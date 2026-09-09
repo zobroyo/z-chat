@@ -1,0 +1,1 @@
+ALTER FUNCTION private.safe_uuid(TEXT) SET search_path = '';
