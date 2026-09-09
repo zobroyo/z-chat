@@ -140,14 +140,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      can_access_conversation: {
-        Args: { _conversation_id: string; _user_id: string }
-        Returns: boolean
-      }
-      is_conversation_member: {
-        Args: { _conversation_id: string; _user_id: string }
-        Returns: boolean
-      }
+      [_ in never]: never
     }
     Enums: {
       conversation_kind: "public" | "dm" | "group"
