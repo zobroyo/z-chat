@@ -15,15 +15,15 @@ import { uploadAvatar } from "@/lib/media";
 export const Route = createFileRoute("/profile")({
   head: () => ({
     meta: [
-      { title: "Your profile — Z Chat" },
+      { title: "Your profile — ZChat" },
       {
         name: "description",
-        content: "Change your display name and profile picture in Z Chat.",
+        content: "Change your display name and profile picture in ZChat.",
       },
-      { property: "og:title", content: "Your profile — Z Chat" },
+      { property: "og:title", content: "Your profile — ZChat" },
       {
         property: "og:description",
-        content: "Change your display name and profile picture in Z Chat.",
+        content: "Change your display name and profile picture in ZChat.",
       },
     ],
   }),

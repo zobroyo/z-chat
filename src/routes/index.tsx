@@ -16,13 +16,13 @@ import { displayNameSchema } from "@/lib/chat";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Z Chat — Sign in" },
+      { title: "ZChat — Sign in" },
       {
         name: "description",
         content:
-          "Sign in to Z Chat and message friends one-to-one or in groups, with photos and instant alerts.",
+          "Sign in to ZChat and message friends one-to-one or in groups, with photos and instant alerts.",
       },
-      { property: "og:title", content: "Z Chat — Sign in" },
+      { property: "og:title", content: "ZChat — Sign in" },
       {
         property: "og:description",
         content: "Message friends one-to-one or in groups, with photos and instant alerts.",
@@ -119,7 +119,7 @@ function AuthPage() {
             Z
           </span>
           <div>
-            <h1 className="text-2xl font-bold">Z Chat</h1>
+            <h1 className="text-2xl font-bold">ZChat</h1>
             <p className="text-sm text-muted-foreground">Talk to anyone. Instantly.</p>
           </div>
         </div>
