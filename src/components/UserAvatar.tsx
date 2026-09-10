@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   name: string | null | undefined;
-  path?: string | null;
+  path?: string | null | undefined;
   online?: boolean;
   className?: string;
   fallback?: string;

@@ -76,7 +76,7 @@ export function NotificationGate() {
             <DialogDescription>
               {on
                 ? "Alerts are on for this device."
-                : "Turn on alerts and Z Chat will ping you the moment someone writes."}
+                : "Turn on alerts and ZChat will ping you the moment someone writes."}
             </DialogDescription>
           </DialogHeader>
 
@@ -103,7 +103,7 @@ export function NotificationGate() {
                   <Check className="size-4" />
                 </span>
                 <span>
-                  Open Z Chat from your home screen, then tap <strong>Allow</strong> here.
+                  Open ZChat from your home screen, then tap <strong>Allow</strong> here.
                 </span>
               </li>
             </ol>
@@ -111,7 +111,7 @@ export function NotificationGate() {
 
           {!on && !installNeeded && touch && !installed && (
             <p className="rounded-xl bg-surface-2 p-4 text-sm text-muted-foreground">
-              Tip: add Z Chat to your home screen from your browser menu so it opens like a real app.
+              Tip: add ZChat to your home screen from your browser menu so it opens like a real app.
             </p>
           )}
 

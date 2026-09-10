@@ -15,15 +15,15 @@ import { uploadAvatar } from "@/lib/media";
 export const Route = createFileRoute("/profile")({
   head: () => ({
     meta: [
-      { title: "Your profile — Z Chat" },
+      { title: "Your profile — ZChat" },
       {
         name: "description",
-        content: "Change your display name and profile picture in Z Chat.",
+        content: "Change your display name and profile picture in ZChat.",
       },
-      { property: "og:title", content: "Your profile — Z Chat" },
+      { property: "og:title", content: "Your profile — ZChat" },
       {
         property: "og:description",
-        content: "Change your display name and profile picture in Z Chat.",
+        content: "Change your display name and profile picture in ZChat.",
       },
     ],
   }),
@@ -66,14 +66,20 @@ function ProfilePage() {
   const save = async () => {
     if (!user) return;
     const parsed = displayNameSchema.safeParse(name);
-    if (!parsed.success) return toast.error(parsed.error.issues[0]!.message);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]!.message);
+      return;
+    }
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
       .update({ display_name: parsed.data })
       .eq("id", user.id);
     setSaving(false);
-    if (error) return toast.error("Could not save your name");
+    if (error) {
+      toast.error("Could not save your name");
+      return;
+    }
     toast.success("Profile updated");
   };
 

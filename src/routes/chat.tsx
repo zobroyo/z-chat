@@ -38,16 +38,16 @@ import { cn } from "@/lib/utils";
 export const Route = createFileRoute("/chat")({
   head: () => ({
     meta: [
-      { title: "Chats — Z Chat" },
+      { title: "Chats — ZChat" },
       {
         name: "description",
         content:
-          "Your Z Chat conversations: the General room, private chats and groups, with photos and instant alerts.",
+          "Your ZChat conversations: the General room, private chats and groups, with photos and instant alerts.",
       },
-      { property: "og:title", content: "Chats — Z Chat" },
+      { property: "og:title", content: "Chats — ZChat" },
       {
         property: "og:description",
-        content: "Private chats, groups and photo sharing in Z Chat.",
+        content: "Private chats, groups and photo sharing in ZChat.",
       },
     ],
   }),
@@ -214,7 +214,7 @@ function ChatPage() {
 
   const activeSubtitle =
     activeConversation?.kind === "public"
-      ? "Everyone on Z Chat"
+      ? "Everyone on ZChat"
       : activeConversation?.kind === "group"
         ? `${memberCount} member${memberCount === 1 ? "" : "s"}`
         : isOnline(activePartner)
@@ -258,7 +258,7 @@ function ChatPage() {
         <span className="flex size-9 items-center justify-center rounded-xl bg-primary font-display text-sm font-extrabold text-primary-foreground">
           Z
         </span>
-        <span className="font-display text-base font-bold">Z Chat</span>
+        <span className="font-display text-base font-bold">ZChat</span>
         <div className="ml-auto flex items-center">
           <NewGroupDialog people={others} onCreate={makeGroup} />
           <NotificationGate />
@@ -288,7 +288,7 @@ function ChatPage() {
               </span>
             }
             title="General"
-            subtitle="Everyone on Z Chat"
+            subtitle="Everyone on ZChat"
             badge={unread[generalRoom?.id ?? ""] ?? 0}
           />
         </Section>

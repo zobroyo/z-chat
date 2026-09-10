@@ -16,13 +16,13 @@ import { displayNameSchema } from "@/lib/chat";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Z Chat — Sign in" },
+      { title: "ZChat — Sign in" },
       {
         name: "description",
         content:
-          "Sign in to Z Chat and message friends one-to-one or in groups, with photos and instant alerts.",
+          "Sign in to ZChat and message friends one-to-one or in groups, with photos and instant alerts.",
       },
-      { property: "og:title", content: "Z Chat — Sign in" },
+      { property: "og:title", content: "ZChat — Sign in" },
       {
         property: "og:description",
         content: "Message friends one-to-one or in groups, with photos and instant alerts.",
@@ -60,7 +60,10 @@ function AuthPage() {
 
   const logIn = async () => {
     const email = emailSchema.safeParse(loginEmail);
-    if (!email.success) return toast.error(email.error.issues[0]!.message);
+    if (!email.success) {
+      toast.error(email.error.issues[0]!.message);
+      return;
+    }
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({
       email: email.data,
@@ -72,11 +75,20 @@ function AuthPage() {
 
   const signUp = async () => {
     const parsedName = displayNameSchema.safeParse(name);
-    if (!parsedName.success) return toast.error(parsedName.error.issues[0]!.message);
+    if (!parsedName.success) {
+      toast.error(parsedName.error.issues[0]!.message);
+      return;
+    }
     const email = emailSchema.safeParse(signupEmail);
-    if (!email.success) return toast.error(email.error.issues[0]!.message);
+    if (!email.success) {
+      toast.error(email.error.issues[0]!.message);
+      return;
+    }
     const password = passwordSchema.safeParse(signupPassword);
-    if (!password.success) return toast.error(password.error.issues[0]!.message);
+    if (!password.success) {
+      toast.error(password.error.issues[0]!.message);
+      return;
+    }
 
     setBusy(true);
     const { error } = await supabase.auth.signUp({
@@ -88,8 +100,11 @@ function AuthPage() {
       },
     });
     setBusy(false);
-    if (error) return toast.error(friendlyAuthError(error.message));
-    toast.success("Account created. Check your inbox if we ask you to confirm your email.");
+    if (error) {
+      toast.error(friendlyAuthError(error.message));
+      return;
+    }
+    toast.success("Account created. You're in!");
   };
 
   const withGoogle = async () => {
@@ -119,7 +134,7 @@ function AuthPage() {
             Z
           </span>
           <div>
-            <h1 className="text-2xl font-bold">Z Chat</h1>
+            <h1 className="text-2xl font-bold">ZChat</h1>
             <p className="text-sm text-muted-foreground">Talk to anyone. Instantly.</p>
           </div>
         </div>

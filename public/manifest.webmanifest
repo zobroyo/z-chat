@@ -1,6 +1,6 @@
 {
-  "name": "Z Chat",
-  "short_name": "Z Chat",
+  "name": "ZChat",
+  "short_name": "ZChat",
   "description": "Fast, private messaging with friends and groups.",
   "start_url": "/chat",
   "scope": "/",
