@@ -89,7 +89,7 @@ function AuthPage() {
     });
     setBusy(false);
     if (error) return toast.error(friendlyAuthError(error.message));
-    toast.success("Account created. Check your inbox if we ask you to confirm your email.");
+    toast.success("Account created. You're in!");
   };
 
   const withGoogle = async () => {
