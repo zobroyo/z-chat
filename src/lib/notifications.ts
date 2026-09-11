@@ -1,5 +1,10 @@
 export type NotificationState = "unsupported" | "default" | "granted" | "denied";
 
+console.log(
+  "[notifications] VAPID public key loaded:",
+  Boolean(import.meta.env.VITE_VAPID_PUBLIC_KEY),
+);
+
 export function notificationsSupported() {
   return typeof window !== "undefined" && "Notification" in window;
 }
@@ -80,16 +85,22 @@ export async function subscribeToPush(userId: string, supabase: {
     }));
 
   const json = subscription.toJSON();
-  await supabase.from("push_subscriptions").upsert(
-    {
-      user_id: userId,
-      endpoint: json.endpoint,
-      p256dh: json.keys?.p256dh,
-      auth: json.keys?.auth,
-    },
-    { onConflict: "endpoint" },
-  );
+  const { error } = await supabase.from("push_subscriptions").upsert(
+  {
+    user_id: userId,
+    endpoint: json.endpoint,
+    p256dh: json.keys?.p256dh,
+    auth: json.keys?.auth,
+  },
+  { onConflict: "endpoint" },
+);
+
+if (error) {
+  console.error("[notifications] Failed to save push subscription:", error);
+  throw error;
 }
+
+console.log("[notifications] Push subscription saved successfully");}
 
 export async function showChatNotification(title: string, body: string) {
   if (getNotificationState() !== "granted") return;

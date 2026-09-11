@@ -1,34 +1,53 @@
-// Minimal service worker: exists so the app can be installed to the home screen
-// and so notifications can be shown while installed (required on iOS/iPadOS).
-// No caching, so /~oauth and every other request always hits the network.
-self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
+self.addEventListener("install", () => {
+  self.skipWaiting();
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
 self.addEventListener("push", (event) => {
-  let data = { title: "New message", body: "" };
-  try {
-    data = event.data.json();
-  } catch {
-    /* ignore malformed payloads */
+  console.log("[sw] PUSH RECEIVED");
+
+  let title = "Z-Chat";
+  let body = "You have a new message";
+
+  if (event.data) {
+    try {
+      const data = event.data.json();
+      title = data.title || title;
+      body = data.body || body;
+    } catch (error) {
+      console.log("[sw] Could not parse push data:", error);
+    }
   }
+
   event.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: "/icons/z-512.png",
-      badge: "/icons/z-512.png",
-      tag: `z-chat-${data.title}`,
-    }),
+    self.registration.showNotification(title, {
+      body: body,
+      tag: "z-chat-message",
+      requireInteraction: false,
+    }).catch((error) => {
+      console.error("[sw] showNotification FAILED:", error);
+    })
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
+
   event.waitUntil(
-    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
-      for (const client of list) {
-        if ("focus" in client) return client.focus();
+    self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true,
+    }).then((clients) => {
+      for (const client of clients) {
+        if ("focus" in client) {
+          return client.focus();
+        }
       }
+
       return self.clients.openWindow("/chat");
-    }),
+    })
   );
 });

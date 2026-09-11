@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from "react";
 import { Bell, BellOff, Check, Plus, Share } from "lucide-react";
 
@@ -26,7 +27,7 @@ import {
  * Shows the alerts prompt every time the app opens until alerts are on.
  * Declining never hides the bell — it stays available for accidental taps.
  */
-export function NotificationGate({ userId }: { userId?: string }) {
+function NotificationGate({ userId }: { userId?: string }) {
   const [state, setState] = useState<NotificationState>("default");
   const [open, setOpen] = useState(false);
   const [touch, setTouch] = useState(false);
@@ -35,24 +36,47 @@ export function NotificationGate({ userId }: { userId?: string }) {
 
   useEffect(() => {
     const current = getNotificationState();
+
     setState(current);
     setTouch(isTouchDevice());
     setInstallNeeded(needsHomeScreenFirst());
     setInstalled(isInstalled());
+
     void registerNotificationWorker();
+
+    if (current === "granted" && userId) {
+      void subscribeToPush(userId, supabase).catch((error) => {
+        console.error("[NotificationGate] Failed to subscribe:", error);
+      });
+    }
+
     if (current !== "granted") {
       const timer = window.setTimeout(() => setOpen(true), 600);
       return () => window.clearTimeout(timer);
     }
+
     return undefined;
-  }, []);
+  }, [userId]);
 
   const ask = async () => {
     const next = await requestNotificationPermission();
+
     setState(next);
+
     if (next === "granted") {
       setOpen(false);
-      if (userId) void subscribeToPush(userId, supabase);
+
+      if (userId) {
+        try {
+          await subscribeToPush(userId, supabase);
+          console.log("[NotificationGate] Push subscription saved");
+        } catch (error) {
+          console.error(
+            "[NotificationGate] Failed to save push subscription:",
+            error,
+          );
+        }
+      }
     }
   };
 
@@ -77,7 +101,11 @@ export function NotificationGate({ userId }: { userId?: string }) {
             <span className="mb-1 flex size-11 items-center justify-center rounded-2xl bg-primary/15 text-primary">
               <Bell className="size-5" />
             </span>
-            <DialogTitle className="font-display text-xl">Never miss a message</DialogTitle>
+
+            <DialogTitle className="font-display text-xl">
+              Never miss a message
+            </DialogTitle>
+
             <DialogDescription>
               {on
                 ? "Alerts are on for this device."
@@ -95,6 +123,7 @@ export function NotificationGate({ userId }: { userId?: string }) {
                   Tap <strong>Share</strong> in your browser bar.
                 </span>
               </li>
+
               <li className="flex gap-3">
                 <span className="mt-0.5 text-muted-foreground">
                   <Plus className="size-4" />
@@ -103,12 +132,14 @@ export function NotificationGate({ userId }: { userId?: string }) {
                   Choose <strong>Add to Home Screen</strong>.
                 </span>
               </li>
+
               <li className="flex gap-3">
                 <span className="mt-0.5 text-muted-foreground">
                   <Check className="size-4" />
                 </span>
                 <span>
-                  Open ZChat from your home screen, then tap <strong>Allow</strong> here.
+                  Open ZChat from your home screen, then tap{" "}
+                  <strong>Allow</strong> here.
                 </span>
               </li>
             </ol>
@@ -116,21 +147,27 @@ export function NotificationGate({ userId }: { userId?: string }) {
 
           {!on && !installNeeded && touch && !installed && (
             <p className="rounded-xl bg-surface-2 p-4 text-sm text-muted-foreground">
-              Tip: add ZChat to your home screen from your browser menu so it opens like a real app.
+              Tip: add ZChat to your home screen from your browser menu so it
+              opens like a real app.
             </p>
           )}
 
           {state === "denied" && (
             <p className="rounded-xl bg-surface-2 p-4 text-sm text-muted-foreground">
-              Alerts are blocked in your device settings for this site. Allow notifications there,
-              then tap Allow again.
+              Alerts are blocked in your device settings for this site. Allow
+              notifications there, then tap Allow again.
             </p>
           )}
 
           <DialogFooter className="gap-2 sm:justify-between">
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setOpen(false)}
+            >
               Not now
             </Button>
+
             {!on && (
               <Button type="button" onClick={ask}>
                 Allow alerts
@@ -142,3 +179,6 @@ export function NotificationGate({ userId }: { userId?: string }) {
     </>
   );
 }
+export { NotificationGate };
+
+
