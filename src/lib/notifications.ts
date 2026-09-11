@@ -54,6 +54,43 @@ export async function requestNotificationPermission(): Promise<NotificationState
   }
 }
 
+function urlBase64ToUint8Array(base64String: string) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+/** Subscribes this device to push and saves it against the given user id. */
+export async function subscribeToPush(userId: string, supabase: {
+  from: (table: string) => {
+    upsert: (row: Record<string, unknown>, opts: Record<string, unknown>) => Promise<unknown>;
+  };
+}) {
+  const registration = await registerNotificationWorker();
+  const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+  if (!registration || !vapidKey) return;
+
+  const existing = await registration.pushManager.getSubscription();
+  const subscription =
+    existing ??
+    (await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+    }));
+
+  const json = subscription.toJSON();
+  await supabase.from("push_subscriptions").upsert(
+    {
+      user_id: userId,
+      endpoint: json.endpoint,
+      p256dh: json.keys?.p256dh,
+      auth: json.keys?.auth,
+    },
+    { onConflict: "endpoint" },
+  );
+}
+
 export async function showChatNotification(title: string, body: string) {
   if (getNotificationState() !== "granted") return;
   const options: NotificationOptions = {

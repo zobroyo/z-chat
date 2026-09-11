@@ -4,6 +4,23 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
+self.addEventListener("push", (event) => {
+  let data = { title: "New message", body: "" };
+  try {
+    data = event.data.json();
+  } catch {
+    /* ignore malformed payloads */
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icons/z-512.png",
+      badge: "/icons/z-512.png",
+      tag: `z-chat-${data.title}`,
+    }),
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   event.waitUntil(

@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { supabase } from "@/integrations/supabase/client";
 import {
   getNotificationState,
   isInstalled,
@@ -17,6 +18,7 @@ import {
   needsHomeScreenFirst,
   registerNotificationWorker,
   requestNotificationPermission,
+  subscribeToPush,
   type NotificationState,
 } from "@/lib/notifications";
 
@@ -24,7 +26,7 @@ import {
  * Shows the alerts prompt every time the app opens until alerts are on.
  * Declining never hides the bell — it stays available for accidental taps.
  */
-export function NotificationGate() {
+export function NotificationGate({ userId }: { userId?: string }) {
   const [state, setState] = useState<NotificationState>("default");
   const [open, setOpen] = useState(false);
   const [touch, setTouch] = useState(false);
@@ -48,7 +50,10 @@ export function NotificationGate() {
   const ask = async () => {
     const next = await requestNotificationPermission();
     setState(next);
-    if (next === "granted") setOpen(false);
+    if (next === "granted") {
+      setOpen(false);
+      if (userId) void subscribeToPush(userId, supabase);
+    }
   };
 
   const on = state === "granted";
