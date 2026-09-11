@@ -1,9 +1,9 @@
+
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,7 +47,6 @@ function AuthPage() {
   const navigate = useNavigate();
   const { session, loading } = useAuth();
   const [busy, setBusy] = useState(false);
-
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [name, setName] = useState("");
@@ -64,12 +63,16 @@ function AuthPage() {
       toast.error(email.error.issues[0]!.message);
       return;
     }
+
     setBusy(true);
+
     const { error } = await supabase.auth.signInWithPassword({
       email: email.data,
       password: loginPassword,
     });
+
     setBusy(false);
+
     if (error) toast.error(friendlyAuthError(error.message));
   };
 
@@ -79,11 +82,13 @@ function AuthPage() {
       toast.error(parsedName.error.issues[0]!.message);
       return;
     }
+
     const email = emailSchema.safeParse(signupEmail);
     if (!email.success) {
       toast.error(email.error.issues[0]!.message);
       return;
     }
+
     const password = passwordSchema.safeParse(signupPassword);
     if (!password.success) {
       toast.error(password.error.issues[0]!.message);
@@ -91,6 +96,7 @@ function AuthPage() {
     }
 
     setBusy(true);
+
     const { error } = await supabase.auth.signUp({
       email: email.data,
       password: password.data,
@@ -99,30 +105,33 @@ function AuthPage() {
         emailRedirectTo: `${window.location.origin}/chat`,
       },
     });
+
     setBusy(false);
+
     if (error) {
       toast.error(friendlyAuthError(error.message));
       return;
     }
+
     toast.success("Account created. You're in!");
   };
 
-const withGoogle = async () => {
-  setBusy(true);
+  const withGoogle = async () => {
+    setBusy(true);
 
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${window.location.origin}/chat`,
-    },
-  });
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/chat`,
+      },
+    });
 
-  if (error) {
-    setBusy(false);
-    toast.error("Google sign-in didn't work. Try email instead.");
-  }
-};
-  
+    if (error) {
+      setBusy(false);
+      toast.error("Google sign-in didn't work. Try email instead.");
+    }
+  };
+
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10">
       <div
@@ -135,6 +144,7 @@ const withGoogle = async () => {
           <span className="flex size-11 items-center justify-center rounded-2xl bg-primary font-display text-lg font-extrabold text-primary-foreground">
             Z
           </span>
+
           <div>
             <h1 className="text-2xl font-bold">ZChat</h1>
             <p className="text-sm text-muted-foreground">Talk to anyone. Instantly.</p>
@@ -160,6 +170,7 @@ const withGoogle = async () => {
                   placeholder="you@example.com"
                 />
               </div>
+
               <div className="space-y-1.5">
                 <Label htmlFor="login-password">Password</Label>
                 <Input
@@ -171,9 +182,18 @@ const withGoogle = async () => {
                   placeholder="••••••••"
                 />
               </div>
+
               <Button className="w-full" disabled={busy} onClick={logIn}>
                 {busy && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Log in
+              </Button>
+
+              <Button
+                variant="link"
+                className="w-full"
+                onClick={() => void navigate({ to: "/recovery" })}
+              >
+                Forgot password?
               </Button>
             </TabsContent>
 
@@ -188,6 +208,7 @@ const withGoogle = async () => {
                   placeholder="Zobro"
                 />
               </div>
+
               <div className="space-y-1.5">
                 <Label htmlFor="signup-email">Email</Label>
                 <Input
@@ -199,6 +220,7 @@ const withGoogle = async () => {
                   placeholder="you@example.com"
                 />
               </div>
+
               <div className="space-y-1.5">
                 <Label htmlFor="signup-password">Password</Label>
                 <Input
@@ -210,6 +232,7 @@ const withGoogle = async () => {
                   placeholder="8+ characters"
                 />
               </div>
+
               <Button className="w-full" disabled={busy} onClick={signUp}>
                 {busy && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Create account
@@ -235,3 +258,4 @@ const withGoogle = async () => {
     </main>
   );
 }
+
