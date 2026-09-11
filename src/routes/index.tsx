@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
+
 import { displayNameSchema } from "@/lib/chat";
 
 export const Route = createFileRoute("/")({
@@ -107,20 +107,22 @@ function AuthPage() {
     toast.success("Account created. You're in!");
   };
 
-  const withGoogle = async () => {
-    setBusy(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
-      setBusy(false);
-      toast.error("Google sign-in didn't work. Try email instead.");
-      return;
-    }
-    if (result.redirected) return;
-    setBusy(false);
-  };
+const withGoogle = async () => {
+  setBusy(true);
 
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}/chat`,
+    },
+  });
+
+  if (error) {
+    setBusy(false);
+    toast.error("Google sign-in didn't work. Try email instead.");
+  }
+};
+  
   return (
     <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10">
       <div
