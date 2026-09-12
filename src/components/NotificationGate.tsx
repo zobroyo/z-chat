@@ -50,13 +50,23 @@ function NotificationGate({ userId }: { userId?: string }) {
       });
     }
 
-    if (current !== "granted") {
+    const alreadyAsked =
+      typeof sessionStorage !== "undefined" &&
+      sessionStorage.getItem(PROMPTED_KEY) === "1";
+
+    if (current !== "granted" && !alreadyAsked) {
+      try {
+        sessionStorage.setItem(PROMPTED_KEY, "1");
+      } catch {
+        /* private mode: prompt just once per mount instead */
+      }
       const timer = window.setTimeout(() => setOpen(true), 600);
       return () => window.clearTimeout(timer);
     }
 
     return undefined;
   }, [userId]);
+
 
   const ask = async () => {
     const next = await requestNotificationPermission();
