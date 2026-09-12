@@ -27,6 +27,8 @@ import {
  * Shows the alerts prompt every time the app opens until alerts are on.
  * Declining never hides the bell — it stays available for accidental taps.
  */
+const PROMPTED_KEY = "zchat-alerts-prompted";
+
 function NotificationGate({ userId }: { userId?: string }) {
   const [state, setState] = useState<NotificationState>("default");
   const [open, setOpen] = useState(false);
@@ -50,13 +52,23 @@ function NotificationGate({ userId }: { userId?: string }) {
       });
     }
 
-    if (current !== "granted") {
+    const alreadyAsked =
+      typeof sessionStorage !== "undefined" &&
+      sessionStorage.getItem(PROMPTED_KEY) === "1";
+
+    if (current !== "granted" && !alreadyAsked) {
+      try {
+        sessionStorage.setItem(PROMPTED_KEY, "1");
+      } catch {
+        /* private mode: prompt just once per mount instead */
+      }
       const timer = window.setTimeout(() => setOpen(true), 600);
       return () => window.clearTimeout(timer);
     }
 
     return undefined;
   }, [userId]);
+
 
   const ask = async () => {
     const next = await requestNotificationPermission();
@@ -165,15 +177,16 @@ function NotificationGate({ userId }: { userId?: string }) {
               variant="ghost"
               onClick={() => setOpen(false)}
             >
-              Not now
+              {installNeeded && !on ? "Got it" : "Not now"}
             </Button>
 
-            {!on && (
+            {!on && !installNeeded && (
               <Button type="button" onClick={ask}>
                 Allow alerts
               </Button>
             )}
           </DialogFooter>
+
         </DialogContent>
       </Dialog>
     </>

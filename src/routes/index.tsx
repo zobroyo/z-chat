@@ -97,7 +97,7 @@ function AuthPage() {
 
     setBusy(true);
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: email.data,
       password: password.data,
       options: {
@@ -113,7 +113,13 @@ function AuthPage() {
       return;
     }
 
-    toast.success("Account created. You're in!");
+    if (data.session) {
+      toast.success("Account created. You're in!");
+      return;
+    }
+
+    toast.success("Check your email to confirm your account, then log in.");
+
   };
 
   const withGoogle = async () => {

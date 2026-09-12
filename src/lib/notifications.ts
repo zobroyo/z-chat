@@ -102,13 +102,19 @@ if (error) {
 
 console.log("[notifications] Push subscription saved successfully");}
 
-export async function showChatNotification(title: string, body: string) {
+export async function showChatNotification(
+  title: string,
+  body: string,
+  conversationId?: string,
+) {
   if (getNotificationState() !== "granted") return;
-  const options: NotificationOptions = {
+  const url = conversationId ? `/chat?c=${conversationId}` : "/chat";
+  const options: NotificationOptions & { data?: unknown } = {
     body,
     icon: "/icons/z-512.png",
     badge: "/icons/z-512.png",
-    tag: `z-chat-${title}`,
+    tag: `z-chat-${conversationId ?? title}`,
+    data: { url },
   };
   try {
     const registration = await navigator.serviceWorker?.getRegistration();

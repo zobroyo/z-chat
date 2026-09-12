@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { displayNameSchema, type Profile } from "@/lib/chat";
-import { uploadAvatar } from "@/lib/media";
+import { IMAGE_ACCEPT, uploadAvatar } from "@/lib/media";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
@@ -37,6 +37,8 @@ function ProfilePage() {
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -46,22 +48,29 @@ function ProfilePage() {
   useEffect(() => {
     if (!user) return;
     let active = true;
+    setLoadError(null);
     supabase
       .from("profiles")
       .select("id, display_name, avatar_url, last_seen")
       .eq("id", user.id)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!active) return;
+        if (error) {
+          setLoadError("We couldn't load your profile. Check your connection and try again.");
+          return;
+        }
         if (data) {
           setProfile(data as Profile);
           setName((data as Profile).display_name);
+        } else {
+          setLoadError("We couldn't find your profile details.");
         }
       });
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, reloadKey]);
 
   const save = async () => {
     if (!user) return;
@@ -119,7 +128,17 @@ function ProfilePage() {
         <h1 className="text-xl font-bold">Your profile</h1>
       </div>
 
+      {loadError && (
+        <div className="mb-4 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+          <p className="mb-3">{loadError}</p>
+          <Button size="sm" variant="secondary" onClick={() => setReloadKey((key) => key + 1)}>
+            Try again
+          </Button>
+        </div>
+      )}
+
       <div className="surface-panel rounded-3xl p-6 shadow-lift">
+
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
             <UserAvatar
@@ -142,10 +161,11 @@ function ProfilePage() {
             <input
               ref={fileRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif,image/heic"
+              accept={IMAGE_ACCEPT}
               className="hidden"
               onChange={(event) => void pickPhoto(event.target.files?.[0] ?? null)}
             />
+
           </div>
           <p className="text-sm text-muted-foreground">{user?.email}</p>
         </div>

@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Hash, Menu, Search, Settings, Users } from "lucide-react";
+import { Hash, LogOut, Menu, Search, Settings, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Composer } from "@/components/chat/Composer";
@@ -23,6 +23,7 @@ import {
   fetchProfiles,
   initialsOf,
   isOnline,
+  leaveConversation,
   markConversationRead,
   sendMessage,
   touchPresence,
@@ -62,7 +63,10 @@ function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [activeId, setActiveId] = useState<string>(PUBLIC_CONVERSATION_ID);
+  const [activeId, setActiveId] = useState<string>(() => {
+    if (typeof window === "undefined") return PUBLIC_CONVERSATION_ID;
+    return new URLSearchParams(window.location.search).get("c") ?? PUBLIC_CONVERSATION_ID;
+  });
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -134,7 +138,7 @@ function ChatPage() {
             const title = sender?.display_name ?? "New message";
             const body = message.body ?? "Sent a photo";
             toast(title, { description: body });
-            void showChatNotification(title, body);
+            void showChatNotification(title, body, message.conversation_id);
           }
         },
       )
@@ -243,6 +247,21 @@ function ChatPage() {
     await reload();
     openConversation(conversation.id);
   };
+
+  const leaveGroup = async () => {
+    if (!user || activeConversation?.kind !== "group") return;
+    if (!window.confirm(`Leave ${activeConversation.name ?? "this group"}?`)) return;
+    try {
+      await leaveConversation(activeConversation.id, user.id);
+      setActiveId(generalRoom?.id ?? PUBLIC_CONVERSATION_ID);
+      await reload();
+      toast.success("You left the group");
+    } catch {
+      toast.error("Could not leave that group");
+    }
+  };
+
+
 
   const handleSend = async (body: string, file: File | null) => {
     if (!user) return;
@@ -417,7 +436,20 @@ function ChatPage() {
             <p className="truncate font-display text-sm font-semibold">{activeTitle}</p>
             <p className="truncate text-xs text-muted-foreground">{activeSubtitle}</p>
           </div>
+
+          {activeConversation?.kind === "group" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto text-muted-foreground"
+              onClick={() => void leaveGroup()}
+            >
+              <LogOut className="mr-1.5 size-4" />
+              Leave group
+            </Button>
+          )}
         </header>
+
 
         <div className="scroll-slim flex-1 space-y-2 overflow-y-auto px-3 py-4">
           {messages.length === 0 && (
