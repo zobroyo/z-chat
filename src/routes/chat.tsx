@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Hash, Menu, Search, Settings, Users } from "lucide-react";
+import { Hash, LogOut, Menu, Search, Settings, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Composer } from "@/components/chat/Composer";
@@ -23,6 +23,7 @@ import {
   fetchProfiles,
   initialsOf,
   isOnline,
+  leaveConversation,
   markConversationRead,
   sendMessage,
   touchPresence,
@@ -62,7 +63,10 @@ function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [activeId, setActiveId] = useState<string>(PUBLIC_CONVERSATION_ID);
+  const [activeId, setActiveId] = useState<string>(() => {
+    if (typeof window === "undefined") return PUBLIC_CONVERSATION_ID;
+    return new URLSearchParams(window.location.search).get("c") ?? PUBLIC_CONVERSATION_ID;
+  });
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -134,7 +138,7 @@ function ChatPage() {
             const title = sender?.display_name ?? "New message";
             const body = message.body ?? "Sent a photo";
             toast(title, { description: body });
-            void showChatNotification(title, body);
+            void showChatNotification(title, body, message.conversation_id);
           }
         },
       )
