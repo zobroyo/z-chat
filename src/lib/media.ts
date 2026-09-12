@@ -5,7 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 export const AVATAR_BUCKET = "avatars";
 export const CHAT_BUCKET = "chat-media";
 
-const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif", "image/heic"];
+const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+/** Browsers can't show HEIC/HEIF in an <img>, so we refuse it up front. */
+const HEIC_PATTERN = /(heic|heif)/i;
+export const IMAGE_ACCEPT = "image/png,image/jpeg,image/webp,image/gif";
+export const HEIC_MESSAGE =
+  "iPhone HEIC photos can't be shown here. Please choose a JPEG or PNG instead.";
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 

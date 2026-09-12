@@ -82,14 +82,15 @@ export async function fetchMembers() {
 }
 
 export async function fetchMessages(conversationId: string) {
+  // Newest 200, then flipped back to oldest-first for display.
   const { data, error } = await supabase
     .from("messages")
     .select("id, conversation_id, sender_id, body, image_url, created_at")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(200);
   if (error) throw error;
-  return (data ?? []) as Message[];
+  return ((data ?? []) as Message[]).slice().reverse();
 }
 
 export async function sendMessage(input: {
