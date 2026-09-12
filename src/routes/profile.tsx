@@ -46,22 +46,29 @@ function ProfilePage() {
   useEffect(() => {
     if (!user) return;
     let active = true;
+    setLoadError(null);
     supabase
       .from("profiles")
       .select("id, display_name, avatar_url, last_seen")
       .eq("id", user.id)
       .maybeSingle()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
         if (!active) return;
+        if (error) {
+          setLoadError("We couldn't load your profile. Check your connection and try again.");
+          return;
+        }
         if (data) {
           setProfile(data as Profile);
           setName((data as Profile).display_name);
+        } else {
+          setLoadError("We couldn't find your profile details.");
         }
       });
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, reloadKey]);
 
   const save = async () => {
     if (!user) return;
