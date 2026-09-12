@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { IMAGE_ACCEPT, MAX_IMAGE_BYTES, validateImage } from "@/lib/media";
 
 type Props = {
   onSend: (body: string, file: File | null) => Promise<void>;
@@ -65,15 +66,23 @@ export function Composer({ onSend, placeholder }: Props) {
         <input
           ref={inputRef}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif,image/heic"
+          accept={IMAGE_ACCEPT}
           className="hidden"
           onChange={(event) => {
             const picked = event.target.files?.[0] ?? null;
             if (!picked) return;
+            try {
+              validateImage(picked, MAX_IMAGE_BYTES);
+            } catch (error) {
+              toast.error(error instanceof Error ? error.message : "That file can't be used");
+              clearFile();
+              return;
+            }
             setFile(picked);
             setPreview(URL.createObjectURL(picked));
           }}
         />
+
         <Button
           type="button"
           variant="ghost"
