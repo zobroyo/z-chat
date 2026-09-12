@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { displayNameSchema, type Profile } from "@/lib/chat";
-import { uploadAvatar } from "@/lib/media";
+import { IMAGE_ACCEPT, uploadAvatar } from "@/lib/media";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
