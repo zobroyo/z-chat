@@ -128,7 +128,17 @@ function ProfilePage() {
         <h1 className="text-xl font-bold">Your profile</h1>
       </div>
 
+      {loadError && (
+        <div className="mb-4 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+          <p className="mb-3">{loadError}</p>
+          <Button size="sm" variant="secondary" onClick={() => setReloadKey((key) => key + 1)}>
+            Try again
+          </Button>
+        </div>
+      )}
+
       <div className="surface-panel rounded-3xl p-6 shadow-lift">
+
         <div className="flex flex-col items-center gap-4">
           <div className="relative">
             <UserAvatar
@@ -151,10 +161,11 @@ function ProfilePage() {
             <input
               ref={fileRef}
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif,image/heic"
+              accept={IMAGE_ACCEPT}
               className="hidden"
               onChange={(event) => void pickPhoto(event.target.files?.[0] ?? null)}
             />
+
           </div>
           <p className="text-sm text-muted-foreground">{user?.email}</p>
         </div>
