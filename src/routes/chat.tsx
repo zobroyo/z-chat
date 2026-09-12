@@ -248,6 +248,21 @@ function ChatPage() {
     openConversation(conversation.id);
   };
 
+  const leaveGroup = async () => {
+    if (!user || activeConversation?.kind !== "group") return;
+    if (!window.confirm(`Leave ${activeConversation.name ?? "this group"}?`)) return;
+    try {
+      await leaveConversation(activeConversation.id, user.id);
+      setActiveId(generalRoom?.id ?? PUBLIC_CONVERSATION_ID);
+      await reload();
+      toast.success("You left the group");
+    } catch {
+      toast.error("Could not leave that group");
+    }
+  };
+
+
+
   const handleSend = async (body: string, file: File | null) => {
     if (!user) return;
     const imagePath = file ? await uploadChatImage(activeId, file) : null;
@@ -421,7 +436,20 @@ function ChatPage() {
             <p className="truncate font-display text-sm font-semibold">{activeTitle}</p>
             <p className="truncate text-xs text-muted-foreground">{activeSubtitle}</p>
           </div>
+
+          {activeConversation?.kind === "group" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto text-muted-foreground"
+              onClick={() => void leaveGroup()}
+            >
+              <LogOut className="mr-1.5 size-4" />
+              Leave group
+            </Button>
+          )}
         </header>
+
 
         <div className="scroll-slim flex-1 space-y-2 overflow-y-auto px-3 py-4">
           {messages.length === 0 && (
