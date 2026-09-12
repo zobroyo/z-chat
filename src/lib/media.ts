@@ -56,7 +56,10 @@ function extensionFor(file: File) {
   return file.type === "image/png" ? "png" : "jpg";
 }
 
-function validate(file: File, maxBytes: number) {
+export function validateImage(file: File, maxBytes: number) {
+  if (HEIC_PATTERN.test(file.type) || HEIC_PATTERN.test(file.name)) {
+    throw new Error(HEIC_MESSAGE);
+  }
   if (!ALLOWED_TYPES.includes(file.type)) {
     throw new Error("Please pick an image file (PNG, JPG, WebP or GIF).");
   }
@@ -64,6 +67,9 @@ function validate(file: File, maxBytes: number) {
     throw new Error(`That image is too big. Max ${Math.round(maxBytes / (1024 * 1024))} MB.`);
   }
 }
+
+const validate = validateImage;
+
 
 export async function uploadAvatar(userId: string, file: File) {
   validate(file, MAX_AVATAR_BYTES);
