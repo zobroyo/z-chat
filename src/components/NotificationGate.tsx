@@ -177,15 +177,16 @@ function NotificationGate({ userId }: { userId?: string }) {
               variant="ghost"
               onClick={() => setOpen(false)}
             >
-              Not now
+              {installNeeded && !on ? "Got it" : "Not now"}
             </Button>
 
-            {!on && (
+            {!on && !installNeeded && (
               <Button type="button" onClick={ask}>
                 Allow alerts
               </Button>
             )}
           </DialogFooter>
+
         </DialogContent>
       </Dialog>
     </>
