@@ -27,6 +27,8 @@ import {
  * Shows the alerts prompt every time the app opens until alerts are on.
  * Declining never hides the bell — it stays available for accidental taps.
  */
+const PROMPTED_KEY = "zchat-alerts-prompted";
+
 function NotificationGate({ userId }: { userId?: string }) {
   const [state, setState] = useState<NotificationState>("default");
   const [open, setOpen] = useState(false);
