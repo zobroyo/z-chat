@@ -38,7 +38,7 @@ const passwordSchema = z.string().min(8, "Password needs at least 8 characters")
 function friendlyAuthError(message: string) {
   const lower = message.toLowerCase();
   if (lower.includes("invalid login")) return "Email or password is incorrect.";
-  if (lower.includes("already registered")) return "That email already has an account.";
+  if (lower.includes("already registered")) return "Unable to create account. Please check your details and try again.";
   if (lower.includes("rate")) return "Too many attempts. Wait a moment and try again.";
   return message;
 }
