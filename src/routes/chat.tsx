@@ -231,7 +231,7 @@ function ChatPage() {
     if (generalRoom && activeId !== generalRoom.id) {
       setActiveId(generalRoom.id);
     }
-  }, [user, conversations, generalRoom, activeId]);
+  }, [user, conversations, generalRoom]);
 
   // Load messages only after a real conversation ID has been resolved.
   useEffect(() => {
