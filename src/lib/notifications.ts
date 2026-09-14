@@ -2,8 +2,9 @@ export type NotificationState = "unsupported" | "default" | "granted" | "denied"
 
 console.log(
   "[notifications] VAPID public key loaded:",
-  Boolean(import.meta.env.VITE_VAPID_PUBLIC_KEY),
+  Boolean(import.meta.env["VITE_VAPID_PUBLIC_KEY"]),
 );
+
 
 export function notificationsSupported() {
   return typeof window !== "undefined" && "Notification" in window;
@@ -67,13 +68,19 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 /** Subscribes this device to push and saves it against the given user id. */
-export async function subscribeToPush(userId: string, supabase: {
-  from: (table: string) => {
-    upsert: (row: Record<string, unknown>, opts: Record<string, unknown>) => Promise<unknown>;
-  };
-}) {
+export async function subscribeToPush(
+  userId: string,
+  supabase: {
+    from: (table: string) => {
+      upsert: (
+        row: Record<string, unknown>,
+        opts: Record<string, unknown>,
+      ) => PromiseLike<{ error: unknown }>;
+    };
+  },
+) {
   const registration = await registerNotificationWorker();
-  const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+  const vapidKey = import.meta.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined;
   if (!registration || !vapidKey) return;
 
   const existing = await registration.pushManager.getSubscription();
@@ -85,15 +92,17 @@ export async function subscribeToPush(userId: string, supabase: {
     }));
 
   const json = subscription.toJSON();
+  const keys = (json.keys ?? {}) as Record<string, string | undefined>;
   const { error } = await supabase.from("push_subscriptions").upsert(
   {
     user_id: userId,
     endpoint: json.endpoint,
-    p256dh: json.keys?.p256dh,
-    auth: json.keys?.auth,
+    p256dh: keys["p256dh"],
+    auth: keys["auth"],
   },
   { onConflict: "endpoint" },
 );
+
 
 if (error) {
   console.error("[notifications] Failed to save push subscription:", error);

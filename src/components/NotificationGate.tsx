@@ -29,6 +29,11 @@ import {
  */
 const PROMPTED_KEY = "zchat-alerts-prompted";
 
+// The generated client is strictly typed to known tables; the push helper only
+// needs a minimal upsert shape.
+const pushClient = supabase as unknown as Parameters<typeof subscribeToPush>[1];
+
+
 function NotificationGate({ userId }: { userId?: string }) {
   const [state, setState] = useState<NotificationState>("default");
   const [open, setOpen] = useState(false);
@@ -47,7 +52,7 @@ function NotificationGate({ userId }: { userId?: string }) {
     void registerNotificationWorker();
 
     if (current === "granted" && userId) {
-      void subscribeToPush(userId, supabase).catch((error) => {
+      void subscribeToPush(userId, pushClient).catch((error) => {
         console.error("[NotificationGate] Failed to subscribe:", error);
       });
     }
@@ -80,7 +85,7 @@ function NotificationGate({ userId }: { userId?: string }) {
 
       if (userId) {
         try {
-          await subscribeToPush(userId, supabase);
+          await subscribeToPush(userId, pushClient);
           console.log("[NotificationGate] Push subscription saved");
         } catch (error) {
           console.error(
