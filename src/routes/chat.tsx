@@ -306,9 +306,15 @@ useEffect(() => {
     (item) => item.kind === "group",
   );
 
-  const directChats = conversations.filter(
-    (item) => item.kind === "dm",
+  const directChats = conversations.filter((item) => {
+  if (item.kind !== "dm" || !user) return false;
+
+  return members.some(
+    (member) =>
+      member.conversation_id === item.id &&
+      member.user_id === user.id,
   );
+});
 
   const others = useMemo(
     () => profiles.filter((profile) => profile.id !== user?.id),
