@@ -2,8 +2,9 @@ export type NotificationState = "unsupported" | "default" | "granted" | "denied"
 
 console.log(
   "[notifications] VAPID public key loaded:",
-  Boolean(import.meta.env.VITE_VAPID_PUBLIC_KEY),
+  Boolean(import.meta.env["VITE_VAPID_PUBLIC_KEY"]),
 );
+
 
 export function notificationsSupported() {
   return typeof window !== "undefined" && "Notification" in window;
