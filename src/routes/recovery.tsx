@@ -29,23 +29,35 @@ function RecoveryPage() {
 
   const sendResetEmail = async () => {
     const parsed = emailSchema.safeParse(email);
-    if (!parsed.success) return toast.error(parsed.error.issues[0].message);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Please check what you entered.");
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/recovery`,
     });
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Check your email for a reset link.");
   };
 
   const updatePassword = async () => {
     const parsed = passwordSchema.safeParse(password);
-    if (!parsed.success) return toast.error(parsed.error.issues[0].message);
+    if (!parsed.success) {
+      toast.error(parsed.error.issues[0]?.message ?? "Please check what you entered.");
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password });
     setLoading(false);
-    if (error) return toast.error(error.message);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
     toast.success("Password updated. You can sign in now.");
     navigate({ to: "/" });
   };
