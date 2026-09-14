@@ -1,5 +1,18 @@
-
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";import { useCallback, useEffect, useMemo, useRef, useState } from "react";import { Hash, LogOut, Menu, Search, Settings, Users } from "lucide-react";import { toast } from "sonner";import { Composer } from "@/components/chat/Composer";import { MessageBubble } from "@/components/chat/MessageBubble";import { NewGroupDialog } from "@/components/chat/NewGroupDialog";import { NotificationGate } from "@/components/NotificationGate";import { UserAvatar } from "@/components/UserAvatar";import { Button } from "@/components/ui/button";import { Input } from "@/components/ui/input";import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";import { useAuth } from "@/hooks/use-auth";import { supabase } from "@/integrations/supabase/client";import {
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Hash, LogOut, Menu, Search, Settings, Users } from "lucide-react";
+import { toast } from "sonner";
+import { Composer } from "@/components/chat/Composer";
+import { MessageBubble } from "@/components/chat/MessageBubble";
+import { NewGroupDialog } from "@/components/chat/NewGroupDialog";
+import { NotificationGate } from "@/components/NotificationGate";
+import { UserAvatar } from "@/components/UserAvatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
+import {
   createGroup,
   ensureDirectConversation,
   fetchConversations,
@@ -16,7 +29,11 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";impo
   type Member,
   type Message,
   type Profile,
-} from "@/lib/chat";import { uploadChatImage } from "@/lib/media";import { showChatNotification } from "@/lib/notifications";import { cn } from "@/lib/utils";
+} from "@/lib/chat";
+import { uploadChatImage } from "@/lib/media";
+import { showChatNotification } from "@/lib/notifications";
+import { cn } from "@/lib/utils";
+
 export const Route = createFileRoute("/chat")({
   head: () => ({
     meta: [
@@ -35,6 +52,7 @@ export const Route = createFileRoute("/chat")({
   }),
   component: ChatPage,
 });
+
 function ChatPage() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
@@ -53,15 +71,14 @@ function ChatPage() {
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  
   const handleSelectConversation = useCallback((id: string) => {
-    setActiveId(id);
-    // This explicitly pushes the ?c= ID string into the TanStack router lifecycle state
-    void navigate({ 
-      search: (prev: any) => ({ ...prev, c: id }),
-      replace: true 
-    });
-  }, [navigate]);
+  setActiveId(id);
+  // This explicitly pushes the ?c= ID string into the TanStack router lifecycle state
+  void navigate({ 
+    search: (prev: any) => ({ ...prev, c: id }),
+    replace: true 
+  });
+}, [navigate]);
 
   const activeIdRef = useRef(activeId);
   const profilesRef = useRef<Profile[]>([]);
@@ -194,6 +211,12 @@ function ChatPage() {
   );
 
   // Resolve the active conversation only after conversations have loaded.
+  //
+  // If the URL contains ?c=<id> and that conversation exists, keep it.
+  // Otherwise open the real General conversation from the database.
+  //
+  // Most importantly, this runs BEFORE the message-loading effect can use
+  // activeId, because activeId starts empty.
   useEffect(() => {
     if (!user || conversations.length === 0) return;
 
@@ -277,289 +300,526 @@ function ChatPage() {
     [members, profileMap, user],
   );
 
-  const publicRooms = conversations.filter((item) => item.kind === "public");
-  const groupRooms = conversations.filter((item) => item.kind === "group");
-  const dmRooms = conversations.filter((item) => item.kind === "dm");
+  const groups = conversations.filter(
+    (item) => item.kind === "group",
+  );
 
-  const filteredProfiles = useMemo(() => {
-    if (!user) return [];
-    const base = profiles.filter((p) => p.id !== user.id);
-    const clean = query.trim().toLowerCase();
-    if (!clean) return base;
-    return base.filter((p) => p.display_name.toLowerCase().includes(clean));
-  }, [profiles, user, query]);
+  const directChats = conversations.filter(
+    (item) => item.kind === "dm",
+  );
 
-  const activeChat = conversations.find((c) => c.id === activeId);
-  const activePartner = activeChat ? partnerOf(activeChat) : undefined;
+  const others = useMemo(
+    () => profiles.filter((profile) => profile.id !== user?.id),
+    [profiles, user],
+  );
+
+  const filteredOthers = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+
+    if (!needle) return others;
+
+    return others.filter((profile) =>
+      profile.display_name.toLowerCase().includes(needle),
+    );
+  }, [others, query]);
+
+  const activeConversation =
+    conversations.find((item) => item.id === activeId) ??
+    generalRoom;
+
+  const activePartner = activeConversation
+    ? partnerOf(activeConversation)
+    : undefined;
+
+  const memberCount = members.filter(
+    (member) => member.conversation_id === activeId,
+  ).length;
+
   const activeTitle =
-    activeChat?.kind === "public"
+    activeConversation?.kind === "public"
       ? "General"
-      : activeChat?.kind === "group"
-        ? (activeChat.name ?? "Group Chat")
-        : (activePartner?.display_name ?? "Direct Message");
+      : activeConversation?.kind === "group"
+        ? (activeConversation.name ?? "Group")
+        : (activePartner?.display_name ?? "Chat");
 
-  const handleCreateDM = async (otherId: string) => {
+  const activeSubtitle =
+    activeConversation?.kind === "public"
+      ? "Everyone on ZChat"
+      : activeConversation?.kind === "group"
+        ? `${memberCount} member${
+            memberCount === 1 ? "" : "s"
+          }`
+        : isOnline(activePartner)
+          ? "Online"
+          : "Offline";
+
+  const openConversation = (id: string) => {
+    setActiveId(id);
+    setSheetOpen(false);
+  };
+
+  const startDirect = async (otherId: string) => {
     if (!user) return;
+
     try {
-      const convo = await ensureDirectConversation(user.id, otherId);
+      const conversation = await ensureDirectConversation(
+        user.id,
+        otherId,
+      );
+
       await reload();
-      handleSelectConversation(convo.id);
+      openConversation(conversation.id);
     } catch {
-      toast.error("Could not open chat");
+      toast.error("Could not open that chat");
     }
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    void navigate({ to: "/" });
+  const makeGroup = async (
+    name: string,
+    memberIds: string[],
+  ) => {
+    if (!user) return;
+
+    const conversation = await createGroup(
+      user.id,
+      name,
+      memberIds,
+    );
+
+    await reload();
+    openConversation(conversation.id);
   };
 
-  const currentProfile = profiles.find((p) => p.id === user?.id);
+  const leaveGroup = async () => {
+    if (
+      !user ||
+      activeConversation?.kind !== "group"
+    ) {
+      return;
+    }
 
-  const SidebarContent = () => (
-    <div className="flex h-full flex-col bg-slate-900 text-slate-100 w-64 border-r border-slate-800">
-      <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-        <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-          <span className="bg-indigo-600 px-2 py-0.5 rounded text-sm font-black">Z</span>
+    if (
+      !window.confirm(
+        `Leave ${
+          activeConversation.name ?? "this group"
+        }?`,
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await leaveConversation(
+        activeConversation.id,
+        user.id,
+      );
+
+      if (generalRoom) {
+        setActiveId(generalRoom.id);
+      } else {
+        setActiveId("");
+      }
+
+      await reload();
+      toast.success("You left the group");
+    } catch {
+      toast.error("Could not leave that group");
+    }
+  };
+
+  const handleSend = async (
+    body: string,
+    file: File | null,
+  ) => {
+    if (!user || !activeId) return;
+
+    const imagePath = file
+      ? await uploadChatImage(activeId, file)
+      : null;
+
+    await sendMessage({
+      conversationId: activeId,
+      senderId: user.id,
+      body,
+      imagePath,
+    });
+  };
+
+  const me = user
+    ? profileMap.get(user.id)
+    : undefined;
+
+  const sidebar = (
+    <div className="flex h-full flex-col bg-sidebar">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-4">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-primary font-display text-sm font-extrabold text-primary-foreground">
+          Z
+        </span>
+
+        <span className="font-display text-base font-bold">
           ZChat
-        </h1>
-        <NewGroupDialog
-          profiles={profiles.filter((p) => p.id !== user?.id)}
-
-myId={user?.id ?? ""}
-onCreate={async (name, ids) => {
-if (!user) return;
-const convo = await createGroup(user.id, name, ids);
-await reload();
-handleSelectConversation(convo.id);
-}}
-/>
-Public Channels
-
-
-{publicRooms.map((convo) => (
-<button
-key={convo.id}
-onClick={() => handleSelectConversation(convo.id)}
-className={cn(
-"w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors text-left",
-activeId === convo.id
-? "bg-indigo-600 text-white font-semibold"
-: "text-slate-300 hover:bg-slate-800/60 hover:text-white",
-)}
->
-
-{convo.name ?? "General"}
-
-))}
-
-Groups
-
-{groupRooms.length}
-
-
-{groupRooms.length === 0 ? (
-No groups joined
-) : (
-
-{groupRooms.map((convo) => (
-<button
-key={convo.id}
-onClick={() => handleSelectConversation(convo.id)}
-className={cn(
-"w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors text-left group",
-activeId === convo.id
-? "bg-indigo-600 text-white font-semibold"
-: "text-slate-300 hover:bg-slate-800/60 hover:text-white",
-)}
->
-
-
-{convo.name}
-
-{unread[convo.id] ? (
-
-{unread[convo.id]}
-
-) : (
-<button
-onClick={(e) => {
-e.stopPropagation();
-if (user) void leaveConversation(convo.id, user.id).then(reload);
-}}
-className="text-[10px] text-slate-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0"
->
-Leave
-
-)}
-
-))}
-
-)}
-Direct Messages
-
-
-
-<input
-type="text"
-placeholder="Find user..."
-value={query}
-onChange={(e) => setQuery(e.target.value)}
-className="bg-transparent text-xs w-full text-white placeholder-slate-500 outline-none py-1"
-/>
-{query.trim() && (
-
-
-Search Results
-
-{filteredProfiles.length === 0 ? (
-No users found
-) : (
-filteredProfiles.map((p) => (
-<button
-key={p.id}
-onClick={() => {
-void handleCreateDM(p.id);
-setQuery("");
-}}
-className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-800 text-xs text-left text-slate-200 transition-colors"
->
-
-{p.display_name}
-
-))
-)}
-
-)}
-{dmRooms.length === 0 ? (
-No open DMs
-) : (
-
-{dmRooms.map((convo) => {
-const partner = partnerOf(convo);
-if (!partner) return null;
-const online = isOnline(partner);
-return (
-<button
-key={convo.id}
-onClick={() => handleSelectConversation(convo.id)}
-className={cn(
-"w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium transition-colors text-left",
-activeId === convo.id
-? "bg-indigo-600 text-white font-semibold"
-: "text-slate-300 hover:bg-slate-800/60 hover:text-white",
-)}
->
-
-
-
-{online && (
-
-)}
-
-{partner.display_name}
-
-{unread[convo.id] ? (
-
-{unread[convo.id]}
-
-) : null}
-
-);
-})}
-
-)}
-
-{currentProfile?.display_name ?? "User"}
-
-
-Online
-
-
-
-
-<Button
-variant="ghost"
-size="icon"
-onClick={() => void handleLogout()}
-className="h-8 w-8 text-slate-400 hover:text-rose-400 hover:bg-slate-800"
->
-
-
-
-
-
-);
-return (
-
-
-
-
-Navigation Sidebar
-
-
-{activeChat?.kind === "public" && }
-{activeTitle}
-
-{activeChat?.kind === "dm" && activePartner && (
-
-{isOnline(activePartner) ? "active now" : "offline"}
-
-)}
-{activeChat?.kind === "group" && (
-
-Group Conversation
-
-)}
-
-
-{messages.length === 0 ? (
-
-
-
-
-Welcome to {activeTitle}!
-This is the absolute beginning of your message stream history. Send a ping to start things off.
-
-) : (
-messages.map((item) => (
-<MessageBubble
-key={item.id}
-message={item}
-myId={user?.id ?? ""}
-profiles={profiles}
-/>
-))
-)}
-
-<Composer
-onSend={async (text, file) => {
-if (!user || !activeId) return;
-try {
-let imagePath: string | null = null;
-if (file) {
-toast.loading("Sending photo...", { id: "upload" });
-imagePath = await uploadChatImage(file);
-toast.success("Photo sent", { id: "upload" });
+        </span>
+
+        <div className="ml-auto flex items-center">
+          <NewGroupDialog
+            people={others}
+            onCreate={makeGroup}
+          />
+
+          <NotificationGate
+            userId={user?.id ?? ""}
+          />
+        </div>
+      </div>
+
+      <div className="px-3 py-3">
+        <div className="relative">
+          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+
+          <Input
+            value={query}
+            onChange={(event) =>
+              setQuery(event.target.value)
+            }
+            placeholder="Search people"
+            className="rounded-xl bg-surface-2 pl-9"
+          />
+        </div>
+      </div>
+
+      <div className="scroll-slim flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+        <Section title="Room">
+          <Row
+            active={activeId === generalRoom?.id}
+            onClick={() =>
+              generalRoom &&
+              openConversation(generalRoom.id)
+            }
+            leading={
+              <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
+                <Hash className="size-4" />
+              </span>
+            }
+            title="General"
+            subtitle="Everyone on ZChat"
+            badge={
+              unread[generalRoom?.id ?? ""] ?? 0
+            }
+          />
+        </Section>
+
+        {groups.length > 0 && (
+          <Section title="Groups">
+            {groups.map((group) => (
+              <Row
+                key={group.id}
+                active={activeId === group.id}
+                onClick={() =>
+                  openConversation(group.id)
+                }
+                leading={
+                  <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
+                    <Users className="size-4" />
+                  </span>
+                }
+                title={group.name ?? "Group"}
+                subtitle={`${
+                  members.filter(
+                    (m) =>
+                      m.conversation_id ===
+                      group.id,
+                  ).length
+                } members`}
+                badge={unread[group.id] ?? 0}
+              />
+            ))}
+          </Section>
+        )}
+
+        {directChats.length > 0 && (
+          <Section title="Chats">
+            {directChats.map((conversation) => {
+              const partner =
+                partnerOf(conversation);
+
+              return (
+                <Row
+                  key={conversation.id}
+                  active={
+                    activeId === conversation.id
+                  }
+                  onClick={() =>
+                    openConversation(
+                      conversation.id,
+                    )
+                  }
+                  leading={
+                    <UserAvatar
+                      name={partner?.display_name}
+                      path={partner?.avatar_url}
+                      online={isOnline(partner)}
+                      className="size-9"
+                    />
+                  }
+                  title={
+                    partner?.display_name ??
+                    "Someone"
+                  }
+                  subtitle={
+                    isOnline(partner)
+                      ? "Online"
+                      : "Offline"
+                  }
+                  badge={
+                    unread[conversation.id] ?? 0
+                  }
+                />
+              );
+            })}
+          </Section>
+        )}
+
+        <Section title="People">
+          {filteredOthers.length === 0 && (
+            <p className="px-2 py-1 text-sm text-muted-foreground">
+              No one else here yet.
+            </p>
+          )}
+
+          {filteredOthers.map((person) => (
+            <Row
+              key={person.id}
+              onClick={() =>
+                void startDirect(person.id)
+              }
+              leading={
+                <UserAvatar
+                  name={person.display_name}
+                  path={person.avatar_url}
+                  online={isOnline(person)}
+                  className="size-9"
+                />
+              }
+              title={
+                person.display_name || "Someone"
+              }
+              subtitle={
+                isOnline(person)
+                  ? "Online"
+                  : "Offline"
+              }
+            />
+          ))}
+        </Section>
+      </div>
+
+      <Link
+        to="/profile"
+        className="flex items-center gap-3 border-t border-border px-4 py-3 transition-colors hover:bg-surface-2"
+      >
+        <UserAvatar
+          name={me?.display_name}
+          path={me?.avatar_url}
+          className="size-9"
+        />
+
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">
+            {me?.display_name || "Set your name"}
+          </span>
+
+          <span className="block truncate text-xs text-muted-foreground">
+            Profile & settings
+          </span>
+        </span>
+
+        <Settings className="size-4 text-muted-foreground" />
+      </Link>
+    </div>
+  );
+
+  return (
+    <div className="flex h-[100dvh] overflow-hidden">
+      <aside className="hidden w-80 shrink-0 border-r border-border md:block">
+        {sidebar}
+      </aside>
+
+      <main className="flex min-w-0 flex-1 flex-col">
+        <header className="flex items-center gap-3 border-b border-border bg-surface/70 px-3 py-3 backdrop-blur">
+          <Sheet
+            open={sheetOpen}
+            onOpenChange={setSheetOpen}
+          >
+            <SheetTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                aria-label="Open chats"
+              >
+                <Menu className="size-5" />
+              </Button>
+            </SheetTrigger>
+
+            <SheetContent
+              side="left"
+              className="w-[19rem] p-0"
+            >
+              <SheetTitle className="sr-only">
+                Chats
+              </SheetTitle>
+
+              {sidebar}
+            </SheetContent>
+          </Sheet>
+
+          {activeConversation?.kind === "dm" ? (
+            <UserAvatar
+              name={activePartner?.display_name}
+              path={activePartner?.avatar_url}
+              online={isOnline(activePartner)}
+              className="size-9"
+            />
+          ) : (
+            <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-sm text-muted-foreground">
+              {activeConversation?.kind ===
+              "public" ? (
+                <Hash className="size-4" />
+              ) : (
+                initialsOf(activeTitle)
+              )}
+            </span>
+          )}
+
+          <div className="min-w-0">
+            <p className="truncate font-display text-sm font-semibold">
+              {activeTitle}
+            </p>
+
+            <p className="truncate text-xs text-muted-foreground">
+              {activeSubtitle}
+            </p>
+          </div>
+
+          {activeConversation?.kind ===
+            "group" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto text-muted-foreground"
+              onClick={() =>
+                void leaveGroup()
+              }
+            >
+              <LogOut className="mr-1.5 size-4" />
+              Leave group
+            </Button>
+          )}
+        </header>
+
+        <div className="scroll-slim flex-1 space-y-2 overflow-y-auto px-3 py-4">
+          {messages.length === 0 && (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-muted-foreground">
+                No messages yet. Say hi.
+              </p>
+            </div>
+          )}
+
+          {messages.map((message, index) => {
+            const previous = messages[index - 1];
+
+            return (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                self={
+                  message.sender_id === user?.id
+                }
+                sender={profileMap.get(
+                  message.sender_id,
+                )}
+                showSender={
+                  previous?.sender_id !==
+                  message.sender_id
+                }
+              />
+            );
+          })}
+
+          <div ref={bottomRef} />
+        </div>
+
+        <Composer
+          onSend={handleSend}
+          placeholder={`Message ${activeTitle}`}
+        />
+      </main>
+    </div>
+  );
 }
-await sendMessage({
-conversationId: activeId,
-senderId: user.id,
-body: text,
-imagePath,
-});
-} catch (e: any) {
-toast.error(e.message || "Failed to deliver message", { id: "upload" });
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-1">
+      <h2 className="px-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+        {title}
+      </h2>
+
+      {children}
+    </section>
+  );
 }
-}}
-/>
 
+function Row({
+  active,
+  onClick,
+  leading,
+  title,
+  subtitle,
+  badge = 0,
+}: {
+  active?: boolean;
+  onClick: () => void;
+  leading: React.ReactNode;
+  title: string;
+  subtitle: string;
+  badge?: number;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors",
+        active
+          ? "bg-surface-2"
+          : "hover:bg-surface-2/60",
+      )}
+    >
+      {leading}
 
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-medium">
+          {title}
+        </span>
 
+        <span className="block truncate text-xs text-muted-foreground">
+          {subtitle}
+        </span>
+      </span>
 
-);
+      {badge > 0 && (
+        <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+          {badge}
+        </span>
+      )}
+    </button>
+  );
 }
-
-
-
-
