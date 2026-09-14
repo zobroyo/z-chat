@@ -29,6 +29,11 @@ import {
  */
 const PROMPTED_KEY = "zchat-alerts-prompted";
 
+// The generated client is strictly typed to known tables; the push helper only
+// needs a minimal upsert shape.
+const pushClient = supabase as unknown as Parameters<typeof subscribeToPush>[1];
+
+
 function NotificationGate({ userId }: { userId?: string }) {
   const [state, setState] = useState<NotificationState>("default");
   const [open, setOpen] = useState(false);
