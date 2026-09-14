@@ -194,6 +194,15 @@ function ChatPage() {
   const groups = conversations.filter((item) => item.kind === "group");
   const directChats = conversations.filter((item) => item.kind === "dm");
 
+  // The General room's real id comes from the database; if the placeholder id
+  // (or a stale ?c= link) doesn't match a chat we can see, fall back to it.
+  useEffect(() => {
+    if (conversations.length === 0 || !generalRoom) return;
+    if (conversations.some((item) => item.id === activeId)) return;
+    setActiveId(generalRoom.id);
+  }, [conversations, generalRoom, activeId]);
+
+
   const others = useMemo(
     () => profiles.filter((profile) => profile.id !== user?.id),
     [profiles, user],
