@@ -289,7 +289,7 @@ function ChatPage() {
         <span className="font-display text-base font-bold">ZChat</span>
         <div className="ml-auto flex items-center">
           <NewGroupDialog people={others} onCreate={makeGroup} />
-          <NotificationGate userId={user?.id} />
+          <NotificationGate userId={user?.id ?? ""} />
         </div>
       </div>
 
