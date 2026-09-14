@@ -217,30 +217,32 @@ function ChatPage() {
   //
   // Most importantly, this runs BEFORE the message-loading effect can use
   // activeId, because activeId starts empty.
-  useEffect(() => {
-    if (!user || conversations.length === 0) return;
+  const conversationInitializedRef = useRef(false);
 
-    const requestedId =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("c")
-        : null;
+useEffect(() => {
+  if (!user || conversations.length === 0) return;
+  if (conversationInitializedRef.current) return;
 
-    const requestedConversation = requestedId
-      ? conversations.find((item) => item.id === requestedId)
-      : undefined;
+  const requestedId =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("c")
+      : null;
 
-    if (requestedConversation) {
-      if (activeId !== requestedConversation.id) {
-        setActiveId(requestedConversation.id);
-      }
-      return;
-    }
+  const requestedConversation = requestedId
+    ? conversations.find((item) => item.id === requestedId)
+    : undefined;
 
-    if (generalRoom && activeId !== generalRoom.id) {
-      setActiveId(generalRoom.id);
-    }
-  }, [user, conversations, generalRoom]);
+  if (requestedConversation) {
+    setActiveId(requestedConversation.id);
+    conversationInitializedRef.current = true;
+    return;
+  }
 
+  if (generalRoom) {
+    setActiveId(generalRoom.id);
+    conversationInitializedRef.current = true;
+  }
+}, [user, conversations, generalRoom]);
   // Load messages only after a real conversation ID has been resolved.
   useEffect(() => {
     if (!user || !activeId) return;
