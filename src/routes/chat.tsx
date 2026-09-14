@@ -71,6 +71,14 @@ function ChatPage() {
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const handleSelectConversation = useCallback((id: string) => {
+  setActiveId(id);
+  // This explicitly pushes the ?c= ID string into the TanStack router lifecycle state
+  void navigate({ 
+    search: (prev: any) => ({ ...prev, c: id }),
+    replace: true 
+  });
+}, [navigate]);
 
   const activeIdRef = useRef(activeId);
   const profilesRef = useRef<Profile[]>([]);
