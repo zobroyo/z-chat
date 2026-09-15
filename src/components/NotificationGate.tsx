@@ -40,6 +40,7 @@ function NotificationGate({ userId }: { userId?: string }) {
   const [touch, setTouch] = useState(false);
   const [installNeeded, setInstallNeeded] = useState(false);
   const [installed, setInstalled] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
 
   useEffect(() => {
     const current = getNotificationState();
@@ -49,12 +50,19 @@ function NotificationGate({ userId }: { userId?: string }) {
     setInstallNeeded(needsHomeScreenFirst());
     setInstalled(isInstalled());
 
+    console.log("[NotificationGate] mount; permission:", current, "installed:", isInstalled());
+
     void registerNotificationWorker();
 
     if (current === "granted" && userId) {
-      void subscribeToPush(userId, pushClient).catch((error) => {
-        console.error("[NotificationGate] Failed to subscribe:", error);
-      });
+      void subscribeToPush(userId, pushClient)
+        .then(() => setPushError(null))
+        .catch((error) => {
+          console.error("[NotificationGate] Failed to subscribe:", error);
+          setPushError(
+            error instanceof Error ? error.message : "Could not set up alerts on this device.",
+          );
+        });
     }
 
     const alreadyAsked =
@@ -76,28 +84,35 @@ function NotificationGate({ userId }: { userId?: string }) {
 
 
   const ask = async () => {
+    setPushError(null);
     const next = await requestNotificationPermission();
 
     setState(next);
 
     if (next === "granted") {
-      setOpen(false);
-
       if (userId) {
         try {
           await subscribeToPush(userId, pushClient);
           console.log("[NotificationGate] Push subscription saved");
+          setPushError(null);
+          setOpen(false);
         } catch (error) {
           console.error(
             "[NotificationGate] Failed to save push subscription:",
             error,
           );
+          // Keep the dialog open so a failed setup never looks like success.
+          setPushError(
+            error instanceof Error ? error.message : "Could not set up alerts on this device.",
+          );
         }
+      } else {
+        setOpen(false);
       }
     }
   };
 
-  const on = state === "granted";
+  const on = state === "granted" && !pushError;
 
   return (
     <>
@@ -166,6 +181,13 @@ function NotificationGate({ userId }: { userId?: string }) {
             <p className="rounded-xl bg-surface-2 p-4 text-sm text-muted-foreground">
               Tip: add ZChat to your home screen from your browser menu so it
               opens like a real app.
+            </p>
+          )}
+
+          {pushError && (
+            <p className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">
+              Alerts could not be set up on this device yet. Try again, and if it
+              keeps failing, close and reopen ZChat.
             </p>
           )}
 

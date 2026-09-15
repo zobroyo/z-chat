@@ -41,21 +41,45 @@ export function needsHomeScreenFirst() {
 }
 
 export async function registerNotificationWorker() {
-  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return null;
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+    console.error("[notifications] Service workers are not supported in this browser");
+    return null;
+  }
   try {
-    return await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-  } catch {
+    const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    console.log("[notifications] /sw.js registered, scope:", registration.scope);
+
+    // Chromium can hand back a registration whose worker is still installing;
+    // push subscription needs an active worker, so wait for it.
+    const ready = await navigator.serviceWorker.ready.catch((error) => {
+      console.error("[notifications] Waiting for the active service worker failed:", error);
+      return null;
+    });
+    const active = registration.active ?? ready?.active ?? null;
+    console.log("[notifications] Active service worker present:", Boolean(active));
+    if (!active) {
+      console.error("[notifications] Service worker registered but has no active worker yet");
+    }
+    return ready ?? registration;
+  } catch (error) {
+    console.error("[notifications] /sw.js registration FAILED:", error);
     return null;
   }
 }
 
 export async function requestNotificationPermission(): Promise<NotificationState> {
-  if (!notificationsSupported()) return "unsupported";
+  if (!notificationsSupported()) {
+    console.error("[notifications] Notifications are not supported in this browser");
+    return "unsupported";
+  }
+  console.log("[notifications] Permission before asking:", getNotificationState());
   await registerNotificationWorker();
   try {
     const result = await Notification.requestPermission();
+    console.log("[notifications] Permission after asking:", result);
     return result as NotificationState;
-  } catch {
+  } catch (error) {
+    console.error("[notifications] Notification.requestPermission FAILED:", error);
     return getNotificationState();
   }
 }
@@ -67,7 +91,10 @@ function urlBase64ToUint8Array(base64String: string) {
   return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
 }
 
-/** Subscribes this device to push and saves it against the given user id. */
+/**
+ * Subscribes this device to push and saves it against the given user id.
+ * Throws when any step fails so callers never treat alerts as enabled by mistake.
+ */
 export async function subscribeToPush(
   userId: string,
   supabase: {
@@ -79,37 +106,85 @@ export async function subscribeToPush(
     };
   },
 ) {
-  const registration = await registerNotificationWorker();
-  const vapidKey = import.meta.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined;
-  if (!registration || !vapidKey) return;
+  console.log("[notifications] subscribeToPush start; permission:", getNotificationState());
 
-  const existing = await registration.pushManager.getSubscription();
-  const subscription =
-    existing ??
-    (await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidKey),
-    }));
+  if (getNotificationState() !== "granted") {
+    throw new Error("Notification permission is not granted");
+  }
+
+  const registration = await registerNotificationWorker();
+  if (!registration) {
+    throw new Error("Service worker registration failed");
+  }
+
+  const vapidKey = import.meta.env["VITE_VAPID_PUBLIC_KEY"] as string | undefined;
+  console.log("[notifications] VAPID public key present:", Boolean(vapidKey));
+  if (!vapidKey) {
+    throw new Error("Missing push public key");
+  }
+
+  if (!("pushManager" in registration)) {
+    throw new Error("Push messaging is not supported in this browser");
+  }
+
+  let existing: PushSubscription | null = null;
+  try {
+    existing = await registration.pushManager.getSubscription();
+    console.log("[notifications] Existing push subscription found:", Boolean(existing));
+  } catch (error) {
+    console.error("[notifications] pushManager.getSubscription FAILED:", error);
+    throw error;
+  }
+
+  let subscription: PushSubscription;
+  if (existing) {
+    subscription = existing;
+  } else {
+    try {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+      console.log("[notifications] pushManager.subscribe succeeded");
+    } catch (error) {
+      console.error("[notifications] pushManager.subscribe FAILED:", error);
+      throw error;
+    }
+  }
 
   const json = subscription.toJSON();
   const keys = (json.keys ?? {}) as Record<string, string | undefined>;
+  const hasEndpoint = Boolean(json.endpoint);
+  console.log(
+    "[notifications] Subscription endpoint present:",
+    hasEndpoint,
+    "host:",
+    hasEndpoint ? new URL(json.endpoint as string).host : "none",
+    "keys present:",
+    Boolean(keys["p256dh"] && keys["auth"]),
+  );
+  if (!hasEndpoint) {
+    throw new Error("Push subscription has no endpoint");
+  }
+
   const { error } = await supabase.from("push_subscriptions").upsert(
-  {
-    user_id: userId,
-    endpoint: json.endpoint,
-    p256dh: keys["p256dh"],
-    auth: keys["auth"],
-  },
-  { onConflict: "endpoint" },
-);
+    {
+      user_id: userId,
+      endpoint: json.endpoint,
+      p256dh: keys["p256dh"],
+      auth: keys["auth"],
+    },
+    { onConflict: "endpoint" },
+  );
 
+  if (error) {
+    console.error("[notifications] Saving push subscription FAILED:", error);
+    throw error;
+  }
 
-if (error) {
-  console.error("[notifications] Failed to save push subscription:", error);
-  throw error;
+  console.log("[notifications] Push subscription saved successfully");
+  return subscription;
 }
-
-console.log("[notifications] Push subscription saved successfully");}
 
 export async function showChatNotification(
   title: string,
