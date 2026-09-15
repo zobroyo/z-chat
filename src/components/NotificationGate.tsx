@@ -40,6 +40,7 @@ function NotificationGate({ userId }: { userId?: string }) {
   const [touch, setTouch] = useState(false);
   const [installNeeded, setInstallNeeded] = useState(false);
   const [installed, setInstalled] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
 
   useEffect(() => {
     const current = getNotificationState();
