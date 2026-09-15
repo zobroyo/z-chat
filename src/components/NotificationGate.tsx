@@ -184,6 +184,13 @@ function NotificationGate({ userId }: { userId?: string }) {
             </p>
           )}
 
+          {pushError && (
+            <p className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">
+              Alerts could not be set up on this device yet. Try again, and if it
+              keeps failing, close and reopen ZChat.
+            </p>
+          )}
+
           {state === "denied" && (
             <p className="rounded-xl bg-surface-2 p-4 text-sm text-muted-foreground">
               Alerts are blocked in your device settings for this site. Allow
