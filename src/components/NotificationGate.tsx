@@ -84,28 +84,35 @@ function NotificationGate({ userId }: { userId?: string }) {
 
 
   const ask = async () => {
+    setPushError(null);
     const next = await requestNotificationPermission();
 
     setState(next);
 
     if (next === "granted") {
-      setOpen(false);
-
       if (userId) {
         try {
           await subscribeToPush(userId, pushClient);
           console.log("[NotificationGate] Push subscription saved");
+          setPushError(null);
+          setOpen(false);
         } catch (error) {
           console.error(
             "[NotificationGate] Failed to save push subscription:",
             error,
           );
+          // Keep the dialog open so a failed setup never looks like success.
+          setPushError(
+            error instanceof Error ? error.message : "Could not set up alerts on this device.",
+          );
         }
+      } else {
+        setOpen(false);
       }
     }
   };
 
-  const on = state === "granted";
+  const on = state === "granted" && !pushError;
 
   return (
     <>
