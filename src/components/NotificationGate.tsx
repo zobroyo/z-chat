@@ -50,12 +50,19 @@ function NotificationGate({ userId }: { userId?: string }) {
     setInstallNeeded(needsHomeScreenFirst());
     setInstalled(isInstalled());
 
+    console.log("[NotificationGate] mount; permission:", current, "installed:", isInstalled());
+
     void registerNotificationWorker();
 
     if (current === "granted" && userId) {
-      void subscribeToPush(userId, pushClient).catch((error) => {
-        console.error("[NotificationGate] Failed to subscribe:", error);
-      });
+      void subscribeToPush(userId, pushClient)
+        .then(() => setPushError(null))
+        .catch((error) => {
+          console.error("[NotificationGate] Failed to subscribe:", error);
+          setPushError(
+            error instanceof Error ? error.message : "Could not set up alerts on this device.",
+          );
+        });
     }
 
     const alreadyAsked =
