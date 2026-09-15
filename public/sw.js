@@ -31,9 +31,14 @@ self.addEventListener("push", (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body: body,
-      tag: "z-chat-message",
+      icon: "/icons/z-512.png",
+      badge: "/icons/z-512.png",
+      tag: `z-chat-${url}-${Date.now()}`,
+      renotify: true,
       data: { url: url },
       requireInteraction: false,
+    }).then(() => {
+      console.log("[sw] Notification displayed successfully");
     }).catch((error) => {
       console.error("[sw] showNotification FAILED:", error);
     })
@@ -43,7 +48,8 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const url = (event.notification.data && event.notification.data.url) || "/chat";
+  const url =
+    (event.notification.data && event.notification.data.url) || "/chat";
 
   event.waitUntil(
     self.clients.matchAll({
@@ -53,7 +59,9 @@ self.addEventListener("notificationclick", (event) => {
       for (const client of clients) {
         if ("focus" in client) {
           if ("navigate" in client) {
-            return client.navigate(url).then((navigated) => (navigated || client).focus());
+            return client.navigate(url).then(
+              (navigated) => (navigated || client).focus()
+            );
           }
           return client.focus();
         }
