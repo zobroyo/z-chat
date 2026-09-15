@@ -74,9 +74,10 @@ function ChatPage() {
   const handleSelectConversation = useCallback((id: string) => {
   setActiveId(id);
   // This explicitly pushes the ?c= ID string into the TanStack router lifecycle state
-  void navigate({ 
-    search: (prev: any) => ({ ...prev, c: id }),
-    replace: true 
+  void navigate({
+    to: "/chat",
+    search: { c: id },
+    replace: true,
   });
 }, [navigate]);
 

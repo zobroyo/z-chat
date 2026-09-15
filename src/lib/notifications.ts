@@ -41,10 +41,28 @@ export function needsHomeScreenFirst() {
 }
 
 export async function registerNotificationWorker() {
-  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return null;
+  if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) {
+    console.error("[notifications] Service workers are not supported in this browser");
+    return null;
+  }
   try {
-    return await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-  } catch {
+    const registration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    console.log("[notifications] /sw.js registered, scope:", registration.scope);
+
+    // Chromium can hand back a registration whose worker is still installing;
+    // push subscription needs an active worker, so wait for it.
+    const ready = await navigator.serviceWorker.ready.catch((error) => {
+      console.error("[notifications] Waiting for the active service worker failed:", error);
+      return null;
+    });
+    const active = registration.active ?? ready?.active ?? null;
+    console.log("[notifications] Active service worker present:", Boolean(active));
+    if (!active) {
+      console.error("[notifications] Service worker registered but has no active worker yet");
+    }
+    return ready ?? registration;
+  } catch (error) {
+    console.error("[notifications] /sw.js registration FAILED:", error);
     return null;
   }
 }
