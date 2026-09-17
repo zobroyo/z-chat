@@ -41,7 +41,7 @@ export function Composer({ onSend, placeholder }: Props) {
   };
 
   return (
-    <div className="border-t border-border bg-surface/80 px-3 py-3 backdrop-blur">
+    <div className="ios-safe-bottom border-t border-border bg-surface/80 px-3 py-3 backdrop-blur">
       {preview && (
         <div className="relative mb-2 inline-block">
           <img src={preview} alt="Selected" className="h-20 rounded-xl object-cover" />
@@ -105,7 +105,8 @@ export function Composer({ onSend, placeholder }: Props) {
           rows={1}
           maxLength={4000}
           placeholder={placeholder ?? "Write a message"}
-          className="max-h-32 min-h-11 resize-none rounded-2xl border-border bg-surface-2"
+          style={{ fontSize: 16 }}
+          className="max-h-32 min-h-11 resize-none rounded-2xl border-border bg-surface-2 md:text-base"
         />
 
         <Button type="submit" size="icon" aria-label="Send message" disabled={sending}>
