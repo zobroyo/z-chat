@@ -654,7 +654,7 @@ useEffect(() => {
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-3 border-b border-border bg-surface/70 px-3 py-3 backdrop-blur">
+        <header className="ios-safe-top flex items-center gap-3 border-b border-border bg-surface/70 px-3 py-3 backdrop-blur">
           <Sheet
             open={sheetOpen}
             onOpenChange={setSheetOpen}
