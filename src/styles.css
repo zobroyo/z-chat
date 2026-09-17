@@ -141,3 +141,31 @@
   scrollbar-width: thin;
   scrollbar-color: var(--color-surface-2) transparent;
 }
+
+/*
+ * iOS PWA (standalone / added-to-home-screen) fixes.
+ * Regular Safari browsing and desktop are untouched — everything here is
+ * scoped to display-mode: standalone.
+ */
+@media (display-mode: standalone) {
+  html,
+  body {
+    /* Stop the whole page from behaving like a scrollable webpage.
+       The chat layout (h-[100dvh] overflow-hidden) becomes the only
+       scroll boundary; individual panes handle their own scrolling. */
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /* Header sits below the Dynamic Island / status bar instead of under it. */
+  .ios-safe-top {
+    padding-top: max(env(safe-area-inset-top), 0.75rem);
+  }
+
+  /* Composer respects the home-indicator area at the bottom. */
+  .ios-safe-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+  }
+}
+
