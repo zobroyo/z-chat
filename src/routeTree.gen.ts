@@ -13,26 +13,71 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RecoveryRouteImport } from './routes/recovery'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminConversationsRouteImport } from './routes/admin.conversations'
+import { Route as AdminConversationsIdRouteImport } from './routes/admin.conversations.$id'
+import { Route as AdminMessagesRouteImport } from './routes/admin.messages'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
+
 const ProfileRoute = ProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
   getParentRoute: () => rootRouteImport,
 } as any)
+
 const RecoveryRoute = RecoveryRouteImport.update({
   id: '/recovery',
   path: '/recovery',
   getParentRoute: () => rootRouteImport,
+} as any)
+
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/admin/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+
+const AdminConversationsRoute = AdminConversationsRouteImport.update({
+  id: '/admin/conversations',
+  path: '/conversations',
+  getParentRoute: () => AdminRoute,
+} as any)
+
+const AdminConversationsIdRoute = AdminConversationsIdRouteImport.update({
+  id: '/admin/conversations/$id',
+  path: '/$id',
+  getParentRoute: () => AdminConversationsRoute,
+} as any)
+
+const AdminMessagesRoute = AdminMessagesRouteImport.update({
+  id: '/admin/messages',
+  path: '/messages',
+  getParentRoute: () => AdminRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -40,33 +85,94 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/conversations': typeof AdminConversationsRoute
+  '/admin/conversations/$id': typeof AdminConversationsIdRoute
+  '/admin/messages': typeof AdminMessagesRoute
 }
+
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
+  '/admin': typeof AdminIndexRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/conversations': typeof AdminConversationsRoute
+  '/admin/conversations/$id': typeof AdminConversationsIdRoute
+  '/admin/messages': typeof AdminMessagesRoute
 }
+
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
+  '/admin': typeof AdminRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/conversations': typeof AdminConversationsRoute
+  '/admin/conversations/$id': typeof AdminConversationsIdRoute
+  '/admin/messages': typeof AdminMessagesRoute
 }
+
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/chat' | '/profile' | '/recovery'
+  fullPaths:
+    | '/'
+    | '/chat'
+    | '/profile'
+    | '/recovery'
+    | '/admin/'
+    | '/admin/users'
+    | '/admin/conversations'
+    | '/admin/conversations/$id'
+    | '/admin/messages'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/chat' | '/profile' | '/recovery'
-  id: '__root__' | '/' | '/chat' | '/profile' | '/recovery'
+  to:
+    | '/'
+    | '/chat'
+    | '/profile'
+    | '/recovery'
+    | '/admin'
+    | '/admin/users'
+    | '/admin/conversations'
+    | '/admin/conversations/$id'
+    | '/admin/messages'
+  id:
+    | '__root__'
+    | '/'
+    | '/chat'
+    | '/profile'
+    | '/recovery'
+    | '/admin'
+    | '/admin/'
+    | '/admin/users'
+    | '/admin/conversations'
+    | '/admin/conversations/$id'
+    | '/admin/messages'
   fileRoutesById: FileRoutesById
 }
+
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ChatRoute: typeof ChatRoute
   ProfileRoute: typeof ProfileRoute
   RecoveryRoute: typeof RecoveryRoute
+  AdminRoute: typeof AdminRoute
+}
+
+export interface AdminRouteChildren {
+  AdminIndexRoute: typeof AdminIndexRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminConversationsRoute: typeof AdminConversationsRoute
+  AdminMessagesRoute: typeof AdminMessagesRoute
+}
+
+export interface AdminConversationsRouteChildren {
+  AdminConversationsIdRoute: typeof AdminConversationsIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -78,6 +184,7 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+
     '/chat': {
       id: '/chat'
       path: '/chat'
@@ -85,6 +192,7 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ChatRouteImport
       parentRoute: typeof rootRouteImport
     }
+
     '/profile': {
       id: '/profile'
       path: '/profile'
@@ -92,6 +200,7 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
+
     '/recovery': {
       id: '/recovery'
       path: '/recovery'
@@ -99,7 +208,67 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecoveryRouteImport
       parentRoute: typeof rootRouteImport
     }
+
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRouteImport
+    }
+
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRouteImport
+    }
+
+    '/admin/conversations': {
+      id: '/admin/conversations'
+      path: '/conversations'
+      fullPath: '/admin/conversations'
+      preLoaderRoute: typeof AdminConversationsRouteImport
+      parentRoute: typeof AdminRouteImport
+    }
+
+    '/admin/conversations/$id': {
+      id: '/admin/conversations/$id'
+      path: '/$id'
+      fullPath: '/admin/conversations/$id'
+      preLoaderRoute: typeof AdminConversationsIdRouteImport
+      parentRoute: typeof AdminConversationsRouteImport
+    }
+
+    '/admin/messages': {
+      id: '/admin/messages'
+      path: '/messages'
+      fullPath: '/admin/messages'
+      preLoaderRoute: typeof AdminMessagesRouteImport
+      parentRoute: typeof AdminRouteImport
+    }
   }
+}
+
+const adminConversationsRouteChildren: AdminConversationsRouteChildren = {
+  AdminConversationsIdRoute: AdminConversationsIdRoute,
+}
+
+const adminRouteChildren: AdminRouteChildren = {
+  AdminIndexRoute: AdminIndexRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminConversationsRoute:
+    AdminConversationsRoute._addFileChildren(adminConversationsRouteChildren),
+  AdminMessagesRoute: AdminMessagesRoute,
 }
 
 const rootRouteChildren: RootRouteChildren = {
@@ -107,13 +276,16 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRoute,
   ProfileRoute: ProfileRoute,
   RecoveryRoute: RecoveryRoute,
+  AdminRoute: AdminRoute._addFileChildren(adminRouteChildren),
 }
+
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
 import type { startInstance } from './start.ts'
+
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
