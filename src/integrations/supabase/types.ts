@@ -164,18 +164,21 @@ export type Database = {
           id: string
           keyword: string
           enabled: boolean
+          replacement: string | null
           created_at: string
         }
         Insert: {
           id?: string
           keyword: string
           enabled?: boolean
+          replacement?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           keyword?: string
           enabled?: boolean
+          replacement?: string | null
           created_at?: string
         }
         Relationships: []
