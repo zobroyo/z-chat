@@ -111,6 +111,7 @@ export type Database = {
       profiles: {
         Row: {
           avatar_url: string | null
+          banned: boolean
           created_at: string
           display_name: string
           id: string
@@ -120,6 +121,7 @@ export type Database = {
         }
         Insert: {
           avatar_url?: string | null
+          banned?: boolean
           created_at?: string
           display_name?: string
           id: string
@@ -129,6 +131,7 @@ export type Database = {
         }
         Update: {
           avatar_url?: string | null
+          banned?: boolean
           created_at?: string
           display_name?: string
           id?: string
@@ -138,12 +141,58 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_settings: {
+        Row: {
+          id: boolean
+          character_limit: number
+          keyword_moderation_enabled: boolean
+        }
+        Insert: {
+          id?: boolean
+          character_limit?: number
+          keyword_moderation_enabled?: boolean
+        }
+        Update: {
+          id?: boolean
+          character_limit?: number
+          keyword_moderation_enabled?: boolean
+        }
+        Relationships: []
+      }
+      blocked_keywords: {
+        Row: {
+          id: string
+          keyword: string
+          enabled: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          keyword: string
+          enabled?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          keyword?: string
+          enabled?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      admin_set_banned: {
+        Args: { _target: string; _value: boolean }
+        Returns: undefined
+      }
+      admin_set_is_admin: {
+        Args: { _target: string; _value: boolean }
+        Returns: undefined
+      }
     }
     Enums: {
       conversation_kind: "public" | "dm" | "group"
