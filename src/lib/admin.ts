@@ -186,6 +186,11 @@ export async function deleteMessageAsAdmin(messageId: string) {
   if (error) throw error;
 }
 
+export async function editMessageAsAdmin(messageId: string, body: string) {
+  const { error } = await supabase.from("messages").update({ body }).eq("id", messageId);
+  if (error) throw error;
+}
+
 export async function renameConversationAsAdmin(conversationId: string, name: string) {
   const { error } = await supabase.from("conversations").update({ name }).eq("id", conversationId);
   if (error) throw error;
@@ -233,21 +238,26 @@ export async function updateChatSettings(fields: Partial<ChatSettings>) {
   if (error) throw error;
 }
 
-export type BlockedKeyword = { id: string; keyword: string; enabled: boolean };
+export type BlockedKeyword = {
+  id: string;
+  keyword: string;
+  enabled: boolean;
+  replacement: string | null;
+};
 
 export async function fetchBlockedKeywords(): Promise<BlockedKeyword[]> {
   const { data, error } = await supabase
     .from("blocked_keywords")
-    .select("id, keyword, enabled")
+    .select("id, keyword, enabled, replacement")
     .order("keyword");
   if (error) throw error;
   return (data ?? []) as BlockedKeyword[];
 }
 
-export async function addBlockedKeyword(keyword: string) {
+export async function addBlockedKeyword(keyword: string, replacement: string | null) {
   const { error } = await supabase
     .from("blocked_keywords")
-    .insert({ keyword: keyword.trim().toLowerCase() });
+    .insert({ keyword: keyword.trim().toLowerCase(), replacement: replacement?.trim() || null });
   if (error) throw error;
 }
 
