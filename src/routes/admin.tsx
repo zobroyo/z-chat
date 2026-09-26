@@ -6,6 +6,7 @@ import {
   Users,
   MessagesSquare,
   MessageCircle,
+  Settings,
   ArrowLeft,
 } from "lucide-react";
 
@@ -22,6 +23,7 @@ const NAV = [
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/conversations", label: "Conversations", icon: MessagesSquare },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
+  { to: "/admin/settings", label: "Settings", icon: Settings },
 ];
 
 function AdminLayout() {
