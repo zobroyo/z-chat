@@ -44,12 +44,16 @@ export type AdminProfile = {
   avatar_url: string | null;
   last_seen: string;
   created_at: string;
+  is_admin: boolean;
+  banned: boolean;
 };
 
 export async function fetchAdminUsers(page: number, search: string) {
   let query = supabase
     .from("profiles")
-    .select("id, display_name, avatar_url, last_seen, created_at", { count: "exact" })
+    .select("id, display_name, avatar_url, last_seen, created_at, is_admin, banned", {
+      count: "exact",
+    })
     .order("display_name")
     .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
   if (search.trim()) query = query.ilike("display_name", `%${search.trim()}%`);
@@ -83,8 +87,14 @@ export async function fetchAdminConversations(
   const withCounts = await Promise.all(
     rows.map(async (c): Promise<ConversationSummary> => {
       const [members, messages, last] = await Promise.all([
-        supabase.from("conversation_members").select("user_id", { count: "exact", head: true }).eq("conversation_id", c.id),
-        supabase.from("messages").select("id", { count: "exact", head: true }).eq("conversation_id", c.id),
+        supabase
+          .from("conversation_members")
+          .select("user_id", { count: "exact", head: true })
+          .eq("conversation_id", c.id),
+        supabase
+          .from("messages")
+          .select("id", { count: "exact", head: true })
+          .eq("conversation_id", c.id),
         supabase
           .from("messages")
           .select("created_at")
@@ -147,4 +157,106 @@ export async function fetchConversationById(id: string) {
     .maybeSingle();
   if (error) throw error;
   return data as Conversation | null;
+}
+
+// --- Admin actions: each calls a SECURITY DEFINER function or an RLS-scoped
+// mutation added specifically for admin use. None of these bypass RLS on
+// their own — the database itself checks private.is_admin(auth.uid()).
+
+export async function setUserBanned(userId: string, banned: boolean) {
+  const { error } = await supabase.rpc("admin_set_banned", { _target: userId, _value: banned });
+  if (error) throw error;
+}
+
+export async function setUserAdmin(userId: string, isAdmin: boolean) {
+  const { error } = await supabase.rpc("admin_set_is_admin", { _target: userId, _value: isAdmin });
+  if (error) throw error;
+}
+
+export async function updateUserProfile(
+  userId: string,
+  fields: { display_name?: string; avatar_url?: string | null },
+) {
+  const { error } = await supabase.from("profiles").update(fields).eq("id", userId);
+  if (error) throw error;
+}
+
+export async function deleteMessageAsAdmin(messageId: string) {
+  const { error } = await supabase.from("messages").delete().eq("id", messageId);
+  if (error) throw error;
+}
+
+export async function renameConversationAsAdmin(conversationId: string, name: string) {
+  const { error } = await supabase.from("conversations").update({ name }).eq("id", conversationId);
+  if (error) throw error;
+}
+
+export async function kickMemberAsAdmin(conversationId: string, userId: string) {
+  const { error } = await supabase
+    .from("conversation_members")
+    .delete()
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function fetchConversationMembers(conversationId: string) {
+  const { data, error } = await supabase
+    .from("conversation_members")
+    .select("user_id")
+    .eq("conversation_id", conversationId);
+  if (error) throw error;
+  const userIds = (data ?? []).map((m) => (m as { user_id: string }).user_id);
+  if (!userIds.length) return [];
+  const { data: profs, error: profErr } = await supabase
+    .from("profiles")
+    .select("id, display_name, avatar_url")
+    .in("id", userIds);
+  if (profErr) throw profErr;
+  return (profs ?? []) as { id: string; display_name: string; avatar_url: string | null }[];
+}
+
+export type ChatSettings = { character_limit: number; keyword_moderation_enabled: boolean };
+
+export async function fetchChatSettings(): Promise<ChatSettings> {
+  const { data, error } = await supabase
+    .from("chat_settings")
+    .select("character_limit, keyword_moderation_enabled")
+    .eq("id", true)
+    .single();
+  if (error) throw error;
+  return data as ChatSettings;
+}
+
+export async function updateChatSettings(fields: Partial<ChatSettings>) {
+  const { error } = await supabase.from("chat_settings").update(fields).eq("id", true);
+  if (error) throw error;
+}
+
+export type BlockedKeyword = { id: string; keyword: string; enabled: boolean };
+
+export async function fetchBlockedKeywords(): Promise<BlockedKeyword[]> {
+  const { data, error } = await supabase
+    .from("blocked_keywords")
+    .select("id, keyword, enabled")
+    .order("keyword");
+  if (error) throw error;
+  return (data ?? []) as BlockedKeyword[];
+}
+
+export async function addBlockedKeyword(keyword: string) {
+  const { error } = await supabase
+    .from("blocked_keywords")
+    .insert({ keyword: keyword.trim().toLowerCase() });
+  if (error) throw error;
+}
+
+export async function setBlockedKeywordEnabled(id: string, enabled: boolean) {
+  const { error } = await supabase.from("blocked_keywords").update({ enabled }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteBlockedKeyword(id: string) {
+  const { error } = await supabase.from("blocked_keywords").delete().eq("id", id);
+  if (error) throw error;
 }
