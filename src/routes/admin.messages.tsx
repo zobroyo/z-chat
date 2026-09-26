@@ -1,8 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
-import { searchAdminMessages, PAGE_SIZE, type AdminMessageRow } from "@/lib/admin";
+import {
+  searchAdminMessages,
+  deleteMessageAsAdmin,
+  PAGE_SIZE,
+  type AdminMessageRow,
+} from "@/lib/admin";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { TechnicalDetails } from "@/components/admin/TechnicalDetails";
@@ -19,14 +25,13 @@ function AdminMessages() {
   const [rows, setRows] = useState<Enriched[] | null>(null);
   const [count, setCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = () => {
     setRows(null);
-    let cancelled = false;
     (async () => {
       try {
         const { rows, count } = await searchAdminMessages(page, query);
-        if (cancelled) return;
         setCount(count);
 
         const senderIds = [...new Set(rows.map((m) => m.sender_id))];
@@ -39,7 +44,6 @@ function AdminMessages() {
             ? supabase.from("conversations").select("id, kind, name").in("id", convIds)
             : Promise.resolve({ data: [] as { id: string; kind: string; name: string | null }[] }),
         ]);
-        if (cancelled) return;
         const profMap = new Map((profs ?? []).map((p) => [p.id, p.display_name]));
         const convMap = new Map(
           (convs ?? []).map((c) => [
@@ -55,13 +59,29 @@ function AdminMessages() {
           })),
         );
       } catch (e) {
-        if (!cancelled) setError((e as Error).message ?? "Search failed");
+        setError((e as Error).message ?? "Search failed");
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+  };
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, query]);
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this message? This can't be undone.")) return;
+    setDeletingId(id);
+    try {
+      await deleteMessageAsAdmin(id);
+      toast.success("Message deleted");
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete message");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -91,11 +111,11 @@ function AdminMessages() {
       ) : (
         <div className="divide-y divide-border rounded-xl border border-border bg-surface">
           {rows.map((m) => (
-            <div key={m.id} className="px-4 py-3">
+            <div key={m.id} className="flex items-start gap-2 px-4 py-3">
               <Link
                 to="/admin/conversations/$id"
                 params={{ id: m.conversation_id }}
-                className="block hover:bg-surface-2 -mx-2 rounded-md px-2 py-1"
+                className="-mx-2 block min-w-0 flex-1 rounded-md px-2 py-1 hover:bg-surface-2"
               >
                 <div className="flex items-baseline justify-between gap-2">
                   <span className="text-sm font-medium text-foreground">{m.senderName}</span>
@@ -105,14 +125,26 @@ function AdminMessages() {
                 </div>
                 <div className="text-xs text-muted-foreground">{m.conversationName}</div>
                 {m.body && <p className="mt-1 truncate text-sm text-foreground">"{m.body}"</p>}
+                <TechnicalDetails
+                  items={[
+                    { label: "Message UUID", value: m.id },
+                    { label: "Conversation UUID", value: m.conversation_id },
+                    { label: "Sender UUID", value: m.sender_id },
+                  ]}
+                />
               </Link>
-              <TechnicalDetails
-                items={[
-                  { label: "Message UUID", value: m.id },
-                  { label: "Conversation UUID", value: m.conversation_id },
-                  { label: "Sender UUID", value: m.sender_id },
-                ]}
-              />
+              <button
+                onClick={() => void handleDelete(m.id)}
+                disabled={deletingId === m.id}
+                aria-label="Delete message"
+                className="mt-1 shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+              >
+                {deletingId === m.id ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Trash2 className="size-4" />
+                )}
+              </button>
             </div>
           ))}
         </div>
