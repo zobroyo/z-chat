@@ -28,6 +28,7 @@ function AdminSettings() {
   const [keywords, setKeywords] = useState<BlockedKeyword[] | null>(null);
   const [customLimit, setCustomLimit] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
+  const [newReplacement, setNewReplacement] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -74,8 +75,9 @@ function AdminSettings() {
     if (!trimmed) return;
     setBusy(true);
     try {
-      await addBlockedKeyword(trimmed);
+      await addBlockedKeyword(trimmed, newReplacement.trim() || null);
       setNewKeyword("");
+      setNewReplacement("");
       load();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to add keyword");
@@ -186,11 +188,19 @@ function AdminSettings() {
           />
         </div>
 
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
           <Input
             value={newKeyword}
             onChange={(e) => setNewKeyword(e.target.value)}
-            placeholder="Add a blocked word"
+            placeholder="Blocked word"
+            className="max-w-[10rem]"
+            onKeyDown={(e) => e.key === "Enter" && void addKeyword()}
+          />
+          <Input
+            value={newReplacement}
+            onChange={(e) => setNewReplacement(e.target.value)}
+            placeholder="Replace with (optional)"
+            className="max-w-[10rem]"
             onKeyDown={(e) => e.key === "Enter" && void addKeyword()}
           />
           <Button
@@ -202,6 +212,10 @@ function AdminSettings() {
             <Plus className="size-4" />
           </Button>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Leave "replace with" empty to block the message outright. Fill it in to swap the word
+          instead.
+        </p>
 
         {keywords.length === 0 ? (
           <p className="text-sm text-muted-foreground">No blocked keywords yet.</p>
@@ -209,11 +223,16 @@ function AdminSettings() {
           <div className="divide-y divide-border rounded-xl border border-border bg-surface">
             {keywords.map((kw) => (
               <div key={kw.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                <span
-                  className={`text-sm ${kw.enabled ? "text-foreground" : "text-muted-foreground line-through"}`}
-                >
-                  {kw.keyword}
-                </span>
+                <div className="min-w-0">
+                  <span
+                    className={`text-sm ${kw.enabled ? "text-foreground" : "text-muted-foreground line-through"}`}
+                  >
+                    {kw.keyword}
+                  </span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {kw.replacement ? `→ "${kw.replacement}"` : "blocks message"}
+                  </span>
+                </div>
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={kw.enabled}
