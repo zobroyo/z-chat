@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Pencil, UserMinus } from "lucide-react";
+import { ArrowLeft, Loader2, Pencil, Trash2, UserMinus } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +9,8 @@ import {
   fetchConversationMembers,
   renameConversationAsAdmin,
   kickMemberAsAdmin,
+  editMessageAsAdmin,
+  deleteMessageAsAdmin,
   type AdminProfile,
 } from "@/lib/admin";
 import type { Conversation, Message } from "@/lib/chat";
@@ -39,6 +41,8 @@ function AdminConversationViewer() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [messageDraft, setMessageDraft] = useState("");
 
   const load = async () => {
     try {
@@ -109,6 +113,37 @@ function AdminConversationViewer() {
       setMembers((prev) => prev.filter((m) => m.id !== userId));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to remove member");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveMessageEdit = async (messageId: string) => {
+    if (!messageDraft.trim()) return;
+    setBusy(true);
+    try {
+      await editMessageAsAdmin(messageId, messageDraft.trim());
+      setMessages((prev) =>
+        prev
+          ? prev.map((m) => (m.id === messageId ? { ...m, body: messageDraft.trim() } : m))
+          : prev,
+      );
+      setEditingMessageId(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to edit message");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const deleteMessage = async (messageId: string) => {
+    if (!window.confirm("Delete this message? This can't be undone.")) return;
+    setBusy(true);
+    try {
+      await deleteMessageAsAdmin(messageId);
+      setMessages((prev) => (prev ? prev.filter((m) => m.id !== messageId) : prev));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete message");
     } finally {
       setBusy(false);
     }
@@ -235,19 +270,73 @@ function AdminConversationViewer() {
                     className="size-8 shrink-0"
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-sm font-medium text-foreground">
-                        {sender?.display_name || "Deleted user"}
-                      </span>
-                      <span className="text-[11px] text-muted-foreground">
-                        {new Date(m.created_at).toLocaleString()}
-                      </span>
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="flex items-baseline gap-2">
+                        <span className="text-sm font-medium text-foreground">
+                          {sender?.display_name || "Deleted user"}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {new Date(m.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      {editingMessageId !== m.id && m.body && (
+                        <div className="flex shrink-0 gap-1">
+                          <button
+                            onClick={() => {
+                              setEditingMessageId(m.id);
+                              setMessageDraft(m.body ?? "");
+                            }}
+                            aria-label="Edit message"
+                            className="text-muted-foreground hover:text-foreground"
+                          >
+                            <Pencil className="size-3.5" />
+                          </button>
+                          <button
+                            onClick={() => void deleteMessage(m.id)}
+                            aria-label="Delete message"
+                            className="text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="size-3.5" />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    {m.body && (
-                      <p className="mt-0.5 text-sm break-words text-foreground">{m.body}</p>
-                    )}
-                    {m.image_url && !m.body && (
-                      <p className="mt-0.5 text-sm italic text-muted-foreground">Sent an image</p>
+                    {editingMessageId === m.id ? (
+                      <div className="mt-1 flex items-center gap-1.5">
+                        <Input
+                          value={messageDraft}
+                          onChange={(e) => setMessageDraft(e.target.value)}
+                          className="h-8 text-sm"
+                          autoFocus
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8"
+                          disabled={busy}
+                          onClick={() => void saveMessageEdit(m.id)}
+                        >
+                          Save
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8"
+                          onClick={() => setEditingMessageId(null)}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        {m.body && (
+                          <p className="mt-0.5 text-sm break-words text-foreground">{m.body}</p>
+                        )}
+                        {m.image_url && !m.body && (
+                          <p className="mt-0.5 text-sm italic text-muted-foreground">
+                            Sent an image
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
