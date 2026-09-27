@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Hash, LogOut, Menu, Search, Settings, Users } from "lucide-react";
+import { Hash, LogOut, Menu, Search, Settings, Shield, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Composer } from "@/components/chat/Composer";
 import { MessageBubble } from "@/components/chat/MessageBubble";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
+import { checkIsAdmin } from "@/lib/admin";
 import { supabase } from "@/integrations/supabase/client";
 import {
   createGroup,
@@ -56,6 +57,19 @@ export const Route = createFileRoute("/chat")({
 function ChatPage() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    let cancelled = false;
+    checkIsAdmin(user.id).then((v) => !cancelled && setIsAdmin(v));
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -71,15 +85,18 @@ function ChatPage() {
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const handleSelectConversation = useCallback((id: string) => {
-  setActiveId(id);
-  // This explicitly pushes the ?c= ID string into the TanStack router lifecycle state
-  void navigate({
-    to: "/chat",
-    search: { c: id },
-    replace: true,
-  });
-}, [navigate]);
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      setActiveId(id);
+      // This explicitly pushes the ?c= ID string into the TanStack router lifecycle state
+      void navigate({
+        to: "/chat",
+        search: { c: id },
+        replace: true,
+      });
+    },
+    [navigate],
+  );
 
   const activeIdRef = useRef(activeId);
   const profilesRef = useRef<Profile[]>([]);
@@ -114,10 +131,7 @@ function ChatPage() {
     void reload();
     void touchPresence(user.id);
 
-    const presence = window.setInterval(
-      () => void touchPresence(user.id),
-      45_000,
-    );
+    const presence = window.setInterval(() => void touchPresence(user.id), 45_000);
 
     return () => window.clearInterval(presence);
   }, [user, reload]);
@@ -137,14 +151,11 @@ function ChatPage() {
         },
         (payload) => {
           const message = payload.new as Message;
-          const isActive =
-            message.conversation_id === activeIdRef.current;
+          const isActive = message.conversation_id === activeIdRef.current;
 
           if (isActive) {
             setMessages((current) =>
-              current.some((item) => item.id === message.id)
-                ? current
-                : [...current, message],
+              current.some((item) => item.id === message.id) ? current : [...current, message],
             );
           }
 
@@ -153,15 +164,12 @@ function ChatPage() {
           if (!isActive) {
             setUnread((current) => ({
               ...current,
-              [message.conversation_id]:
-                (current[message.conversation_id] ?? 0) + 1,
+              [message.conversation_id]: (current[message.conversation_id] ?? 0) + 1,
             }));
           }
 
           if (!isActive || document.visibilityState !== "visible") {
-            const sender = profilesRef.current.find(
-              (item) => item.id === message.sender_id,
-            );
+            const sender = profilesRef.current.find((item) => item.id === message.sender_id);
 
             const title = sender?.display_name ?? "New message";
             const body = message.body ?? "Sent a photo";
@@ -170,11 +178,7 @@ function ChatPage() {
               description: body,
             });
 
-            void showChatNotification(
-              title,
-              body,
-              message.conversation_id,
-            );
+            void showChatNotification(title, body, message.conversation_id);
           }
         },
       )
@@ -186,7 +190,9 @@ function ChatPage() {
           table: "profiles",
         },
         () => {
-          void fetchProfiles().then(setProfiles).catch(() => undefined);
+          void fetchProfiles()
+            .then(setProfiles)
+            .catch(() => undefined);
         },
       )
       .on(
@@ -207,9 +213,7 @@ function ChatPage() {
     };
   }, [user, reload]);
 
-  const generalRoom = conversations.find(
-    (item) => item.kind === "public",
-  );
+  const generalRoom = conversations.find((item) => item.kind === "public");
 
   // Resolve the active conversation only after conversations have loaded.
   //
@@ -220,30 +224,28 @@ function ChatPage() {
   // activeId, because activeId starts empty.
   const conversationInitializedRef = useRef(false);
 
-useEffect(() => {
-  if (!user || conversations.length === 0) return;
-  if (conversationInitializedRef.current) return;
+  useEffect(() => {
+    if (!user || conversations.length === 0) return;
+    if (conversationInitializedRef.current) return;
 
-  const requestedId =
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("c")
-      : null;
+    const requestedId =
+      typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("c") : null;
 
-  const requestedConversation = requestedId
-    ? conversations.find((item) => item.id === requestedId)
-    : undefined;
+    const requestedConversation = requestedId
+      ? conversations.find((item) => item.id === requestedId)
+      : undefined;
 
-  if (requestedConversation) {
-    setActiveId(requestedConversation.id);
-    conversationInitializedRef.current = true;
-    return;
-  }
+    if (requestedConversation) {
+      setActiveId(requestedConversation.id);
+      conversationInitializedRef.current = true;
+      return;
+    }
 
-  if (generalRoom) {
-    setActiveId(generalRoom.id);
-    conversationInitializedRef.current = true;
-  }
-}, [user, conversations, generalRoom]);
+    if (generalRoom) {
+      setActiveId(generalRoom.id);
+      conversationInitializedRef.current = true;
+    }
+  }, [user, conversations, generalRoom]);
   // Load messages only after a real conversation ID has been resolved.
   useEffect(() => {
     if (!user || !activeId) return;
@@ -279,10 +281,7 @@ useEffect(() => {
   }, [messages]);
 
   const profileMap = useMemo(
-    () =>
-      new Map(
-        profiles.map((profile) => [profile.id, profile]),
-      ),
+    () => new Map(profiles.map((profile) => [profile.id, profile])),
     [profiles],
   );
 
@@ -291,31 +290,23 @@ useEffect(() => {
       if (!user) return undefined;
 
       const partnerId = members.find(
-        (member) =>
-          member.conversation_id === conversation.id &&
-          member.user_id !== user.id,
+        (member) => member.conversation_id === conversation.id && member.user_id !== user.id,
       )?.user_id;
 
-      return partnerId
-        ? profileMap.get(partnerId)
-        : undefined;
+      return partnerId ? profileMap.get(partnerId) : undefined;
     },
     [members, profileMap, user],
   );
 
-  const groups = conversations.filter(
-    (item) => item.kind === "group",
-  );
+  const groups = conversations.filter((item) => item.kind === "group");
 
   const directChats = conversations.filter((item) => {
-  if (item.kind !== "dm" || !user) return false;
+    if (item.kind !== "dm" || !user) return false;
 
-  return members.some(
-    (member) =>
-      member.conversation_id === item.id &&
-      member.user_id === user.id,
-  );
-});
+    return members.some(
+      (member) => member.conversation_id === item.id && member.user_id === user.id,
+    );
+  });
 
   const others = useMemo(
     () => profiles.filter((profile) => profile.id !== user?.id),
@@ -327,22 +318,14 @@ useEffect(() => {
 
     if (!needle) return others;
 
-    return others.filter((profile) =>
-      profile.display_name.toLowerCase().includes(needle),
-    );
+    return others.filter((profile) => profile.display_name.toLowerCase().includes(needle));
   }, [others, query]);
 
-  const activeConversation =
-    conversations.find((item) => item.id === activeId) ??
-    generalRoom;
+  const activeConversation = conversations.find((item) => item.id === activeId) ?? generalRoom;
 
-  const activePartner = activeConversation
-    ? partnerOf(activeConversation)
-    : undefined;
+  const activePartner = activeConversation ? partnerOf(activeConversation) : undefined;
 
-  const memberCount = members.filter(
-    (member) => member.conversation_id === activeId,
-  ).length;
+  const memberCount = members.filter((member) => member.conversation_id === activeId).length;
 
   const activeTitle =
     activeConversation?.kind === "public"
@@ -355,9 +338,7 @@ useEffect(() => {
     activeConversation?.kind === "public"
       ? "Everyone on ZChat"
       : activeConversation?.kind === "group"
-        ? `${memberCount} member${
-            memberCount === 1 ? "" : "s"
-          }`
+        ? `${memberCount} member${memberCount === 1 ? "" : "s"}`
         : isOnline(activePartner)
           ? "Online"
           : "Offline";
@@ -371,10 +352,7 @@ useEffect(() => {
     if (!user) return;
 
     try {
-      const conversation = await ensureDirectConversation(
-        user.id,
-        otherId,
-      );
+      const conversation = await ensureDirectConversation(user.id, otherId);
 
       await reload();
       openConversation(conversation.id);
@@ -383,45 +361,26 @@ useEffect(() => {
     }
   };
 
-  const makeGroup = async (
-    name: string,
-    memberIds: string[],
-  ) => {
+  const makeGroup = async (name: string, memberIds: string[]) => {
     if (!user) return;
 
-    const conversation = await createGroup(
-      user.id,
-      name,
-      memberIds,
-    );
+    const conversation = await createGroup(user.id, name, memberIds);
 
     await reload();
     openConversation(conversation.id);
   };
 
   const leaveGroup = async () => {
-    if (
-      !user ||
-      activeConversation?.kind !== "group"
-    ) {
+    if (!user || activeConversation?.kind !== "group") {
       return;
     }
 
-    if (
-      !window.confirm(
-        `Leave ${
-          activeConversation.name ?? "this group"
-        }?`,
-      )
-    ) {
+    if (!window.confirm(`Leave ${activeConversation.name ?? "this group"}?`)) {
       return;
     }
 
     try {
-      await leaveConversation(
-        activeConversation.id,
-        user.id,
-      );
+      await leaveConversation(activeConversation.id, user.id);
 
       if (generalRoom) {
         setActiveId(generalRoom.id);
@@ -436,15 +395,10 @@ useEffect(() => {
     }
   };
 
-  const handleSend = async (
-    body: string,
-    file: File | null,
-  ) => {
+  const handleSend = async (body: string, file: File | null) => {
     if (!user || !activeId) return;
 
-    const imagePath = file
-      ? await uploadChatImage(activeId, file)
-      : null;
+    const imagePath = file ? await uploadChatImage(activeId, file) : null;
 
     await sendMessage({
       conversationId: activeId,
@@ -454,9 +408,7 @@ useEffect(() => {
     });
   };
 
-  const me = user
-    ? profileMap.get(user.id)
-    : undefined;
+  const me = user ? profileMap.get(user.id) : undefined;
 
   const sidebar = (
     <div className="flex h-full flex-col bg-sidebar">
@@ -465,19 +417,12 @@ useEffect(() => {
           Z
         </span>
 
-        <span className="font-display text-base font-bold">
-          ZChat
-        </span>
+        <span className="font-display text-base font-bold">ZChat</span>
 
         <div className="ml-auto flex items-center">
-          <NewGroupDialog
-            people={others}
-            onCreate={makeGroup}
-          />
+          <NewGroupDialog people={others} onCreate={makeGroup} />
 
-          <NotificationGate
-            userId={user?.id ?? ""}
-          />
+          <NotificationGate userId={user?.id ?? ""} />
         </div>
       </div>
 
@@ -487,9 +432,7 @@ useEffect(() => {
 
           <Input
             value={query}
-            onChange={(event) =>
-              setQuery(event.target.value)
-            }
+            onChange={(event) => setQuery(event.target.value)}
             placeholder="Search people"
             className="rounded-xl bg-surface-2 pl-9"
           />
@@ -500,10 +443,7 @@ useEffect(() => {
         <Section title="Room">
           <Row
             active={activeId === generalRoom?.id}
-            onClick={() =>
-              generalRoom &&
-              openConversation(generalRoom.id)
-            }
+            onClick={() => generalRoom && openConversation(generalRoom.id)}
             leading={
               <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
                 <Hash className="size-4" />
@@ -511,9 +451,7 @@ useEffect(() => {
             }
             title="General"
             subtitle="Everyone on ZChat"
-            badge={
-              unread[generalRoom?.id ?? ""] ?? 0
-            }
+            badge={unread[generalRoom?.id ?? ""] ?? 0}
           />
         </Section>
 
@@ -523,22 +461,14 @@ useEffect(() => {
               <Row
                 key={group.id}
                 active={activeId === group.id}
-                onClick={() =>
-                  openConversation(group.id)
-                }
+                onClick={() => openConversation(group.id)}
                 leading={
                   <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
                     <Users className="size-4" />
                   </span>
                 }
                 title={group.name ?? "Group"}
-                subtitle={`${
-                  members.filter(
-                    (m) =>
-                      m.conversation_id ===
-                      group.id,
-                  ).length
-                } members`}
+                subtitle={`${members.filter((m) => m.conversation_id === group.id).length} members`}
                 badge={unread[group.id] ?? 0}
               />
             ))}
@@ -548,20 +478,13 @@ useEffect(() => {
         {directChats.length > 0 && (
           <Section title="Chats">
             {directChats.map((conversation) => {
-              const partner =
-                partnerOf(conversation);
+              const partner = partnerOf(conversation);
 
               return (
                 <Row
                   key={conversation.id}
-                  active={
-                    activeId === conversation.id
-                  }
-                  onClick={() =>
-                    openConversation(
-                      conversation.id,
-                    )
-                  }
+                  active={activeId === conversation.id}
+                  onClick={() => openConversation(conversation.id)}
                   leading={
                     <UserAvatar
                       name={partner?.display_name}
@@ -570,18 +493,9 @@ useEffect(() => {
                       className="size-9"
                     />
                   }
-                  title={
-                    partner?.display_name ??
-                    "Someone"
-                  }
-                  subtitle={
-                    isOnline(partner)
-                      ? "Online"
-                      : "Offline"
-                  }
-                  badge={
-                    unread[conversation.id] ?? 0
-                  }
+                  title={partner?.display_name ?? "Someone"}
+                  subtitle={isOnline(partner) ? "Online" : "Offline"}
+                  badge={unread[conversation.id] ?? 0}
                 />
               );
             })}
@@ -590,17 +504,13 @@ useEffect(() => {
 
         <Section title="People">
           {filteredOthers.length === 0 && (
-            <p className="px-2 py-1 text-sm text-muted-foreground">
-              No one else here yet.
-            </p>
+            <p className="px-2 py-1 text-sm text-muted-foreground">No one else here yet.</p>
           )}
 
           {filteredOthers.map((person) => (
             <Row
               key={person.id}
-              onClick={() =>
-                void startDirect(person.id)
-              }
+              onClick={() => void startDirect(person.id)}
               leading={
                 <UserAvatar
                   name={person.display_name}
@@ -609,37 +519,35 @@ useEffect(() => {
                   className="size-9"
                 />
               }
-              title={
-                person.display_name || "Someone"
-              }
-              subtitle={
-                isOnline(person)
-                  ? "Online"
-                  : "Offline"
-              }
+              title={person.display_name || "Someone"}
+              subtitle={isOnline(person) ? "Online" : "Offline"}
             />
           ))}
         </Section>
       </div>
 
+      {isAdmin && (
+        <Link
+          to="/admin"
+          className="flex items-center gap-3 border-t border-border px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+        >
+          <Shield className="size-4" />
+          Admin panel
+        </Link>
+      )}
+
       <Link
         to="/profile"
         className="flex items-center gap-3 border-t border-border px-4 py-3 transition-colors hover:bg-surface-2"
       >
-        <UserAvatar
-          name={me?.display_name}
-          path={me?.avatar_url}
-          className="size-9"
-        />
+        <UserAvatar name={me?.display_name} path={me?.avatar_url} className="size-9" />
 
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">
             {me?.display_name || "Set your name"}
           </span>
 
-          <span className="block truncate text-xs text-muted-foreground">
-            Profile & settings
-          </span>
+          <span className="block truncate text-xs text-muted-foreground">Profile & settings</span>
         </span>
 
         <Settings className="size-4 text-muted-foreground" />
@@ -649,34 +557,19 @@ useEffect(() => {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden">
-      <aside className="hidden w-80 shrink-0 border-r border-border md:block">
-        {sidebar}
-      </aside>
+      <aside className="hidden w-80 shrink-0 border-r border-border md:block">{sidebar}</aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="ios-safe-top flex items-center gap-3 border-b border-border bg-surface/70 px-3 py-3 backdrop-blur">
-          <Sheet
-            open={sheetOpen}
-            onOpenChange={setSheetOpen}
-          >
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden"
-                aria-label="Open chats"
-              >
+              <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open chats">
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
 
-            <SheetContent
-              side="left"
-              className="w-[19rem] p-0"
-            >
-              <SheetTitle className="sr-only">
-                Chats
-              </SheetTitle>
+            <SheetContent side="left" className="w-[19rem] p-0">
+              <SheetTitle className="sr-only">Chats</SheetTitle>
 
               {sidebar}
             </SheetContent>
@@ -691,8 +584,7 @@ useEffect(() => {
             />
           ) : (
             <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-sm text-muted-foreground">
-              {activeConversation?.kind ===
-              "public" ? (
+              {activeConversation?.kind === "public" ? (
                 <Hash className="size-4" />
               ) : (
                 initialsOf(activeTitle)
@@ -701,24 +593,17 @@ useEffect(() => {
           )}
 
           <div className="min-w-0">
-            <p className="truncate font-display text-sm font-semibold">
-              {activeTitle}
-            </p>
+            <p className="truncate font-display text-sm font-semibold">{activeTitle}</p>
 
-            <p className="truncate text-xs text-muted-foreground">
-              {activeSubtitle}
-            </p>
+            <p className="truncate text-xs text-muted-foreground">{activeSubtitle}</p>
           </div>
 
-          {activeConversation?.kind ===
-            "group" && (
+          {activeConversation?.kind === "group" && (
             <Button
               variant="ghost"
               size="sm"
               className="ml-auto text-muted-foreground"
-              onClick={() =>
-                void leaveGroup()
-              }
+              onClick={() => void leaveGroup()}
             >
               <LogOut className="mr-1.5 size-4" />
               Leave group
@@ -729,9 +614,7 @@ useEffect(() => {
         <div className="scroll-slim flex-1 space-y-2 overflow-y-auto px-3 py-4">
           {messages.length === 0 && (
             <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-muted-foreground">
-                No messages yet. Say hi.
-              </p>
+              <p className="text-sm text-muted-foreground">No messages yet. Say hi.</p>
             </div>
           )}
 
@@ -742,16 +625,9 @@ useEffect(() => {
               <MessageBubble
                 key={message.id}
                 message={message}
-                self={
-                  message.sender_id === user?.id
-                }
-                sender={profileMap.get(
-                  message.sender_id,
-                )}
-                showSender={
-                  previous?.sender_id !==
-                  message.sender_id
-                }
+                self={message.sender_id === user?.id}
+                sender={profileMap.get(message.sender_id)}
+                showSender={previous?.sender_id !== message.sender_id}
               />
             );
           })}
@@ -759,22 +635,13 @@ useEffect(() => {
           <div ref={bottomRef} />
         </div>
 
-        <Composer
-          onSend={handleSend}
-          placeholder={`Message ${activeTitle}`}
-        />
+        <Composer onSend={handleSend} placeholder={`Message ${activeTitle}`} />
       </main>
     </div>
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-1">
       <h2 className="px-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -807,21 +674,15 @@ function Row({
       onClick={onClick}
       className={cn(
         "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors",
-        active
-          ? "bg-surface-2"
-          : "hover:bg-surface-2/60",
+        active ? "bg-surface-2" : "hover:bg-surface-2/60",
       )}
     >
       {leading}
 
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">
-          {title}
-        </span>
+        <span className="block truncate text-sm font-medium">{title}</span>
 
-        <span className="block truncate text-xs text-muted-foreground">
-          {subtitle}
-        </span>
+        <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>
       </span>
 
       {badge > 0 && (
