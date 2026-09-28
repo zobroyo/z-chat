@@ -56,7 +56,7 @@ function AdminConversationViewer() {
 
       const { data: msgs, error: msgErr } = await supabase
         .from("messages")
-        .select("id, conversation_id, sender_id, body, image_url, created_at")
+        .select("id, conversation_id, sender_id, body, image_url, created_at, reply_to_message_id")
         .eq("conversation_id", id)
         .order("created_at", { ascending: false })
         .limit(200);
