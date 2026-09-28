@@ -80,6 +80,7 @@ export type Database = {
           created_at: string
           id: string
           image_url: string | null
+          reply_to_message_id: string | null
           sender_id: string
         }
         Insert: {
@@ -88,6 +89,7 @@ export type Database = {
           created_at?: string
           id?: string
           image_url?: string | null
+          reply_to_message_id?: string | null
           sender_id: string
         }
         Update: {
@@ -96,6 +98,7 @@ export type Database = {
           created_at?: string
           id?: string
           image_url?: string | null
+          reply_to_message_id?: string | null
           sender_id?: string
         }
         Relationships: [
