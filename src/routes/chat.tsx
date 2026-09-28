@@ -83,6 +83,7 @@ function ChatPage() {
   });
 
   const [unread, setUnread] = useState<Record<string, number>>({});
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const handleSelectConversation = useCallback(
@@ -250,6 +251,7 @@ function ChatPage() {
   useEffect(() => {
     if (!user || !activeId) return;
 
+    setReplyingTo(null);
     let active = true;
 
     fetchMessages(activeId)
@@ -405,6 +407,7 @@ function ChatPage() {
       senderId: user.id,
       body,
       imagePath,
+      replyToMessageId: replyingTo?.id ?? null,
     });
   };
 
@@ -620,6 +623,20 @@ function ChatPage() {
 
           {messages.map((message, index) => {
             const previous = messages[index - 1];
+            const replyTarget = message.reply_to_message_id
+              ? messages.find((item) => item.id === message.reply_to_message_id)
+              : undefined;
+            const replyPreview = message.reply_to_message_id
+              ? replyTarget
+                ? {
+                    senderName:
+                      replyTarget.sender_id === user?.id
+                        ? "You"
+                        : (profileMap.get(replyTarget.sender_id)?.display_name ?? "Someone"),
+                    snippet: replyTarget.body ?? "Sent a photo",
+                  }
+                : null
+              : undefined;
 
             return (
               <MessageBubble
@@ -628,6 +645,17 @@ function ChatPage() {
                 self={message.sender_id === user?.id}
                 sender={profileMap.get(message.sender_id)}
                 showSender={previous?.sender_id !== message.sender_id}
+                replyPreview={replyPreview}
+                onReply={() => setReplyingTo(message)}
+                onJumpToReply={
+                  message.reply_to_message_id
+                    ? () => {
+                        document
+                          .getElementById(`message-${message.reply_to_message_id}`)
+                          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }
+                    : undefined
+                }
               />
             );
           })}
@@ -635,7 +663,22 @@ function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
-        <Composer onSend={handleSend} placeholder={`Message ${activeTitle}`} />
+        <Composer
+          onSend={handleSend}
+          placeholder={`Message ${activeTitle}`}
+          replyingTo={
+            replyingTo
+              ? {
+                  senderName:
+                    replyingTo.sender_id === user?.id
+                      ? "yourself"
+                      : (profileMap.get(replyingTo.sender_id)?.display_name ?? "Someone"),
+                  snippet: replyingTo.body ?? "Sent a photo",
+                }
+              : null
+          }
+          onCancelReply={() => setReplyingTo(null)}
+        />
       </main>
     </div>
   );
