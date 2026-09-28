@@ -6,12 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { IMAGE_ACCEPT, MAX_IMAGE_BYTES, validateImage } from "@/lib/media";
 
+type ReplyingTo = {
+  senderName: string;
+  snippet: string;
+} | null;
+
 type Props = {
   onSend: (body: string, file: File | null) => Promise<void>;
   placeholder?: string;
+  replyingTo?: ReplyingTo;
+  onCancelReply?: () => void;
 };
 
-export function Composer({ onSend, placeholder }: Props) {
+export function Composer({ onSend, placeholder, replyingTo, onCancelReply }: Props) {
   const [value, setValue] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -33,6 +40,7 @@ export function Composer({ onSend, placeholder }: Props) {
       await onSend(value, file);
       setValue("");
       clearFile();
+      onCancelReply?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Message failed to send");
     } finally {
@@ -42,6 +50,25 @@ export function Composer({ onSend, placeholder }: Props) {
 
   return (
     <div className="ios-safe-bottom border-t border-border bg-surface/80 px-3 py-3 backdrop-blur">
+      {replyingTo && (
+        <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border-l-2 border-primary bg-surface-2 px-3 py-2">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-foreground">
+              Replying to {replyingTo.senderName}
+            </p>
+            <p className="truncate text-xs text-muted-foreground">{replyingTo.snippet}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onCancelReply}
+            aria-label="Cancel reply"
+            className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-surface"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      )}
+
       {preview && (
         <div className="relative mb-2 inline-block">
           <img src={preview} alt="Selected" className="h-20 rounded-xl object-cover" />
@@ -110,7 +137,11 @@ export function Composer({ onSend, placeholder }: Props) {
         />
 
         <Button type="submit" size="icon" aria-label="Send message" disabled={sending}>
-          {sending ? <Loader2 className="size-4 animate-spin" /> : <SendHorizontal className="size-4" />}
+          {sending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <SendHorizontal className="size-4" />
+          )}
         </Button>
       </form>
     </div>
