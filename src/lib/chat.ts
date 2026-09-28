@@ -36,6 +36,7 @@ export type Message = {
   body: string | null;
   image_url: string | null;
   created_at: string;
+  reply_to_message_id: string | null;
 };
 
 export const displayNameSchema = z
@@ -84,7 +85,7 @@ export async function fetchMembers() {
 export async function fetchMessages(conversationId: string) {
   const { data, error } = await supabase
     .from("messages")
-    .select("id, conversation_id, sender_id, body, image_url, created_at")
+    .select("id, conversation_id, sender_id, body, image_url, created_at, reply_to_message_id")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -98,6 +99,7 @@ export async function sendMessage(input: {
   senderId: string;
   body?: string;
   imagePath?: string | null;
+  replyToMessageId?: string | null;
 }) {
   const trimmed = input.body?.trim() ?? "";
   if (!trimmed && !input.imagePath) return;
@@ -108,6 +110,7 @@ export async function sendMessage(input: {
     sender_id: input.senderId,
     body: trimmed || null,
     image_url: input.imagePath ?? null,
+    reply_to_message_id: input.replyToMessageId ?? null,
   });
   if (error) throw error;
 }
