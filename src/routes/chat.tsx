@@ -64,12 +64,20 @@ function ChatPage() {
       setIsAdmin(false);
       return;
     }
+
     let cancelled = false;
-    checkIsAdmin(user.id).then((v) => !cancelled && setIsAdmin(v));
+
+    checkIsAdmin(user.id).then((v) => {
+      if (!cancelled) {
+        setIsAdmin(v);
+      }
+    });
+
     return () => {
       cancelled = true;
     };
   }, [user]);
+
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -79,6 +87,7 @@ function ChatPage() {
   // A valid ?c= link is resolved after conversations have loaded.
   const [activeId, setActiveId] = useState<string>(() => {
     if (typeof window === "undefined") return "";
+
     return new URLSearchParams(window.location.search).get("c") ?? "";
   });
 
@@ -86,9 +95,11 @@ function ChatPage() {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+
   const handleSelectConversation = useCallback(
     (id: string) => {
       setActiveId(id);
+
       // This explicitly pushes the ?c= ID string into the TanStack router lifecycle state
       void navigate({
         to: "/chat",
@@ -107,7 +118,9 @@ function ChatPage() {
   profilesRef.current = profiles;
 
   useEffect(() => {
-    if (!loading && !user) void navigate({ to: "/" });
+    if (!loading && !user) {
+      void navigate({ to: "/" });
+    }
   }, [loading, user, navigate]);
 
   const reload = useCallback(async () => {
@@ -132,7 +145,10 @@ function ChatPage() {
     void reload();
     void touchPresence(user.id);
 
-    const presence = window.setInterval(() => void touchPresence(user.id), 45_000);
+    const presence = window.setInterval(
+      () => void touchPresence(user.id),
+      45_000,
+    );
 
     return () => window.clearInterval(presence);
   }, [user, reload]);
@@ -154,23 +170,30 @@ function ChatPage() {
           const message = payload.new as Message;
           const isActive = message.conversation_id === activeIdRef.current;
 
+          // Our own sends are added optimistically in handleSend and
+          // reconciled directly from the insert response.
+          if (message.sender_id === user.id) return;
+
           if (isActive) {
             setMessages((current) =>
-              current.some((item) => item.id === message.id) ? current : [...current, message],
+              current.some((item) => item.id === message.id)
+                ? current
+                : [...current, message],
             );
           }
-
-          if (message.sender_id === user.id) return;
 
           if (!isActive) {
             setUnread((current) => ({
               ...current,
-              [message.conversation_id]: (current[message.conversation_id] ?? 0) + 1,
+              [message.conversation_id]:
+                (current[message.conversation_id] ?? 0) + 1,
             }));
           }
 
           if (!isActive || document.visibilityState !== "visible") {
-            const sender = profilesRef.current.find((item) => item.id === message.sender_id);
+            const sender = profilesRef.current.find(
+              (item) => item.id === message.sender_id,
+            );
 
             const title = sender?.display_name ?? "New message";
             const body = message.body ?? "Sent a photo";
@@ -179,7 +202,11 @@ function ChatPage() {
               description: body,
             });
 
-            void showChatNotification(title, body, message.conversation_id);
+            void showChatNotification(
+              title,
+              body,
+              message.conversation_id,
+            );
           }
         },
       )
@@ -214,15 +241,11 @@ function ChatPage() {
     };
   }, [user, reload]);
 
-  const generalRoom = conversations.find((item) => item.kind === "public");
+  const generalRoom = conversations.find(
+    (item) => item.kind === "public",
+  );
 
   // Resolve the active conversation only after conversations have loaded.
-  //
-  // If the URL contains ?c=<id> and that conversation exists, keep it.
-  // Otherwise open the real General conversation from the database.
-  //
-  // Most importantly, this runs BEFORE the message-loading effect can use
-  // activeId, because activeId starts empty.
   const conversationInitializedRef = useRef(false);
 
   useEffect(() => {
@@ -230,7 +253,9 @@ function ChatPage() {
     if (conversationInitializedRef.current) return;
 
     const requestedId =
-      typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("c") : null;
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("c")
+        : null;
 
     const requestedConversation = requestedId
       ? conversations.find((item) => item.id === requestedId)
@@ -247,6 +272,7 @@ function ChatPage() {
       conversationInitializedRef.current = true;
     }
   }, [user, conversations, generalRoom]);
+
   // Load messages only after a real conversation ID has been resolved.
   useEffect(() => {
     if (!user || !activeId) return;
@@ -256,7 +282,9 @@ function ChatPage() {
 
     fetchMessages(activeId)
       .then((rows) => {
-        if (active) setMessages(rows);
+        if (active) {
+          setMessages(rows);
+        }
       })
       .catch(() => {
         if (active) {
@@ -292,7 +320,9 @@ function ChatPage() {
       if (!user) return undefined;
 
       const partnerId = members.find(
-        (member) => member.conversation_id === conversation.id && member.user_id !== user.id,
+        (member) =>
+          member.conversation_id === conversation.id &&
+          member.user_id !== user.id,
       )?.user_id;
 
       return partnerId ? profileMap.get(partnerId) : undefined;
@@ -300,13 +330,17 @@ function ChatPage() {
     [members, profileMap, user],
   );
 
-  const groups = conversations.filter((item) => item.kind === "group");
+  const groups = conversations.filter(
+    (item) => item.kind === "group",
+  );
 
   const directChats = conversations.filter((item) => {
     if (item.kind !== "dm" || !user) return false;
 
     return members.some(
-      (member) => member.conversation_id === item.id && member.user_id === user.id,
+      (member) =>
+        member.conversation_id === item.id &&
+        member.user_id === user.id,
     );
   });
 
@@ -320,14 +354,21 @@ function ChatPage() {
 
     if (!needle) return others;
 
-    return others.filter((profile) => profile.display_name.toLowerCase().includes(needle));
+    return others.filter((profile) =>
+      profile.display_name.toLowerCase().includes(needle),
+    );
   }, [others, query]);
 
-  const activeConversation = conversations.find((item) => item.id === activeId) ?? generalRoom;
+  const activeConversation =
+    conversations.find((item) => item.id === activeId) ?? generalRoom;
 
-  const activePartner = activeConversation ? partnerOf(activeConversation) : undefined;
+  const activePartner = activeConversation
+    ? partnerOf(activeConversation)
+    : undefined;
 
-  const memberCount = members.filter((member) => member.conversation_id === activeId).length;
+  const memberCount = members.filter(
+    (member) => member.conversation_id === activeId,
+  ).length;
 
   const activeTitle =
     activeConversation?.kind === "public"
@@ -354,7 +395,10 @@ function ChatPage() {
     if (!user) return;
 
     try {
-      const conversation = await ensureDirectConversation(user.id, otherId);
+      const conversation = await ensureDirectConversation(
+        user.id,
+        otherId,
+      );
 
       await reload();
       openConversation(conversation.id);
@@ -366,7 +410,11 @@ function ChatPage() {
   const makeGroup = async (name: string, memberIds: string[]) => {
     if (!user) return;
 
-    const conversation = await createGroup(user.id, name, memberIds);
+    const conversation = await createGroup(
+      user.id,
+      name,
+      memberIds,
+    );
 
     await reload();
     openConversation(conversation.id);
@@ -377,7 +425,11 @@ function ChatPage() {
       return;
     }
 
-    if (!window.confirm(`Leave ${activeConversation.name ?? "this group"}?`)) {
+    if (
+      !window.confirm(
+        `Leave ${activeConversation.name ?? "this group"}?`,
+      )
+    ) {
       return;
     }
 
@@ -397,21 +449,82 @@ function ChatPage() {
     }
   };
 
-  const handleSend = async (body: string, file: File | null) => {
+  const handleSend = async (
+    body: string,
+    file: File | null,
+  ) => {
     if (!user || !activeId) return;
 
-    const imagePath = file ? await uploadChatImage(activeId, file) : null;
+    const trimmed = body.trim();
+    const replyToMessageId = replyingTo?.id ?? null;
 
-    await sendMessage({
-      conversationId: activeId,
-      senderId: user.id,
-      body,
-      imagePath,
-      replyToMessageId: replyingTo?.id ?? null,
-    });
+    // Show it instantly instead of waiting on the upload/insert/Realtime
+    // round trip. Only for text.
+    let tempId: string | null = null;
+
+    if (trimmed && !file) {
+      tempId = `temp-${crypto.randomUUID()}`;
+
+      const optimisticMessage: Message = {
+        id: tempId,
+        conversation_id: activeId,
+        sender_id: user.id,
+        body: trimmed,
+        image_url: null,
+        created_at: new Date().toISOString(),
+        reply_to_message_id: replyToMessageId,
+      };
+
+      setMessages((current) => [
+        ...current,
+        optimisticMessage,
+      ]);
+    }
+
+    try {
+      const imagePath = file
+        ? await uploadChatImage(activeId, file)
+        : null;
+
+      const inserted = await sendMessage({
+        conversationId: activeId,
+        senderId: user.id,
+        body,
+        imagePath,
+        replyToMessageId,
+      });
+
+      if (tempId && inserted) {
+        const finalTempId = tempId;
+
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === finalTempId ? inserted : item,
+          ),
+        );
+      } else if (inserted) {
+        setMessages((current) =>
+          current.some((item) => item.id === inserted.id)
+            ? current
+            : [...current, inserted],
+        );
+      }
+    } catch (error) {
+      if (tempId) {
+        const finalTempId = tempId;
+
+        setMessages((current) =>
+          current.filter((item) => item.id !== finalTempId),
+        );
+      }
+
+      throw error;
+    }
   };
 
-  const me = user ? profileMap.get(user.id) : undefined;
+  const me = user
+    ? profileMap.get(user.id)
+    : undefined;
 
   const sidebar = (
     <div className="flex h-full flex-col bg-sidebar">
@@ -420,10 +533,15 @@ function ChatPage() {
           Z
         </span>
 
-        <span className="font-display text-base font-bold">ZChat</span>
+        <span className="font-display text-base font-bold">
+          ZChat
+        </span>
 
         <div className="ml-auto flex items-center">
-          <NewGroupDialog people={others} onCreate={makeGroup} />
+          <NewGroupDialog
+            people={others}
+            onCreate={makeGroup}
+          />
 
           <NotificationGate userId={user?.id ?? ""} />
         </div>
@@ -446,7 +564,10 @@ function ChatPage() {
         <Section title="Room">
           <Row
             active={activeId === generalRoom?.id}
-            onClick={() => generalRoom && openConversation(generalRoom.id)}
+            onClick={() =>
+              generalRoom &&
+              openConversation(generalRoom.id)
+            }
             leading={
               <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
                 <Hash className="size-4" />
@@ -464,7 +585,9 @@ function ChatPage() {
               <Row
                 key={group.id}
                 active={activeId === group.id}
-                onClick={() => openConversation(group.id)}
+                onClick={() =>
+                  openConversation(group.id)
+                }
                 leading={
                   <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
                     <Users className="size-4" />
@@ -481,13 +604,18 @@ function ChatPage() {
         {directChats.length > 0 && (
           <Section title="Chats">
             {directChats.map((conversation) => {
-              const partner = partnerOf(conversation);
+              const partner =
+                partnerOf(conversation);
 
               return (
                 <Row
                   key={conversation.id}
-                  active={activeId === conversation.id}
-                  onClick={() => openConversation(conversation.id)}
+                  active={
+                    activeId === conversation.id
+                  }
+                  onClick={() =>
+                    openConversation(conversation.id)
+                  }
                   leading={
                     <UserAvatar
                       name={partner?.display_name}
@@ -496,9 +624,18 @@ function ChatPage() {
                       className="size-9"
                     />
                   }
-                  title={partner?.display_name ?? "Someone"}
-                  subtitle={isOnline(partner) ? "Online" : "Offline"}
-                  badge={unread[conversation.id] ?? 0}
+                  title={
+                    partner?.display_name ??
+                    "Someone"
+                  }
+                  subtitle={
+                    isOnline(partner)
+                      ? "Online"
+                      : "Offline"
+                  }
+                  badge={
+                    unread[conversation.id] ?? 0
+                  }
                 />
               );
             })}
@@ -507,13 +644,17 @@ function ChatPage() {
 
         <Section title="People">
           {filteredOthers.length === 0 && (
-            <p className="px-2 py-1 text-sm text-muted-foreground">No one else here yet.</p>
+            <p className="px-2 py-1 text-sm text-muted-foreground">
+              No one else here yet.
+            </p>
           )}
 
           {filteredOthers.map((person) => (
             <Row
               key={person.id}
-              onClick={() => void startDirect(person.id)}
+              onClick={() =>
+                void startDirect(person.id)
+              }
               leading={
                 <UserAvatar
                   name={person.display_name}
@@ -522,8 +663,15 @@ function ChatPage() {
                   className="size-9"
                 />
               }
-              title={person.display_name || "Someone"}
-              subtitle={isOnline(person) ? "Online" : "Offline"}
+              title={
+                person.display_name ||
+                "Someone"
+              }
+              subtitle={
+                isOnline(person)
+                  ? "Online"
+                  : "Offline"
+              }
             />
           ))}
         </Section>
@@ -543,14 +691,20 @@ function ChatPage() {
         to="/profile"
         className="flex items-center gap-3 border-t border-border px-4 py-3 transition-colors hover:bg-surface-2"
       >
-        <UserAvatar name={me?.display_name} path={me?.avatar_url} className="size-9" />
+        <UserAvatar
+          name={me?.display_name}
+          path={me?.avatar_url}
+          className="size-9"
+        />
 
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">
             {me?.display_name || "Set your name"}
           </span>
 
-          <span className="block truncate text-xs text-muted-foreground">Profile & settings</span>
+          <span className="block truncate text-xs text-muted-foreground">
+            Profile & settings
+          </span>
         </span>
 
         <Settings className="size-4 text-muted-foreground" />
@@ -560,19 +714,34 @@ function ChatPage() {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden">
-      <aside className="hidden w-80 shrink-0 border-r border-border md:block">{sidebar}</aside>
+      <aside className="hidden w-80 shrink-0 border-r border-border md:block">
+        {sidebar}
+      </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
         <header className="ios-safe-top flex items-center gap-3 border-b border-border bg-surface/70 px-3 py-3 backdrop-blur">
-          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
+          <Sheet
+            open={sheetOpen}
+            onOpenChange={setSheetOpen}
+          >
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open chats">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden"
+                aria-label="Open chats"
+              >
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
 
-            <SheetContent side="left" className="w-[19rem] p-0">
-              <SheetTitle className="sr-only">Chats</SheetTitle>
+            <SheetContent
+              side="left"
+              className="w-[19rem] p-0"
+            >
+              <SheetTitle className="sr-only">
+                Chats
+              </SheetTitle>
 
               {sidebar}
             </SheetContent>
@@ -596,9 +765,13 @@ function ChatPage() {
           )}
 
           <div className="min-w-0">
-            <p className="truncate font-display text-sm font-semibold">{activeTitle}</p>
+            <p className="truncate font-display text-sm font-semibold">
+              {activeTitle}
+            </p>
 
-            <p className="truncate text-xs text-muted-foreground">{activeSubtitle}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {activeSubtitle}
+            </p>
           </div>
 
           {activeConversation?.kind === "group" && (
@@ -617,42 +790,71 @@ function ChatPage() {
         <div className="scroll-slim flex-1 space-y-2 overflow-y-auto px-3 py-4">
           {messages.length === 0 && (
             <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-muted-foreground">No messages yet. Say hi.</p>
+              <p className="text-sm text-muted-foreground">
+                No messages yet. Say hi.
+              </p>
             </div>
           )}
 
           {messages.map((message, index) => {
             const previous = messages[index - 1];
+
             const replyTarget = message.reply_to_message_id
-              ? messages.find((item) => item.id === message.reply_to_message_id)
+              ? messages.find(
+                  (item) =>
+                    item.id ===
+                    message.reply_to_message_id,
+                )
               : undefined;
-            const replyPreview = message.reply_to_message_id
-              ? replyTarget
-                ? {
-                    senderName:
-                      replyTarget.sender_id === user?.id
-                        ? "You"
-                        : (profileMap.get(replyTarget.sender_id)?.display_name ?? "Someone"),
-                    snippet: replyTarget.body ?? "Sent a photo",
-                  }
-                : null
-              : undefined;
+
+            const replyPreview =
+              message.reply_to_message_id
+                ? replyTarget
+                  ? {
+                      senderName:
+                        replyTarget.sender_id ===
+                        user?.id
+                          ? "You"
+                          : (profileMap.get(
+                              replyTarget.sender_id,
+                            )?.display_name ??
+                            "Someone"),
+                      snippet:
+                        replyTarget.body ??
+                        "Sent a photo",
+                    }
+                  : null
+                : undefined;
 
             return (
               <MessageBubble
                 key={message.id}
                 message={message}
-                self={message.sender_id === user?.id}
-                sender={profileMap.get(message.sender_id)}
-                showSender={previous?.sender_id !== message.sender_id}
+                self={
+                  message.sender_id === user?.id
+                }
+                sender={profileMap.get(
+                  message.sender_id,
+                )}
+                showSender={
+                  previous?.sender_id !==
+                  message.sender_id
+                }
                 replyPreview={replyPreview}
-                onReply={() => setReplyingTo(message)}
+                onReply={() =>
+                  setReplyingTo(message)
+                }
                 onJumpToReply={
                   message.reply_to_message_id
                     ? () => {
                         document
-                          .getElementById(`message-${message.reply_to_message_id}`)
-                          ?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          .getElementById(
+                            `message-${message.reply_to_message_id}`,
+                          )
+                          ?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          });
                       }
                     : undefined
                 }
@@ -670,21 +872,35 @@ function ChatPage() {
             replyingTo
               ? {
                   senderName:
-                    replyingTo.sender_id === user?.id
+                    replyingTo.sender_id ===
+                    user?.id
                       ? "yourself"
-                      : (profileMap.get(replyingTo.sender_id)?.display_name ?? "Someone"),
-                  snippet: replyingTo.body ?? "Sent a photo",
+                      : (profileMap.get(
+                          replyingTo.sender_id,
+                        )?.display_name ??
+                        "Someone"),
+                  snippet:
+                    replyingTo.body ??
+                    "Sent a photo",
                 }
               : null
           }
-          onCancelReply={() => setReplyingTo(null)}
+          onCancelReply={() =>
+            setReplyingTo(null)
+          }
         />
       </main>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <section className="space-y-1">
       <h2 className="px-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -717,15 +933,21 @@ function Row({
       onClick={onClick}
       className={cn(
         "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors",
-        active ? "bg-surface-2" : "hover:bg-surface-2/60",
+        active
+          ? "bg-surface-2"
+          : "hover:bg-surface-2/60",
       )}
     >
       {leading}
 
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">{title}</span>
+        <span className="block truncate text-sm font-medium">
+          {title}
+        </span>
 
-        <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {subtitle}
+        </span>
       </span>
 
       {badge > 0 && (
