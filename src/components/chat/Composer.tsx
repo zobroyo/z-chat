@@ -35,16 +35,24 @@ export function Composer({ onSend, placeholder, replyingTo, onCancelReply }: Pro
   const submit = async () => {
     if (sending) return;
     if (!value.trim() && !file) return;
-    setSending(true);
+
+    const body = value;
+    const pickedFile = file;
+    const hasImage = Boolean(pickedFile);
+
+    // Clear immediately so the composer feels instant. Image sends still show
+    // a brief sending state since the upload itself takes real time.
+    setValue("");
+    clearFile();
+    onCancelReply?.();
+    if (hasImage) setSending(true);
+
     try {
-      await onSend(value, file);
-      setValue("");
-      clearFile();
-      onCancelReply?.();
+      await onSend(body, pickedFile);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Message failed to send");
     } finally {
-      setSending(false);
+      if (hasImage) setSending(false);
     }
   };
 
