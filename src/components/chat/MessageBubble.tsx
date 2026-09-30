@@ -38,7 +38,10 @@ export function MessageBubble({
   return (
     <div
       id={`message-${message.id}`}
-      className={cn("group flex items-end gap-2", self ? "flex-row-reverse" : "flex-row")}
+      className={cn(
+        "group flex animate-in items-end gap-2 fade-in slide-in-from-bottom-1 duration-200",
+        self ? "flex-row-reverse" : "flex-row",
+      )}
     >
       <div className="size-7">
         {showSender && !self && (
@@ -59,7 +62,7 @@ export function MessageBubble({
               type="button"
               onClick={onReply}
               aria-label="Reply"
-              className="mb-1 shrink-0 rounded-full p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100"
+              className="mb-1 shrink-0 rounded-full p-1.5 text-muted-foreground opacity-60 transition-opacity hover:bg-surface-2 hover:opacity-100 active:opacity-100"
             >
               <Reply className="size-3.5" />
             </button>
