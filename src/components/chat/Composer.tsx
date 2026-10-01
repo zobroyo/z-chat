@@ -13,12 +13,13 @@ type ReplyingTo = {
 
 type Props = {
   onSend: (body: string, file: File | null) => Promise<void>;
+  onTypingChange?: (isTyping: boolean) => void;
   placeholder?: string;
   replyingTo?: ReplyingTo;
   onCancelReply?: () => void;
 };
 
-export function Composer({ onSend, placeholder, replyingTo, onCancelReply }: Props) {
+export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCancelReply }: Props) {
   const [value, setValue] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -40,6 +41,7 @@ export function Composer({ onSend, placeholder, replyingTo, onCancelReply }: Pro
     const pickedFile = file;
     const hasImage = Boolean(pickedFile);
 
+    onTypingChange?.(false);
     // Clear immediately so the composer feels instant. Image sends still show
     // a brief sending state since the upload itself takes real time.
     setValue("");
@@ -130,7 +132,11 @@ export function Composer({ onSend, placeholder, replyingTo, onCancelReply }: Pro
 
         <Textarea
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => {
+            const nextValue = event.target.value;
+            setValue(nextValue);
+            onTypingChange?.(Boolean(nextValue.trim()));
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();

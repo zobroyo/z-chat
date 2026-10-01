@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Hash, LogOut, Menu, Search, Settings, Shield, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -87,6 +88,7 @@ function ChatPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageReceipts, setMessageReceipts] = useState<MessageReceipt[]>([]);
+  const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
 
   // Start empty so we NEVER fetch messages using the fake placeholder ID.
   // A valid ?c= link is resolved after conversations have loaded.
@@ -120,6 +122,11 @@ function ChatPage() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const receiptQueueRef = useRef(new Map<string, { conversationId: string; read: boolean }>());
   const receiptTimerRef = useRef<number | null>(null);
+  const typingChannelRef = useRef<RealtimeChannel | null>(null);
+  const typingTimeoutRef = useRef<number | null>(null);
+  const typingChannelReadyRef = useRef(false);
+  const isTypingRef = useRef(false);
+  const presenceTrackedRef = useRef(false);
 
   activeIdRef.current = activeId;
   profilesRef.current = profiles;
@@ -165,6 +172,40 @@ function ChatPage() {
       }
     }, 250);
   }, [user]);
+
+  const stopTyping = useCallback(() => {
+    if (typingTimeoutRef.current !== null) {
+      window.clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    isTypingRef.current = false;
+    if (presenceTrackedRef.current) {
+      presenceTrackedRef.current = false;
+      void typingChannelRef.current?.untrack().catch(() => undefined);
+    }
+  }, []);
+
+  const startTyping = useCallback(() => {
+    if (!user) return;
+    if (document.visibilityState !== "visible" || !document.hasFocus()) {
+      stopTyping();
+      return;
+    }
+    if (typingTimeoutRef.current !== null) {
+      window.clearTimeout(typingTimeoutRef.current);
+    }
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      const channel = typingChannelRef.current;
+      if (typingChannelReadyRef.current && channel) {
+        presenceTrackedRef.current = true;
+        void channel.track({ userId: user.id, typing: true }).catch(() => {
+          presenceTrackedRef.current = false;
+        });
+      }
+    }
+    typingTimeoutRef.current = window.setTimeout(stopTyping, 2200);
+  }, [user, stopTyping]);
 
   useEffect(() => {
     const handleWorkerMessage = (event: MessageEvent) => {
@@ -443,6 +484,68 @@ function ChatPage() {
   }, []);
 
   useEffect(() => {
+    if (!user || !activeId) return;
+
+    let disposed = false;
+    const channel = supabase.channel(`zchat:typing:${activeId}`, {
+      config: {
+        private: true,
+        presence: { key: `${user.id}:${crypto.randomUUID()}` },
+      },
+    });
+    typingChannelRef.current = channel;
+    typingChannelReadyRef.current = false;
+
+    channel.on("presence", { event: "sync" }, () => {
+      const presence = channel.presenceState<{ userId?: string; typing?: boolean }>();
+      const ids = Object.values(presence)
+        .flat()
+        .filter((state) => state.typing && state.userId && state.userId !== user.id)
+        .map((state) => state.userId as string);
+      setTypingUserIds([...new Set(ids)]);
+    });
+
+    const stopWhenUnavailable = () => {
+      if (document.visibilityState !== "visible" || !document.hasFocus()) stopTyping();
+    };
+    window.addEventListener("blur", stopTyping);
+    document.addEventListener("visibilitychange", stopWhenUnavailable);
+
+    channel.subscribe((status) => {
+      if (disposed) return;
+      if (status === "SUBSCRIBED") {
+        typingChannelReadyRef.current = true;
+        if (
+          isTypingRef.current &&
+          typingTimeoutRef.current !== null &&
+          document.visibilityState === "visible" &&
+          document.hasFocus()
+        ) {
+          presenceTrackedRef.current = true;
+          void channel.track({ userId: user.id, typing: true }).catch(() => {
+            presenceTrackedRef.current = false;
+          });
+        }
+      } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+        typingChannelReadyRef.current = false;
+        presenceTrackedRef.current = false;
+        setTypingUserIds([]);
+      }
+    });
+
+    return () => {
+      disposed = true;
+      window.removeEventListener("blur", stopTyping);
+      document.removeEventListener("visibilitychange", stopWhenUnavailable);
+      stopTyping();
+      typingChannelReadyRef.current = false;
+      setTypingUserIds([]);
+      if (typingChannelRef.current === channel) typingChannelRef.current = null;
+      void supabase.removeChannel(channel);
+    };
+  }, [user, activeId, stopTyping]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({
       block: "end",
     });
@@ -524,6 +627,20 @@ function ChatPage() {
           ? "Online"
           : "Offline";
 
+  const typingNames = [...new Set(typingUserIds)].map(
+    (id) => profileMap.get(id)?.display_name ?? "Someone",
+  );
+  const typingLabel =
+    typingNames.length === 0
+      ? null
+      : typingNames.length === 1
+        ? `${typingNames[0]} is typing…`
+        : typingNames.length === 2
+          ? `${typingNames[0]} and ${typingNames[1]} are typing…`
+          : typingNames.length === 3
+            ? `${typingNames[0]}, ${typingNames[1]} and ${typingNames[2]} are typing…`
+            : `${typingNames[0]}, ${typingNames[1]} and ${typingNames.length - 2} others are typing…`;
+
   const openConversation = (id: string) => {
     setActiveId(id);
     setSheetOpen(false);
@@ -591,6 +708,7 @@ function ChatPage() {
     body: string,
     file: File | null,
   ) => {
+    stopTyping();
     if (!user || !activeId) return;
 
     const trimmed = body.trim();
@@ -1005,8 +1123,15 @@ function ChatPage() {
           <div ref={bottomRef} />
         </div>
 
+        {typingLabel && (
+          <p className="px-5 pb-1 text-xs text-muted-foreground" aria-live="polite">
+            <span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-muted-foreground align-middle" />
+            {typingLabel}
+          </p>
+        )}
         <Composer
           onSend={handleSend}
+          onTypingChange={(isTyping) => (isTyping ? startTyping() : stopTyping())}
           placeholder={`Message ${activeTitle}`}
           replyingTo={
             replyingTo
