@@ -36,6 +36,7 @@ export type Message = {
   body: string | null;
   image_url: string | null;
   created_at: string;
+  reply_to_message_id: string | null;
 };
 
 export const displayNameSchema = z
@@ -84,7 +85,7 @@ export async function fetchMembers() {
 export async function fetchMessages(conversationId: string) {
   const { data, error } = await supabase
     .from("messages")
-    .select("id, conversation_id, sender_id, body, image_url, created_at")
+    .select("id, conversation_id, sender_id, body, image_url, created_at, reply_to_message_id")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .limit(200);
@@ -98,18 +99,25 @@ export async function sendMessage(input: {
   senderId: string;
   body?: string;
   imagePath?: string | null;
+  replyToMessageId?: string | null;
 }) {
   const trimmed = input.body?.trim() ?? "";
-  if (!trimmed && !input.imagePath) return;
+  if (!trimmed && !input.imagePath) return null;
   if (trimmed) messageSchema.parse(trimmed);
 
-  const { error } = await supabase.from("messages").insert({
-    conversation_id: input.conversationId,
-    sender_id: input.senderId,
-    body: trimmed || null,
-    image_url: input.imagePath ?? null,
-  });
+  const { data, error } = await supabase
+    .from("messages")
+    .insert({
+      conversation_id: input.conversationId,
+      sender_id: input.senderId,
+      body: trimmed || null,
+      image_url: input.imagePath ?? null,
+      reply_to_message_id: input.replyToMessageId ?? null,
+    })
+    .select("id, conversation_id, sender_id, body, image_url, created_at, reply_to_message_id")
+    .single();
   if (error) throw error;
+  return data as Message;
 }
 
 /** Finds the one-to-one chat with someone, creating it the first time. */

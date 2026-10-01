@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Hash, LogOut, Menu, Search, Settings, Users } from "lucide-react";
+import { Hash, LogOut, Menu, Search, Settings, Shield, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Composer } from "@/components/chat/Composer";
 import { MessageBubble } from "@/components/chat/MessageBubble";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
+import { checkIsAdmin } from "@/lib/admin";
 import { supabase } from "@/integrations/supabase/client";
 import {
   createGroup,
@@ -55,6 +56,27 @@ export const Route = createFileRoute("/chat")({
 function ChatPage() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    checkIsAdmin(user.id).then((v) => {
+      if (!cancelled) {
+        setIsAdmin(v);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -64,21 +86,28 @@ function ChatPage() {
   // A valid ?c= link is resolved after conversations have loaded.
   const [activeId, setActiveId] = useState<string>(() => {
     if (typeof window === "undefined") return "";
+
     return new URLSearchParams(window.location.search).get("c") ?? "";
   });
 
   const [unread, setUnread] = useState<Record<string, number>>({});
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const handleSelectConversation = useCallback((id: string) => {
-  setActiveId(id);
-  // This explicitly pushes the ?c= ID string into the TanStack router lifecycle state
-  void navigate({
-    to: "/chat",
-    search: { c: id },
-    replace: true,
-  });
-}, [navigate]);
+
+  const handleSelectConversation = useCallback(
+    (id: string) => {
+      setActiveId(id);
+
+      // This explicitly pushes the ?c= ID string into the TanStack router lifecycle state
+      void navigate({
+        to: "/chat",
+        search: { c: id },
+        replace: true,
+      });
+    },
+    [navigate],
+  );
 
   const activeIdRef = useRef(activeId);
   const profilesRef = useRef<Profile[]>([]);
@@ -104,7 +133,9 @@ function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (!loading && !user) void navigate({ to: "/" });
+    if (!loading && !user) {
+      void navigate({ to: "/" });
+    }
   }, [loading, user, navigate]);
 
   const reload = useCallback(async () => {
@@ -152,8 +183,11 @@ function ChatPage() {
         },
         (payload) => {
           const message = payload.new as Message;
-          const isActive =
-            message.conversation_id === activeIdRef.current;
+          const isActive = message.conversation_id === activeIdRef.current;
+
+          // Our own sends are added optimistically in handleSend and
+          // reconciled directly from the insert response.
+          if (message.sender_id === user.id) return;
 
           if (isActive) {
             setMessages((current) =>
@@ -162,8 +196,6 @@ function ChatPage() {
                 : [...current, message],
             );
           }
-
-          if (message.sender_id === user.id) return;
 
           if (!isActive) {
             setUnread((current) => ({
@@ -184,6 +216,8 @@ function ChatPage() {
             toast(title, {
               description: body,
             });
+
+
           }
         },
       )
@@ -195,7 +229,9 @@ function ChatPage() {
           table: "profiles",
         },
         () => {
-          void fetchProfiles().then(setProfiles).catch(() => undefined);
+          void fetchProfiles()
+            .then(setProfiles)
+            .catch(() => undefined);
         },
       )
       .on(
@@ -221,47 +257,45 @@ function ChatPage() {
   );
 
   // Resolve the active conversation only after conversations have loaded.
-  //
-  // If the URL contains ?c=<id> and that conversation exists, keep it.
-  // Otherwise open the real General conversation from the database.
-  //
-  // Most importantly, this runs BEFORE the message-loading effect can use
-  // activeId, because activeId starts empty.
   const conversationInitializedRef = useRef(false);
 
-useEffect(() => {
-  if (!user || conversations.length === 0) return;
-  if (conversationInitializedRef.current) return;
+  useEffect(() => {
+    if (!user || conversations.length === 0) return;
+    if (conversationInitializedRef.current) return;
 
-  const requestedId =
-    typeof window !== "undefined"
-      ? new URLSearchParams(window.location.search).get("c")
-      : null;
+    const requestedId =
+      typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("c")
+        : null;
 
-  const requestedConversation = requestedId
-    ? conversations.find((item) => item.id === requestedId)
-    : undefined;
+    const requestedConversation = requestedId
+      ? conversations.find((item) => item.id === requestedId)
+      : undefined;
 
-  if (requestedConversation) {
-    setActiveId(requestedConversation.id);
-    conversationInitializedRef.current = true;
-    return;
-  }
+    if (requestedConversation) {
+      setActiveId(requestedConversation.id);
+      conversationInitializedRef.current = true;
+      return;
+    }
 
-  if (generalRoom) {
-    setActiveId(generalRoom.id);
-    conversationInitializedRef.current = true;
-  }
-}, [user, conversations, generalRoom]);
+    if (generalRoom) {
+      setActiveId(generalRoom.id);
+      conversationInitializedRef.current = true;
+    }
+  }, [user, conversations, generalRoom]);
+
   // Load messages only after a real conversation ID has been resolved.
   useEffect(() => {
     if (!user || !activeId) return;
 
+    setReplyingTo(null);
     let active = true;
 
     fetchMessages(activeId)
       .then((rows) => {
-        if (active) setMessages(rows);
+        if (active) {
+          setMessages(rows);
+        }
       })
       .catch(() => {
         if (active) {
@@ -288,10 +322,7 @@ useEffect(() => {
   }, [messages]);
 
   const profileMap = useMemo(
-    () =>
-      new Map(
-        profiles.map((profile) => [profile.id, profile]),
-      ),
+    () => new Map(profiles.map((profile) => [profile.id, profile])),
     [profiles],
   );
 
@@ -305,9 +336,7 @@ useEffect(() => {
           member.user_id !== user.id,
       )?.user_id;
 
-      return partnerId
-        ? profileMap.get(partnerId)
-        : undefined;
+      return partnerId ? profileMap.get(partnerId) : undefined;
     },
     [members, profileMap, user],
   );
@@ -317,14 +346,14 @@ useEffect(() => {
   );
 
   const directChats = conversations.filter((item) => {
-  if (item.kind !== "dm" || !user) return false;
+    if (item.kind !== "dm" || !user) return false;
 
-  return members.some(
-    (member) =>
-      member.conversation_id === item.id &&
-      member.user_id === user.id,
-  );
-});
+    return members.some(
+      (member) =>
+        member.conversation_id === item.id &&
+        member.user_id === user.id,
+    );
+  });
 
   const others = useMemo(
     () => profiles.filter((profile) => profile.id !== user?.id),
@@ -342,8 +371,7 @@ useEffect(() => {
   }, [others, query]);
 
   const activeConversation =
-    conversations.find((item) => item.id === activeId) ??
-    generalRoom;
+    conversations.find((item) => item.id === activeId) ?? generalRoom;
 
   const activePartner = activeConversation
     ? partnerOf(activeConversation)
@@ -364,9 +392,7 @@ useEffect(() => {
     activeConversation?.kind === "public"
       ? "Everyone on ZChat"
       : activeConversation?.kind === "group"
-        ? `${memberCount} member${
-            memberCount === 1 ? "" : "s"
-          }`
+        ? `${memberCount} member${memberCount === 1 ? "" : "s"}`
         : isOnline(activePartner)
           ? "Online"
           : "Offline";
@@ -392,10 +418,7 @@ useEffect(() => {
     }
   };
 
-  const makeGroup = async (
-    name: string,
-    memberIds: string[],
-  ) => {
+  const makeGroup = async (name: string, memberIds: string[]) => {
     if (!user) return;
 
     const conversation = await createGroup(
@@ -409,28 +432,20 @@ useEffect(() => {
   };
 
   const leaveGroup = async () => {
-    if (
-      !user ||
-      activeConversation?.kind !== "group"
-    ) {
+    if (!user || activeConversation?.kind !== "group") {
       return;
     }
 
     if (
       !window.confirm(
-        `Leave ${
-          activeConversation.name ?? "this group"
-        }?`,
+        `Leave ${activeConversation.name ?? "this group"}?`,
       )
     ) {
       return;
     }
 
     try {
-      await leaveConversation(
-        activeConversation.id,
-        user.id,
-      );
+      await leaveConversation(activeConversation.id, user.id);
 
       if (generalRoom) {
         setActiveId(generalRoom.id);
@@ -451,16 +466,71 @@ useEffect(() => {
   ) => {
     if (!user || !activeId) return;
 
-    const imagePath = file
-      ? await uploadChatImage(activeId, file)
-      : null;
+    const trimmed = body.trim();
+    const replyToMessageId = replyingTo?.id ?? null;
 
-    await sendMessage({
-      conversationId: activeId,
-      senderId: user.id,
-      body,
-      imagePath,
-    });
+    // Show it instantly instead of waiting on the upload/insert/Realtime
+    // round trip. Only for text.
+    let tempId: string | null = null;
+
+    if (trimmed && !file) {
+      tempId = `temp-${crypto.randomUUID()}`;
+
+      const optimisticMessage: Message = {
+        id: tempId,
+        conversation_id: activeId,
+        sender_id: user.id,
+        body: trimmed,
+        image_url: null,
+        created_at: new Date().toISOString(),
+        reply_to_message_id: replyToMessageId,
+      };
+
+      setMessages((current) => [
+        ...current,
+        optimisticMessage,
+      ]);
+    }
+
+    try {
+      const imagePath = file
+        ? await uploadChatImage(activeId, file)
+        : null;
+
+      const inserted = await sendMessage({
+        conversationId: activeId,
+        senderId: user.id,
+        body,
+        imagePath,
+        replyToMessageId,
+      });
+
+      if (tempId && inserted) {
+        const finalTempId = tempId;
+
+        setMessages((current) =>
+          current.map((item) =>
+            item.id === finalTempId ? inserted : item,
+          ),
+        );
+      } else if (inserted) {
+        setMessages((current) =>
+          current.some((item) => item.id === inserted.id)
+            ? current
+            : [...current, inserted],
+        );
+      }
+    } catch (error) {
+      if (tempId) {
+        const finalTempId = tempId;
+
+        setMessages((current) =>
+          current.filter((item) => item.id !== finalTempId),
+        );
+      }
+
+      throw error;
+    }
   };
 
   const me = user
@@ -484,9 +554,7 @@ useEffect(() => {
             onCreate={makeGroup}
           />
 
-          <NotificationGate
-            userId={user?.id ?? ""}
-          />
+          <NotificationGate userId={user?.id ?? ""} />
         </div>
       </div>
 
@@ -496,9 +564,7 @@ useEffect(() => {
 
           <Input
             value={query}
-            onChange={(event) =>
-              setQuery(event.target.value)
-            }
+            onChange={(event) => setQuery(event.target.value)}
             placeholder="Search people"
             className="rounded-xl bg-surface-2 pl-9"
           />
@@ -520,9 +586,7 @@ useEffect(() => {
             }
             title="General"
             subtitle="Everyone on ZChat"
-            badge={
-              unread[generalRoom?.id ?? ""] ?? 0
-            }
+            badge={unread[generalRoom?.id ?? ""] ?? 0}
           />
         </Section>
 
@@ -541,13 +605,7 @@ useEffect(() => {
                   </span>
                 }
                 title={group.name ?? "Group"}
-                subtitle={`${
-                  members.filter(
-                    (m) =>
-                      m.conversation_id ===
-                      group.id,
-                  ).length
-                } members`}
+                subtitle={`${members.filter((m) => m.conversation_id === group.id).length} members`}
                 badge={unread[group.id] ?? 0}
               />
             ))}
@@ -567,9 +625,7 @@ useEffect(() => {
                     activeId === conversation.id
                   }
                   onClick={() =>
-                    openConversation(
-                      conversation.id,
-                    )
+                    openConversation(conversation.id)
                   }
                   leading={
                     <UserAvatar
@@ -619,7 +675,8 @@ useEffect(() => {
                 />
               }
               title={
-                person.display_name || "Someone"
+                person.display_name ||
+                "Someone"
               }
               subtitle={
                 isOnline(person)
@@ -630,6 +687,16 @@ useEffect(() => {
           ))}
         </Section>
       </div>
+
+      {isAdmin && (
+        <Link
+          to="/admin"
+          className="flex items-center gap-3 border-t border-border px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+        >
+          <Shield className="size-4" />
+          Admin panel
+        </Link>
+      )}
 
       <Link
         to="/profile"
@@ -700,8 +767,7 @@ useEffect(() => {
             />
           ) : (
             <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-sm text-muted-foreground">
-              {activeConversation?.kind ===
-              "public" ? (
+              {activeConversation?.kind === "public" ? (
                 <Hash className="size-4" />
               ) : (
                 initialsOf(activeTitle)
@@ -719,15 +785,12 @@ useEffect(() => {
             </p>
           </div>
 
-          {activeConversation?.kind ===
-            "group" && (
+          {activeConversation?.kind === "group" && (
             <Button
               variant="ghost"
               size="sm"
               className="ml-auto text-muted-foreground"
-              onClick={() =>
-                void leaveGroup()
-              }
+              onClick={() => void leaveGroup()}
             >
               <LogOut className="mr-1.5 size-4" />
               Leave group
@@ -747,6 +810,33 @@ useEffect(() => {
           {messages.map((message, index) => {
             const previous = messages[index - 1];
 
+            const replyTarget = message.reply_to_message_id
+              ? messages.find(
+                  (item) =>
+                    item.id ===
+                    message.reply_to_message_id,
+                )
+              : undefined;
+
+            const replyPreview =
+              message.reply_to_message_id
+                ? replyTarget
+                  ? {
+                      senderName:
+                        replyTarget.sender_id ===
+                        user?.id
+                          ? "You"
+                          : (profileMap.get(
+                              replyTarget.sender_id,
+                            )?.display_name ??
+                            "Someone"),
+                      snippet:
+                        replyTarget.body ??
+                        "Sent a photo",
+                    }
+                  : null
+                : undefined;
+
             return (
               <MessageBubble
                 key={message.id}
@@ -761,6 +851,24 @@ useEffect(() => {
                   previous?.sender_id !==
                   message.sender_id
                 }
+                replyPreview={replyPreview}
+                onReply={() =>
+                  setReplyingTo(message)
+                }
+                onJumpToReply={
+                  message.reply_to_message_id
+                    ? () => {
+                        document
+                          .getElementById(
+                            `message-${message.reply_to_message_id}`,
+                          )
+                          ?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center",
+                          });
+                      }
+                    : undefined
+                }
               />
             );
           })}
@@ -771,6 +879,26 @@ useEffect(() => {
         <Composer
           onSend={handleSend}
           placeholder={`Message ${activeTitle}`}
+          replyingTo={
+            replyingTo
+              ? {
+                  senderName:
+                    replyingTo.sender_id ===
+                    user?.id
+                      ? "yourself"
+                      : (profileMap.get(
+                          replyingTo.sender_id,
+                        )?.display_name ??
+                        "Someone"),
+                  snippet:
+                    replyingTo.body ??
+                    "Sent a photo",
+                }
+              : null
+          }
+          onCancelReply={() =>
+            setReplyingTo(null)
+          }
         />
       </main>
     </div>
