@@ -31,7 +31,6 @@ import {
   type Profile,
 } from "@/lib/chat";
 import { uploadChatImage } from "@/lib/media";
-import { showChatNotification } from "@/lib/notifications";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/chat")({
@@ -87,6 +86,22 @@ function ChatPage() {
 
   activeIdRef.current = activeId;
   profilesRef.current = profiles;
+
+  useEffect(() => {
+    const handleWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "zchat:get-active-conversation") return;
+
+      const conversationId =
+        document.visibilityState === "visible" && document.hasFocus()
+          ? activeIdRef.current
+          : null;
+      event.ports[0]?.postMessage({ conversationId });
+    };
+
+    navigator.serviceWorker?.addEventListener("message", handleWorkerMessage);
+    return () =>
+      navigator.serviceWorker?.removeEventListener("message", handleWorkerMessage);
+  }, []);
 
   useEffect(() => {
     if (!loading && !user) void navigate({ to: "/" });
@@ -169,12 +184,6 @@ function ChatPage() {
             toast(title, {
               description: body,
             });
-
-            void showChatNotification(
-              title,
-              body,
-              message.conversation_id,
-            );
           }
         },
       )

@@ -75,6 +75,16 @@ Deno.serve(async (req) => {
     const title = sender?.display_name ?? "New message";
     const body = message.body ?? "Sent a photo";
 
+    const { data: conversation, error: conversationError } = await supabase
+      .from("conversations")
+      .select("name")
+      .eq("id", message.conversation_id)
+      .maybeSingle();
+
+    if (conversationError) {
+      console.warn("[send-push] Conversation lookup failed:", conversationError);
+    }
+
     console.log("[send-push] Notification title:", title);
     console.log("[send-push] Notification body:", body);
 
@@ -122,6 +132,8 @@ Deno.serve(async (req) => {
             JSON.stringify({
               title,
               body,
+              conversation_id: message.conversation_id,
+              conversation_name: conversation?.name ?? null,
               url: "/chat",
             }),
           );
