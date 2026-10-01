@@ -200,6 +200,18 @@
   scrollbar-color: var(--color-surface-2) transparent;
 }
 
+@utility accent-swatch {
+  background-color: oklch(0.66 0.18 262);
+
+  &[data-accent-preview="teal"] {
+    background-color: oklch(0.66 0.13 177);
+  }
+
+  &[data-accent-preview="coral"] {
+    background-color: oklch(0.66 0.17 28);
+  }
+}
+
 /*
  * iOS PWA (standalone / added-to-home-screen) fixes.
  * Regular Safari browsing and desktop are untouched — everything here is
