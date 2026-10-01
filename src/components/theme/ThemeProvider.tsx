@@ -55,8 +55,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.dataset.theme = resolvedMode;
-    root.dataset.accent = accent;
+    root.dataset["theme"] = resolvedMode;
+    root.dataset["accent"] = accent;
     root.style.colorScheme = resolvedMode;
 
     const themeColor = getComputedStyle(root).getPropertyValue("--background").trim();
