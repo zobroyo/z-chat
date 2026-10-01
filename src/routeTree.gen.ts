@@ -10,169 +10,169 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RecoveryRouteImport } from './routes/recovery'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
-import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminConversationsRouteImport } from './routes/admin.conversations'
-import { Route as AdminConversationsIdRouteImport } from './routes/admin.conversations.$id'
 import { Route as AdminMessagesRouteImport } from './routes/admin.messages'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminConversationsIndexRouteImport } from './routes/admin.conversations.index'
+import { Route as AdminConversationsIdRouteImport } from './routes/admin.conversations.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-
-const ChatRoute = ChatRouteImport.update({
-  id: '/chat',
-  path: '/chat',
-  getParentRoute: () => rootRouteImport,
-} as any)
-
-const ProfileRoute = ProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => rootRouteImport,
-} as any)
-
-const RecoveryRoute = RecoveryRouteImport.update({
-  id: '/recovery',
-  path: '/recovery',
-  getParentRoute: () => rootRouteImport,
-} as any)
-
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-
+const ChatRoute = ChatRouteImport.update({
+  id: '/chat',
+  path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecoveryRoute = RecoveryRouteImport.update({
+  id: '/recovery',
+  path: '/recovery',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
-  id: '/admin/',
+  id: '/',
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
-
-const AdminUsersRoute = AdminUsersRouteImport.update({
-  id: '/admin/users',
-  path: '/users',
-  getParentRoute: () => AdminRoute,
-} as any)
-
 const AdminConversationsRoute = AdminConversationsRouteImport.update({
-  id: '/admin/conversations',
+  id: '/conversations',
   path: '/conversations',
   getParentRoute: () => AdminRoute,
 } as any)
-
+const AdminMessagesRoute = AdminMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminConversationsIndexRoute = AdminConversationsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminConversationsRoute,
+} as any)
 const AdminConversationsIdRoute = AdminConversationsIdRouteImport.update({
-  id: '/admin/conversations/$id',
+  id: '/$id',
   path: '/$id',
   getParentRoute: () => AdminConversationsRoute,
 } as any)
 
-const AdminMessagesRoute = AdminMessagesRouteImport.update({
-  id: '/admin/messages',
-  path: '/messages',
-  getParentRoute: () => AdminRoute,
-} as any)
-
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
-  '/admin/': typeof AdminIndexRoute
-  '/admin/users': typeof AdminUsersRoute
-  '/admin/conversations': typeof AdminConversationsRoute
-  '/admin/conversations/$id': typeof AdminConversationsIdRoute
+  '/admin/conversations': typeof AdminConversationsRouteWithChildren
   '/admin/messages': typeof AdminMessagesRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/conversations/$id': typeof AdminConversationsIdRoute
+  '/admin/conversations/': typeof AdminConversationsIndexRoute
 }
-
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
-  '/admin': typeof AdminIndexRoute
-  '/admin/users': typeof AdminUsersRoute
-  '/admin/conversations': typeof AdminConversationsRoute
-  '/admin/conversations/$id': typeof AdminConversationsIdRoute
   '/admin/messages': typeof AdminMessagesRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin': typeof AdminIndexRoute
+  '/admin/conversations/$id': typeof AdminConversationsIdRoute
+  '/admin/conversations': typeof AdminConversationsIndexRoute
 }
-
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteWithChildren
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
-  '/admin': typeof AdminRoute
-  '/admin/': typeof AdminIndexRoute
-  '/admin/users': typeof AdminUsersRoute
-  '/admin/conversations': typeof AdminConversationsRoute
-  '/admin/conversations/$id': typeof AdminConversationsIdRoute
+  '/admin/conversations': typeof AdminConversationsRouteWithChildren
   '/admin/messages': typeof AdminMessagesRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/conversations/$id': typeof AdminConversationsIdRoute
+  '/admin/conversations/': typeof AdminConversationsIndexRoute
 }
-
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/chat'
     | '/profile'
     | '/recovery'
-    | '/admin/'
-    | '/admin/users'
     | '/admin/conversations'
-    | '/admin/conversations/$id'
     | '/admin/messages'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/admin/'
+    | '/admin/conversations/$id'
+    | '/admin/conversations/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/chat'
     | '/profile'
     | '/recovery'
-    | '/admin'
-    | '/admin/users'
-    | '/admin/conversations'
-    | '/admin/conversations/$id'
     | '/admin/messages'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/admin'
+    | '/admin/conversations/$id'
+    | '/admin/conversations'
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/chat'
     | '/profile'
     | '/recovery'
-    | '/admin'
-    | '/admin/'
-    | '/admin/users'
     | '/admin/conversations'
-    | '/admin/conversations/$id'
     | '/admin/messages'
+    | '/admin/settings'
+    | '/admin/users'
+    | '/admin/'
+    | '/admin/conversations/$id'
+    | '/admin/conversations/'
   fileRoutesById: FileRoutesById
 }
-
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRouteWithChildren
   ChatRoute: typeof ChatRoute
   ProfileRoute: typeof ProfileRoute
   RecoveryRoute: typeof RecoveryRoute
-  AdminRoute: typeof AdminRoute
-}
-
-export interface AdminRouteChildren {
-  AdminIndexRoute: typeof AdminIndexRoute
-  AdminUsersRoute: typeof AdminUsersRoute
-  AdminConversationsRoute: typeof AdminConversationsRoute
-  AdminMessagesRoute: typeof AdminMessagesRoute
-}
-
-export interface AdminConversationsRouteChildren {
-  AdminConversationsIdRoute: typeof AdminConversationsIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -184,31 +184,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-
-    '/chat': {
-      id: '/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof ChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-
-    '/profile': {
-      id: '/profile'
-      path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof ProfileRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-
-    '/recovery': {
-      id: '/recovery'
-      path: '/recovery'
-      fullPath: '/recovery'
-      preLoaderRoute: typeof RecoveryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -216,76 +191,123 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recovery': {
+      id: '/recovery'
+      path: '/recovery'
+      fullPath: '/recovery'
+      preLoaderRoute: typeof RecoveryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
-      parentRoute: typeof AdminRouteImport
+      parentRoute: typeof AdminRoute
     }
-
-    '/admin/users': {
-      id: '/admin/users'
-      path: '/users'
-      fullPath: '/admin/users'
-      preLoaderRoute: typeof AdminUsersRouteImport
-      parentRoute: typeof AdminRouteImport
-    }
-
     '/admin/conversations': {
       id: '/admin/conversations'
       path: '/conversations'
       fullPath: '/admin/conversations'
       preLoaderRoute: typeof AdminConversationsRouteImport
-      parentRoute: typeof AdminRouteImport
+      parentRoute: typeof AdminRoute
     }
-
-    '/admin/conversations/$id': {
-      id: '/admin/conversations/$id'
-      path: '/$id'
-      fullPath: '/admin/conversations/$id'
-      preLoaderRoute: typeof AdminConversationsIdRouteImport
-      parentRoute: typeof AdminConversationsRouteImport
-    }
-
     '/admin/messages': {
       id: '/admin/messages'
       path: '/messages'
       fullPath: '/admin/messages'
       preLoaderRoute: typeof AdminMessagesRouteImport
-      parentRoute: typeof AdminRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/conversations/': {
+      id: '/admin/conversations/'
+      path: '/'
+      fullPath: '/admin/conversations/'
+      preLoaderRoute: typeof AdminConversationsIndexRouteImport
+      parentRoute: typeof AdminConversationsRoute
+    }
+    '/admin/conversations/$id': {
+      id: '/admin/conversations/$id'
+      path: '/$id'
+      fullPath: '/admin/conversations/$id'
+      preLoaderRoute: typeof AdminConversationsIdRouteImport
+      parentRoute: typeof AdminConversationsRoute
     }
   }
 }
 
-const adminConversationsRouteChildren: AdminConversationsRouteChildren = {
-  AdminConversationsIdRoute: AdminConversationsIdRoute,
+interface AdminConversationsRouteChildren {
+  AdminConversationsIdRoute: typeof AdminConversationsIdRoute
+  AdminConversationsIndexRoute: typeof AdminConversationsIndexRoute
 }
 
-const adminRouteChildren: AdminRouteChildren = {
-  AdminIndexRoute: AdminIndexRoute,
-  AdminUsersRoute: AdminUsersRoute,
-  AdminConversationsRoute:
-    AdminConversationsRoute._addFileChildren(adminConversationsRouteChildren),
-  AdminMessagesRoute: AdminMessagesRoute,
+const AdminConversationsRouteChildren: AdminConversationsRouteChildren = {
+  AdminConversationsIdRoute: AdminConversationsIdRoute,
+  AdminConversationsIndexRoute: AdminConversationsIndexRoute,
 }
+
+const AdminConversationsRouteWithChildren =
+  AdminConversationsRoute._addFileChildren(AdminConversationsRouteChildren)
+
+interface AdminRouteChildren {
+  AdminConversationsRoute: typeof AdminConversationsRouteWithChildren
+  AdminMessagesRoute: typeof AdminMessagesRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminConversationsRoute: AdminConversationsRouteWithChildren,
+  AdminMessagesRoute: AdminMessagesRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRouteWithChildren,
   ChatRoute: ChatRoute,
   ProfileRoute: ProfileRoute,
   RecoveryRoute: RecoveryRoute,
-  AdminRoute: AdminRoute._addFileChildren(adminRouteChildren),
 }
-
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
 import type { startInstance } from './start.ts'
-
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
