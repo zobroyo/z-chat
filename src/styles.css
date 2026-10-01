@@ -5,8 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Z CHAT design system — "Ink dark".
- * Near-black surfaces, one electric accent, quiet borders.
+ * Z CHAT design system — "Ink".
+ * Neutral surfaces, restrained accents, quiet borders.
  * All colors are oklch semantic tokens. Never hardcode colors in components.
  */
 
@@ -56,12 +56,39 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --shadow-lift: 0 1px 0 0 oklch(1 0 0 / 4%) inset, 0 18px 40px -24px oklch(0 0 0 / 80%);
-  --shadow-glow: 0 0 0 1px oklch(0.66 0.18 262 / 35%), 0 12px 40px -16px oklch(0.66 0.18 262 / 45%);
+  --shadow-lift: var(--theme-shadow-lift);
+  --shadow-glow: var(--theme-shadow-glow);
 }
 
 :root {
   --radius: 0.875rem;
+
+  --accent-hue: 262;
+  --accent-chroma: 0.18;
+
+  --primary: oklch(0.66 var(--accent-chroma) var(--accent-hue));
+  --primary-foreground: oklch(0.145 0.008 275);
+  --ring: oklch(0.66 var(--accent-chroma) var(--accent-hue) / 60%);
+  --bubble: oklch(0.66 var(--accent-chroma) var(--accent-hue));
+  --bubble-foreground: oklch(0.16 0.02 var(--accent-hue));
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-ring: var(--ring);
+  --theme-shadow-glow: 0 0 0 1px oklch(0.66 var(--accent-chroma) var(--accent-hue) / 35%), 0 12px 40px -16px oklch(0.66 var(--accent-chroma) var(--accent-hue) / 45%);
+}
+
+:root[data-accent="teal"] {
+  --accent-hue: 177;
+  --accent-chroma: 0.13;
+}
+
+:root[data-accent="coral"] {
+  --accent-hue: 28;
+  --accent-chroma: 0.17;
+}
+
+:root,
+:root[data-theme="dark"] {
 
   --background: oklch(0.145 0.008 275);
   --foreground: oklch(0.928 0.004 275);
@@ -72,9 +99,6 @@
   --card-foreground: oklch(0.928 0.004 275);
   --popover: oklch(0.184 0.008 275);
   --popover-foreground: oklch(0.928 0.004 275);
-
-  --primary: oklch(0.66 0.18 262);
-  --primary-foreground: oklch(0.145 0.008 275);
 
   --secondary: oklch(0.244 0.009 275);
   --secondary-foreground: oklch(0.928 0.004 275);
@@ -90,20 +114,48 @@
 
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.66 0.18 262 / 60%);
-
-  --bubble: oklch(0.66 0.18 262);
-  --bubble-foreground: oklch(0.16 0.02 262);
   --online: oklch(0.78 0.17 152);
 
   --sidebar: oklch(0.164 0.008 275);
   --sidebar-foreground: oklch(0.928 0.004 275);
-  --sidebar-primary: oklch(0.66 0.18 262);
-  --sidebar-primary-foreground: oklch(0.145 0.008 275);
   --sidebar-accent: oklch(0.244 0.009 275);
   --sidebar-accent-foreground: oklch(0.96 0.004 275);
   --sidebar-border: oklch(1 0 0 / 9%);
-  --sidebar-ring: oklch(0.66 0.18 262 / 60%);
+  --theme-shadow-lift: 0 1px 0 0 oklch(1 0 0 / 4%) inset, 0 18px 40px -24px oklch(0 0 0 / 80%);
+}
+
+:root[data-theme="light"] {
+  --background: oklch(0.982 0.003 260);
+  --foreground: oklch(0.205 0.012 270);
+  --surface: oklch(1 0 0);
+  --surface-2: oklch(0.947 0.006 260);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0.012 270);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0.012 270);
+
+  --primary-foreground: oklch(0.99 0.003 260);
+  --secondary: oklch(0.925 0.007 260);
+  --secondary-foreground: oklch(0.225 0.012 270);
+  --muted: oklch(0.93 0.006 260);
+  --muted-foreground: oklch(0.49 0.018 265);
+  --accent: oklch(0.91 0.012 260);
+  --accent-foreground: oklch(0.205 0.012 270);
+  --destructive: oklch(0.58 0.21 25);
+  --destructive-foreground: oklch(0.99 0.003 260);
+  --border: oklch(0.28 0.015 270 / 13%);
+  --input: oklch(0.28 0.015 270 / 18%);
+  --bubble-foreground: oklch(0.99 0.003 260);
+  --online: oklch(0.61 0.16 150);
+
+  --sidebar: oklch(0.962 0.005 260);
+  --sidebar-foreground: oklch(0.205 0.012 270);
+  --sidebar-primary-foreground: oklch(0.99 0.003 260);
+  --sidebar-accent: oklch(0.92 0.009 260);
+  --sidebar-accent-foreground: oklch(0.205 0.012 270);
+  --sidebar-border: oklch(0.28 0.015 270 / 13%);
+  --theme-shadow-lift: 0 1px 0 0 oklch(1 0 0 / 90%) inset, 0 18px 40px -24px oklch(0.24 0.02 270 / 24%);
 }
 
 @layer base {
@@ -113,6 +165,11 @@
 
   html {
     color-scheme: dark;
+    background-color: var(--color-background);
+  }
+
+  html[data-theme="light"] {
+    color-scheme: light;
   }
 
   body {
@@ -121,6 +178,7 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     overscroll-behavior-y: none;
+    transition: background-color 160ms ease, color 160ms ease;
   }
 
   h1,

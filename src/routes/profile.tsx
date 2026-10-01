@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Camera, Loader2, LogOut } from "lucide-react";
+import { ArrowLeft, Camera, Check, Laptop, Loader2, LogOut, Moon, Sun } from "lucide-react";
 import { toast } from "sonner";
 
 import { UserAvatar } from "@/components/UserAvatar";
@@ -11,6 +11,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { displayNameSchema, type Profile } from "@/lib/chat";
 import { IMAGE_ACCEPT, uploadAvatar } from "@/lib/media";
+import { useTheme, type ThemeAccent, type ThemeMode } from "@/components/theme/ThemeProvider";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/profile")({
   head: () => ({
@@ -40,6 +42,7 @@ function ProfilePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { mode, accent, setMode, setAccent } = useTheme();
 
   useEffect(() => {
     if (!loading && !user) void navigate({ to: "/" });
@@ -127,6 +130,70 @@ function ProfilePage() {
         </Button>
         <h1 className="text-xl font-bold">Your profile</h1>
       </div>
+
+      <section className="mb-5" aria-labelledby="appearance-title">
+        <div className="mb-3">
+          <h2 id="appearance-title" className="font-display text-sm font-semibold">Appearance</h2>
+          <p className="mt-1 text-xs text-muted-foreground">Choose how ZChat looks on this device.</p>
+        </div>
+
+        <div className="surface-panel rounded-2xl p-3 shadow-lift">
+          <div className="grid grid-cols-3 gap-2" aria-label="Color mode">
+            {([
+              { value: "system", label: "System", icon: Laptop },
+              { value: "light", label: "Light", icon: Sun },
+              { value: "dark", label: "Dark", icon: Moon },
+            ] satisfies { value: ThemeMode; label: string; icon: typeof Laptop }[]).map((option) => {
+              const Icon = option.icon;
+              const selected = mode === option.value;
+              return (
+                <Button
+                  key={option.value}
+                  type="button"
+                  variant={selected ? "secondary" : "ghost"}
+                  aria-pressed={selected}
+                  onClick={() => setMode(option.value)}
+                  className="h-auto min-w-0 flex-col gap-1.5 px-2 py-3"
+                >
+                  <Icon className="size-4" />
+                  <span>{option.label}</span>
+                </Button>
+              );
+            })}
+          </div>
+
+          <div className="my-3 h-px bg-border" />
+
+          <div className="flex items-center justify-between gap-3 px-1">
+            <span className="text-sm font-medium">Accent</span>
+            <div className="flex gap-2" aria-label="Accent color">
+              {([
+                { value: "blue", label: "Blue" },
+                { value: "teal", label: "Teal" },
+                { value: "coral", label: "Coral" },
+              ] satisfies { value: ThemeAccent; label: string }[]).map((option) => {
+                const selected = accent === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-label={`${option.label} accent`}
+                    aria-pressed={selected}
+                    data-accent-preview={option.value}
+                    onClick={() => setAccent(option.value)}
+                    className={cn(
+                      "accent-swatch flex size-9 items-center justify-center rounded-full border border-border transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                      selected && "ring-2 ring-ring ring-offset-2 ring-offset-background",
+                    )}
+                  >
+                    {selected && <Check className="size-4 text-primary-foreground" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {loadError && (
         <div className="mb-4 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
