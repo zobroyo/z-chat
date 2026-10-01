@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      message_receipts: {
+        Row: {
+          conversation_id: string
+          delivered_at: string | null
+          message_id: string
+          read_at: string | null
+          recipient_id: string
+        }
+        Insert: {
+          conversation_id: string
+          delivered_at?: string | null
+          message_id: string
+          read_at?: string | null
+          recipient_id: string
+        }
+        Update: {
+          conversation_id?: string
+          delivered_at?: string | null
+          message_id?: string
+          read_at?: string | null
+          recipient_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_receipts_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_receipts_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_members: {
         Row: {
           conversation_id: string

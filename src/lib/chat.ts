@@ -39,6 +39,14 @@ export type Message = {
   reply_to_message_id: string | null;
 };
 
+export type MessageReceipt = {
+  message_id: string;
+  conversation_id: string;
+  recipient_id: string;
+  delivered_at: string | null;
+  read_at: string | null;
+};
+
 export const displayNameSchema = z
   .string()
   .trim()
@@ -93,6 +101,82 @@ export async function fetchMessages(conversationId: string) {
   if (error) throw error;
 
   return ((data ?? []) as Message[]).slice().reverse();
+}
+
+export async function fetchMessageReceipts(conversationId: string, messageIds: string[]) {
+  if (messageIds.length === 0) return [] as MessageReceipt[];
+
+  const results: MessageReceipt[] = [];
+  for (let offset = 0; offset < messageIds.length; offset += 500) {
+    const ids = messageIds.slice(offset, offset + 500);
+    const { data, error } = await supabase
+      .from("message_receipts")
+      .select("message_id, conversation_id, recipient_id, delivered_at, read_at")
+      .eq("conversation_id", conversationId)
+      .in("message_id", ids);
+    if (error) throw error;
+    results.push(...((data ?? []) as MessageReceipt[]));
+  }
+  return results;
+}
+
+export async function markMessagesDelivered(
+  conversationId: string,
+  userId: string,
+  messageIds: string[],
+) {
+  if (messageIds.length === 0) return;
+  const { error } = await supabase
+    .from("message_receipts")
+    .update({ delivered_at: new Date().toISOString() })
+    .eq("conversation_id", conversationId)
+    .eq("recipient_id", userId)
+    .in("message_id", messageIds)
+    .is("delivered_at", null);
+  if (error) throw error;
+}
+
+export async function deliverPendingMessages(userId: string) {
+  while (true) {
+    const { data, error } = await supabase
+      .from("message_receipts")
+      .select("message_id, conversation_id")
+      .eq("recipient_id", userId)
+      .is("delivered_at", null)
+      .limit(500);
+    if (error) throw error;
+    const pending = data ?? [];
+    if (pending.length === 0) return;
+
+    const byConversation = new Map<string, string[]>();
+    for (const receipt of pending) {
+      const ids = byConversation.get(receipt.conversation_id) ?? [];
+      ids.push(receipt.message_id);
+      byConversation.set(receipt.conversation_id, ids);
+    }
+    await Promise.all(
+      [...byConversation.entries()].map(([conversationId, ids]) =>
+        markMessagesDelivered(conversationId, userId, ids),
+      ),
+    );
+  }
+}
+
+export async function markMessagesRead(
+  conversationId: string,
+  userId: string,
+  messageIds: string[],
+) {
+  if (messageIds.length === 0) return;
+  const readAt = new Date().toISOString();
+  const { error } = await supabase
+    .from("message_receipts")
+    .update({ delivered_at: readAt, read_at: readAt })
+    .eq("conversation_id", conversationId)
+    .eq("recipient_id", userId)
+    .in("message_id", messageIds)
+    .is("read_at", null);
+  if (error) throw error;
 }
 export async function sendMessage(input: {
   conversationId: string;
@@ -176,11 +260,12 @@ export async function leaveConversation(conversationId: string, userId: string) 
 }
 
 export async function markConversationRead(conversationId: string, userId: string) {
-  await supabase
+  const { error } = await supabase
     .from("conversation_members")
     .update({ last_read_at: new Date().toISOString() })
     .eq("conversation_id", conversationId)
     .eq("user_id", userId);
+  if (error) throw error;
 }
 
 export async function touchPresence(userId: string) {

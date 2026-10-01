@@ -1,8 +1,8 @@
-import { Reply } from "lucide-react";
+import { Check, CheckCheck, Reply } from "lucide-react";
 
 import { UserAvatar } from "@/components/UserAvatar";
 import { CHAT_BUCKET, useSignedUrl } from "@/lib/media";
-import type { Message, Profile } from "@/lib/chat";
+import type { Message, MessageReceipt, Profile } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
 type ReplyPreview = {
@@ -18,6 +18,8 @@ type Props = {
   replyPreview?: ReplyPreview | undefined;
   onReply?: (() => void) | undefined;
   onJumpToReply?: (() => void) | undefined;
+  receipts?: MessageReceipt[] | undefined;
+  groupChat?: boolean | undefined;
 };
 
 export function MessageBubble({
@@ -28,12 +30,26 @@ export function MessageBubble({
   replyPreview,
   onReply,
   onJumpToReply,
+  receipts = [],
+  groupChat = false,
 }: Props) {
   const imageUrl = useSignedUrl(CHAT_BUCKET, message.image_url);
   const time = new Date(message.created_at).toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
+  const messageReceipts = receipts.filter((receipt) => receipt.message_id === message.id);
+  const deliveredCount = messageReceipts.filter((receipt) => receipt.delivered_at).length;
+  const readCount = messageReceipts.filter((receipt) => receipt.read_at).length;
+  const receiptStatus = message.id.startsWith("temp-")
+    ? "Sending"
+    : groupChat && messageReceipts.length > 1
+      ? `Delivered ${deliveredCount}/${messageReceipts.length} · Read ${readCount}/${messageReceipts.length}`
+      : readCount > 0
+        ? "Read"
+        : deliveredCount > 0
+          ? "Delivered"
+          : "Sent";
 
   return (
     <div
@@ -108,7 +124,15 @@ export function MessageBubble({
           </div>
         </div>
 
-        <p className="px-1 text-[10px] text-muted-foreground">{time}</p>
+        <p className={cn("flex items-center gap-1 px-1 text-[10px] text-muted-foreground", self && "justify-end")}>
+          {time}
+          {self && (
+            <span className="inline-flex items-center gap-0.5" aria-label={receiptStatus} title={receiptStatus}>
+              {readCount > 0 ? <CheckCheck className="size-3 text-primary" /> : deliveredCount > 0 ? <CheckCheck className="size-3" /> : <Check className="size-3" />}
+              {groupChat && messageReceipts.length > 1 ? <span>{receiptStatus.replace(/^Delivered /, "D ").replace(" · Read ", " · R ")}</span> : <span>{receiptStatus}</span>}
+            </span>
+          )}
+        </p>
       </div>
     </div>
   );

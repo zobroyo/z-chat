@@ -15,20 +15,25 @@ import { checkIsAdmin } from "@/lib/admin";
 import { supabase } from "@/integrations/supabase/client";
 import {
   createGroup,
+  deliverPendingMessages,
   ensureDirectConversation,
   fetchConversations,
   fetchMembers,
+  fetchMessageReceipts,
   fetchMessages,
   fetchProfiles,
   initialsOf,
   isOnline,
   leaveConversation,
   markConversationRead,
+  markMessagesDelivered,
+  markMessagesRead,
   sendMessage,
   touchPresence,
   type Conversation,
   type Member,
   type Message,
+  type MessageReceipt,
   type Profile,
 } from "@/lib/chat";
 import { uploadChatImage } from "@/lib/media";
@@ -81,6 +86,7 @@ function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messageReceipts, setMessageReceipts] = useState<MessageReceipt[]>([]);
 
   // Start empty so we NEVER fetch messages using the fake placeholder ID.
   // A valid ?c= link is resolved after conversations have loaded.
@@ -112,9 +118,53 @@ function ChatPage() {
   const activeIdRef = useRef(activeId);
   const profilesRef = useRef<Profile[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const receiptQueueRef = useRef(new Map<string, { conversationId: string; read: boolean }>());
+  const receiptTimerRef = useRef<number | null>(null);
 
   activeIdRef.current = activeId;
   profilesRef.current = profiles;
+
+  const queueReceipt = useCallback((messageId: string, conversationId: string, read: boolean) => {
+    if (messageId.startsWith("temp-")) return;
+    const queued = receiptQueueRef.current.get(messageId);
+    receiptQueueRef.current.set(messageId, {
+      conversationId,
+      read: read || queued?.read === true,
+    });
+    if (receiptTimerRef.current !== null) return;
+    receiptTimerRef.current = window.setTimeout(() => {
+      receiptTimerRef.current = null;
+      const batch = [...receiptQueueRef.current.entries()];
+      receiptQueueRef.current.clear();
+      const byConversation = new Map<string, { delivered: string[]; read: string[] }>();
+      for (const [id, value] of batch) {
+        const rows = byConversation.get(value.conversationId) ?? { delivered: [], read: [] };
+        if (value.read && value.conversationId === activeIdRef.current && document.visibilityState === "visible" && document.hasFocus()) {
+          rows.read.push(id);
+        } else {
+          rows.delivered.push(id);
+        }
+        byConversation.set(value.conversationId, rows);
+      }
+      for (const [conversationId, ids] of byConversation) {
+        if (ids.delivered.length) {
+          if (user) {
+            const deliveredAt = new Date().toISOString();
+            void markMessagesDelivered(conversationId, user.id, ids.delivered)
+              .then(() => setMessageReceipts((current) => mergeReceipts(current, ids.delivered, user.id, conversationId, deliveredAt, false)))
+              .catch(() => undefined);
+          }
+        }
+        if (ids.read.length && user) {
+          const readAt = new Date().toISOString();
+          void markMessagesRead(conversationId, user.id, ids.read)
+            .then(() => setMessageReceipts((current) => mergeReceipts(current, ids.read, user.id, conversationId, readAt, true)))
+            .catch(() => undefined);
+          if (conversationId === activeIdRef.current) void markConversationRead(conversationId, user.id).catch(() => undefined);
+        }
+      }
+    }, 250);
+  }, [user]);
 
   useEffect(() => {
     const handleWorkerMessage = (event: MessageEvent) => {
@@ -158,6 +208,7 @@ function ChatPage() {
     if (!user) return;
 
     void reload();
+    void deliverPendingMessages(user.id).catch(() => undefined);
     void touchPresence(user.id);
 
     const presence = window.setInterval(
@@ -197,6 +248,12 @@ function ChatPage() {
             );
           }
 
+          queueReceipt(
+            message.id,
+            message.conversation_id,
+            isActive && document.visibilityState === "visible" && document.hasFocus(),
+          );
+
           if (!isActive) {
             setUnread((current) => ({
               ...current,
@@ -234,23 +291,45 @@ function ChatPage() {
             .catch(() => undefined);
         },
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "conversation_members",
-        },
-        () => {
-          void reload();
-        },
-      )
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversation_members" }, () => void reload())
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "conversation_members" }, () => void reload())
       .subscribe();
 
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [user, reload]);
+  }, [user, reload, queueReceipt]);
+
+  useEffect(() => {
+    if (!user || !activeId) return;
+    const channel = supabase
+      .channel(`z-chat-receipts-${activeId}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "message_receipts",
+        filter: `conversation_id=eq.${activeId}`,
+      }, (payload) => {
+        const receipt = (payload.new ?? payload.old) as MessageReceipt;
+        if (!receipt?.message_id) return;
+        setMessageReceipts((current) => {
+          const index = current.findIndex((item) => item.message_id === receipt.message_id && item.recipient_id === receipt.recipient_id);
+          if (index < 0) return [...current, receipt];
+          const next = current.slice();
+          const previous = next[index];
+          if (!previous) return [...current, receipt];
+          next[index] = {
+            ...previous,
+            ...receipt,
+            delivered_at: receipt.delivered_at ?? previous.delivered_at,
+            read_at: receipt.read_at ?? previous.read_at,
+          };
+          return next;
+        });
+      })
+      .subscribe();
+    return () => void supabase.removeChannel(channel);
+  }, [user, activeId]);
 
   const generalRoom = conversations.find(
     (item) => item.kind === "public",
@@ -289,12 +368,28 @@ function ChatPage() {
     if (!user || !activeId) return;
 
     setReplyingTo(null);
+    setMessages([]);
+    setMessageReceipts([]);
     let active = true;
 
     fetchMessages(activeId)
-      .then((rows) => {
+      .then(async (rows) => {
         if (active) {
           setMessages(rows);
+          const receipts = await fetchMessageReceipts(activeId, rows.map((row) => row.id));
+          if (!active) return;
+          setMessageReceipts(receipts);
+          const incomingIds = rows.filter((row) => row.sender_id !== user.id).map((row) => row.id);
+          const isViewing = document.visibilityState === "visible" && document.hasFocus() && activeIdRef.current === activeId;
+          const toAcknowledge = incomingIds.filter((id) => {
+            const receipt = receipts.find((item) => item.message_id === id && item.recipient_id === user.id);
+            return isViewing ? !receipt?.read_at : !receipt?.delivered_at;
+          });
+          toAcknowledge.forEach((id) => queueReceipt(id, activeId, isViewing));
+          if (isViewing) {
+            setUnread((current) => ({ ...current, [activeId]: 0 }));
+            void markConversationRead(activeId, user.id).catch(() => undefined);
+          }
         }
       })
       .catch(() => {
@@ -303,17 +398,49 @@ function ChatPage() {
         }
       });
 
-    setUnread((current) => ({
-      ...current,
-      [activeId]: 0,
-    }));
-
-    void markConversationRead(activeId, user.id);
-
     return () => {
       active = false;
     };
-  }, [activeId, user]);
+  }, [activeId, user, queueReceipt]);
+
+  useEffect(() => {
+    if (!user || !activeId) return;
+    let timer: number | undefined;
+    const refresh = () => {
+      if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void deliverPendingMessages(user.id).catch(() => undefined);
+        void fetchMessages(activeId).then(async (rows) => {
+          if (activeIdRef.current !== activeId) return;
+          setMessages(rows);
+          const receipts = await fetchMessageReceipts(activeId, rows.map((row) => row.id));
+          if (activeIdRef.current !== activeId) return;
+          setMessageReceipts((current) => mergeFetchedReceipts(current, receipts));
+          const ids = rows.filter((row) => row.sender_id !== user.id)
+            .map((row) => row.id)
+            .filter((id) => !receipts.some((receipt) => receipt.message_id === id && receipt.recipient_id === user.id && receipt.read_at));
+          ids.forEach((id) => queueReceipt(id, activeId, true));
+          if (ids.length && activeIdRef.current === activeId && document.visibilityState === "visible" && document.hasFocus()) {
+            void markConversationRead(activeId, user.id).catch(() => undefined);
+          }
+        }).catch(() => undefined);
+      }, 200);
+    };
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [user, activeId, queueReceipt]);
+
+  useEffect(() => () => {
+    if (receiptTimerRef.current !== null) window.clearTimeout(receiptTimerRef.current);
+  }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
@@ -852,6 +979,8 @@ function ChatPage() {
                   message.sender_id
                 }
                 replyPreview={replyPreview}
+                receipts={messageReceipts.filter((receipt) => receipt.message_id === message.id)}
+                groupChat={activeConversation?.kind !== "dm"}
                 onReply={() =>
                   setReplyingTo(message)
                 }
@@ -968,4 +1097,49 @@ function Row({
       )}
     </button>
   );
+}
+
+function mergeReceipts(
+  current: MessageReceipt[],
+  messageIds: string[],
+  recipientId: string,
+  conversationId: string,
+  timestamp: string,
+  read: boolean,
+) {
+  const ids = new Set(messageIds);
+  const found = new Set<string>();
+  const next = current.map((receipt) => {
+    if (!ids.has(receipt.message_id) || receipt.recipient_id !== recipientId) return receipt;
+    found.add(receipt.message_id);
+    return {
+      ...receipt,
+      delivered_at: receipt.delivered_at ?? timestamp,
+      read_at: read ? receipt.read_at ?? timestamp : receipt.read_at,
+    };
+  });
+  for (const id of ids) {
+    if (!found.has(id)) next.push({
+      message_id: id,
+      conversation_id: conversationId,
+      recipient_id: recipientId,
+      delivered_at: timestamp,
+      read_at: read ? timestamp : null,
+    });
+  }
+  return next;
+}
+
+function mergeFetchedReceipts(current: MessageReceipt[], fetched: MessageReceipt[]) {
+  const byKey = new Map(current.map((row) => [`${row.message_id}:${row.recipient_id}`, row]));
+  for (const row of fetched) {
+    const key = `${row.message_id}:${row.recipient_id}`;
+    const previous = byKey.get(key);
+    byKey.set(key, previous ? {
+      ...row,
+      delivered_at: row.delivered_at ?? previous.delivered_at,
+      read_at: row.read_at ?? previous.read_at,
+    } : row);
+  }
+  return [...byKey.values()];
 }
