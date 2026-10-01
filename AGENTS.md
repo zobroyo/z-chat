@@ -8,3 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
+
+- Theme state is frontend-only: persist mode/accent in localStorage and express palettes through semantic CSS tokens so every screen stays consistent.
