@@ -4,7 +4,7 @@ import https from "node:https";
 import http from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
-const MAX_HTML_BYTES = 512 * 1024;
+const MAX_HTML_BYTES = 1024 * 1024;
 const MAX_REDIRECTS = 3;
 const REQUEST_TIMEOUT_MS = 7000;
 const CACHE_TTL_MS = 10 * 60_000;
@@ -87,6 +87,7 @@ function requestHtml(
   pinned: PinnedAddress,
 ): Promise<{ status: number; location: string | null; contentType: string; body: string }> {
   return new Promise((resolve, reject) => {
+    let settled = false;
     const transport = url.protocol === "https:" ? https : http;
     const request = transport.request(
       {
@@ -101,7 +102,13 @@ function requestHtml(
         },
         servername: url.hostname,
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-        lookup: (_hostname, _options, callback) => callback(null, pinned.address, pinned.family),
+        lookup: (_hostname, options, callback) => {
+          if (options.all) {
+            callback(null, [{ address: pinned.address, family: pinned.family }]);
+            return;
+          }
+          callback(null, pinned.address, pinned.family);
+        },
       },
       (response) => {
         const status = response.statusCode ?? 0;
@@ -130,27 +137,43 @@ function requestHtml(
 
         const chunks: Buffer[] = [];
         let size = 0;
+        let tail = "";
+        const finish = (body: string) => {
+          if (settled) return;
+          settled = true;
+          resolve({ status, location: null, contentType, body });
+        };
         response.on("data", (chunk: Buffer | string) => {
+          if (settled) return;
           const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-          size += bytes.length;
-          if (size > MAX_HTML_BYTES) {
-            request.destroy(new Error("HTML exceeds size limit"));
+          const remaining = MAX_HTML_BYTES - size;
+          if (remaining <= 0) {
+            finish(Buffer.concat(chunks).toString("utf8"));
+            response.destroy();
             return;
           }
-          chunks.push(bytes);
+
+          const bounded = bytes.subarray(0, remaining);
+          chunks.push(bounded);
+          size += bounded.length;
+          const tailAndText = tail + bounded.toString("utf8");
+          const reachedHeadEnd = tailAndText.toLowerCase().includes("</head>");
+          tail = tailAndText.slice(-6);
+
+          if (reachedHeadEnd || size === MAX_HTML_BYTES) {
+            finish(Buffer.concat(chunks).toString("utf8"));
+            response.destroy();
+          }
         });
-        response.on("end", () =>
-          resolve({
-            status,
-            location: null,
-            contentType,
-            body: Buffer.concat(chunks).toString("utf8"),
-          }),
-        );
-        response.on("error", reject);
+        response.on("end", () => finish(Buffer.concat(chunks).toString("utf8")));
+        response.on("error", (error) => {
+          if (!settled) reject(error);
+        });
       },
     );
-    request.on("error", reject);
+    request.on("error", (error) => {
+      if (!settled) reject(error);
+    });
     request.end();
   });
 }
@@ -202,7 +225,7 @@ function getAttributes(tag: string): Record<string, string> {
 
 function parseMetadata(html: string, finalUrl: URL): Preview | null {
   const headEnd = html.toLowerCase().indexOf("</head>");
-  const head = (headEnd >= 0 ? html.slice(0, headEnd) : html).slice(0, 128 * 1024);
+  const head = (headEnd >= 0 ? html.slice(0, headEnd) : html).slice(0, MAX_HTML_BYTES);
   const meta = new Map<string, string>();
   for (const match of head.matchAll(/<meta\b[^>]*>/gi)) {
     const attributes = getAttributes(match[0]);
