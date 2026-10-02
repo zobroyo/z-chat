@@ -40,6 +40,7 @@ export function MessageBubble({
   const bubbleRef = useRef<HTMLDivElement>(null);
   const [previewIsVisible, setPreviewIsVisible] = useState(false);
   const [previews, setPreviews] = useState<Record<string, LinkPreview | null>>({});
+  const [previewImageErrors, setPreviewImageErrors] = useState<Record<string, boolean>>({});
   const links = useMemo(() => findMessageLinks(message.body ?? ""), [message.body]);
   const previewUrls = useMemo(() => uniquePreviewUrls(links), [links]);
   const imageUrl = useSignedUrl(CHAT_BUCKET, message.image_url);
@@ -197,17 +198,22 @@ export function MessageBubble({
                       rel="noopener noreferrer"
                       className="mx-2.5 mb-2.5 flex max-w-[22rem] items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-background/50 p-2 text-left transition-colors hover:bg-background/75"
                     >
-                      {preview.image && (
+                      {preview.image && !previewImageErrors[url] && (
                         <img
                           src={preview.image}
                           alt=""
                           loading="lazy"
                           referrerPolicy="no-referrer"
                           className="size-16 shrink-0 rounded-lg bg-surface object-cover"
+                          onError={() =>
+                            setPreviewImageErrors((current) => ({ ...current, [url]: true }))
+                          }
                         />
                       )}
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-xs font-semibold">{preview.title ?? preview.siteName}</span>
+                      <span className="min-w-0 flex-1 text-foreground">
+                        <span className="block truncate text-xs font-semibold">
+                          {preview.title || preview.siteName}
+                        </span>
                         {preview.description && (
                           <span className="mt-0.5 line-clamp-2 block break-words text-[11px] leading-snug text-muted-foreground">
                             {preview.description}
