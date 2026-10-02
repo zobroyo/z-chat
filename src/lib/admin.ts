@@ -66,6 +66,7 @@ export type ConversationSummary = Conversation & {
   memberCount: number;
   messageCount: number;
   lastMessageAt: string | null;
+  participantNames: string[] | null;
 };
 
 export async function fetchAdminConversations(
@@ -84,13 +85,31 @@ export async function fetchAdminConversations(
   if (error) throw error;
 
   const rows = (data ?? []) as Conversation[];
+
+  const memberRows = await Promise.all(
+    rows.map((c) =>
+      supabase.from("conversation_members").select("user_id").eq("conversation_id", c.id),
+    ),
+  );
+  const membersByConversation = new Map(
+    rows.map((c, i) => [c.id, (memberRows[i]?.data ?? []).map((m) => m.user_id as string)]),
+  );
+
+  const allMemberIds = [
+    ...new Set(memberRows.flatMap((r) => (r.data ?? []).map((m) => m.user_id as string))),
+  ];
+  const profileMap = new Map<string, string>();
+  if (allMemberIds.length) {
+    const { data: profs } = await supabase
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", allMemberIds);
+    for (const p of profs ?? []) profileMap.set(p.id, p.display_name);
+  }
+
   const withCounts = await Promise.all(
     rows.map(async (c): Promise<ConversationSummary> => {
-      const [members, messages, last] = await Promise.all([
-        supabase
-          .from("conversation_members")
-          .select("user_id", { count: "exact", head: true })
-          .eq("conversation_id", c.id),
+      const [messages, last] = await Promise.all([
         supabase
           .from("messages")
           .select("id", { count: "exact", head: true })
@@ -103,11 +122,14 @@ export async function fetchAdminConversations(
           .limit(1)
           .maybeSingle(),
       ]);
+      const memberIds = membersByConversation.get(c.id) ?? [];
       return {
         ...c,
-        memberCount: members.count ?? 0,
+        memberCount: memberIds.length,
         messageCount: messages.count ?? 0,
         lastMessageAt: (last.data as { created_at: string } | null)?.created_at ?? null,
+        participantNames:
+          c.kind === "dm" ? memberIds.map((id) => profileMap.get(id) ?? "Someone") : null,
       };
     }),
   );
