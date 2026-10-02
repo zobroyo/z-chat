@@ -139,7 +139,7 @@ function AuthPage() {
   };
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center overflow-hidden px-5 py-10">
+    <main className="standalone-scroll-page ios-safe-top ios-safe-bottom relative flex min-h-screen items-center justify-center overflow-x-hidden px-5 py-10">
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 left-1/2 size-[36rem] -translate-x-1/2 rounded-full bg-primary/12 blur-3xl"

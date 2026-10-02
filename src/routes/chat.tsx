@@ -427,10 +427,22 @@ function ChatPage() {
           schema: "public",
           table: "profiles",
         },
-        () => {
-          void fetchProfiles()
-            .then(setProfiles)
-            .catch(() => undefined);
+        (payload) => {
+          const profileId = (payload.new as Partial<Profile> | null)?.id ??
+            (payload.old as Partial<Profile> | null)?.id;
+          if (!profileId) return;
+
+          if (payload.eventType === "DELETE") {
+            setProfiles((current) => current.filter((profile) => profile.id !== profileId));
+            return;
+          }
+
+          const profile = payload.new as Profile;
+          setProfiles((current) => {
+            const next = current.filter((item) => item.id !== profile.id);
+            next.push(profile);
+            return next.sort((a, b) => a.display_name.localeCompare(b.display_name));
+          });
         },
       )
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversation_members" }, () => void reload())
@@ -658,6 +670,15 @@ function ChatPage() {
     () => new Map(profiles.map((profile) => [profile.id, profile])),
     [profiles],
   );
+  const receiptsByMessage = useMemo(() => {
+    const grouped = new Map<string, MessageReceipt[]>();
+    for (const receipt of messageReceipts) {
+      const rows = grouped.get(receipt.message_id);
+      if (rows) rows.push(receipt);
+      else grouped.set(receipt.message_id, [receipt]);
+    }
+    return grouped;
+  }, [messageReceipts]);
 
   const partnerOf = useCallback(
     (conversation: Conversation) => {
@@ -756,7 +777,7 @@ function ChatPage() {
         conversationSwitchTimerRef.current = null;
       }, 180);
     }
-    setActiveId(id);
+    handleSelectConversation(id);
     setSheetOpen(false);
   };
 
@@ -1235,7 +1256,7 @@ function ChatPage() {
                   message.sender_id
                 }
                 replyPreview={replyPreview}
-                receipts={messageReceipts.filter((receipt) => receipt.message_id === message.id)}
+                receipts={receiptsByMessage.get(message.id) ?? []}
                 groupChat={activeConversation?.kind !== "dm"}
                 onReply={() =>
                   setReplyingTo(message)

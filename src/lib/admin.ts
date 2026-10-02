@@ -29,6 +29,8 @@ export async function fetchAdminStats(): Promise<AdminStats> {
     supabase.from("conversations").select("id", { count: "exact", head: true }).eq("kind", "group"),
     supabase.from("conversations").select("id", { count: "exact", head: true }).eq("kind", "dm"),
   ]);
+  const failedQuery = [users, conversations, messages, groups, dms].find((result) => result.error);
+  if (failedQuery?.error) throw failedQuery.error;
   return {
     users: users.count ?? 0,
     conversations: conversations.count ?? 0,

@@ -121,7 +121,7 @@ function ProfilePage() {
   };
 
   return (
-    <main className="mx-auto min-h-screen w-full max-w-md px-5 py-8">
+    <main className="standalone-scroll-page ios-safe-top ios-safe-bottom mx-auto min-h-screen w-full max-w-md px-5 py-8">
       <div className="mb-8 flex items-center gap-3">
         <Button asChild variant="ghost" size="icon" aria-label="Back to chats">
           <Link to="/chat">

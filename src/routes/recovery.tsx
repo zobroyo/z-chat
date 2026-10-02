@@ -63,7 +63,7 @@ function RecoveryPage() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
+    <div className="standalone-scroll-page ios-safe-top ios-safe-bottom mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-4 p-6">
       <h1 className="text-xl font-semibold">
         {stage === "request" ? "Reset your password" : "Choose a new password"}
       </h1>

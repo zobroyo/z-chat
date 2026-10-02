@@ -43,6 +43,8 @@ function NotificationGate({ userId }: { userId?: string }) {
   const [pushError, setPushError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!userId) return;
+
     const current = getNotificationState();
 
     setState(current);
@@ -184,6 +186,12 @@ function NotificationGate({ userId }: { userId?: string }) {
             </p>
           )}
 
+          {state === "unsupported" && (
+            <p className="rounded-xl bg-surface-2 p-4 text-sm text-muted-foreground">
+              This browser does not support notifications. Try a supported browser or install ZChat on your device.
+            </p>
+          )}
+
           {pushError && (
             <p className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive">
               Alerts could not be set up on this device yet. Try again, and if it
@@ -207,7 +215,7 @@ function NotificationGate({ userId }: { userId?: string }) {
               {installNeeded && !on ? "Got it" : "Not now"}
             </Button>
 
-            {!on && !installNeeded && (
+            {!on && state !== "unsupported" && !installNeeded && (
               <Button type="button" onClick={ask}>
                 Allow alerts
               </Button>

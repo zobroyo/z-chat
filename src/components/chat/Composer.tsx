@@ -28,6 +28,7 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
   const [visibleReply, setVisibleReply] = useState<ReplyingTo>(replyingTo ?? null);
   const [replyClosing, setReplyClosing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const previewUrlRef = useRef<string | null>(null);
   const replySenderName = replyingTo?.senderName;
   const replySnippet = replyingTo?.snippet;
   const replyPreview = replyingTo ?? visibleReply;
@@ -53,10 +54,15 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
 
   const clearFile = () => {
     setFile(null);
-    if (preview) URL.revokeObjectURL(preview);
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    previewUrlRef.current = null;
     setPreview(null);
     if (inputRef.current) inputRef.current.value = "";
   };
+
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+  }, []);
 
   const submit = async () => {
     if (sending) return;
@@ -145,8 +151,10 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
               clearFile();
               return;
             }
+            if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+            previewUrlRef.current = URL.createObjectURL(picked);
             setFile(picked);
-            setPreview(URL.createObjectURL(picked));
+            setPreview(previewUrlRef.current);
           }}
         />
 

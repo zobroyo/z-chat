@@ -224,6 +224,15 @@
     overflow: hidden;
     overscroll-behavior: none;
   }
+
+  .standalone-scroll-page {
+    height: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 @keyframes zchat-message-enter {

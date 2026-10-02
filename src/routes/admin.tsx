@@ -74,7 +74,7 @@ function AdminLayout() {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="standalone-scroll-page flex min-h-screen bg-background">
       <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface/50 md:flex">
         <div className="px-4 py-5">
           <div className="font-display text-sm font-bold tracking-wide text-foreground">
@@ -114,7 +114,7 @@ function AdminLayout() {
         </div>
       </aside>
 
-      <div className="fixed inset-x-0 top-0 z-10 flex items-center gap-1 overflow-x-auto border-b border-border bg-surface/90 px-2 py-2 backdrop-blur md:hidden">
+      <div className="ios-safe-top fixed inset-x-0 top-0 z-10 flex items-center gap-1 overflow-x-auto border-b border-border bg-surface/90 px-2 py-2 backdrop-blur md:hidden">
         {NAV.map((item) => {
           const active = item.exact
             ? location.pathname === item.to
@@ -135,7 +135,7 @@ function AdminLayout() {
         })}
       </div>
 
-      <main className="min-w-0 flex-1 px-4 py-6 pt-16 md:pt-6">
+      <main className="min-w-0 flex-1 px-4 py-6 pt-[calc(4rem+env(safe-area-inset-top))] md:pt-6">
         <Outlet />
       </main>
     </div>

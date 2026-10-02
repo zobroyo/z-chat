@@ -25,14 +25,22 @@ function isThemeAccent(value: string | null): value is ThemeAccent {
 
 function getStoredMode(): ThemeMode {
   if (typeof window === "undefined") return "system";
-  const stored = window.localStorage.getItem(MODE_KEY);
-  return isThemeMode(stored) ? stored : "system";
+  try {
+    const stored = window.localStorage.getItem(MODE_KEY);
+    return isThemeMode(stored) ? stored : "system";
+  } catch {
+    return "system";
+  }
 }
 
 function getStoredAccent(): ThemeAccent {
   if (typeof window === "undefined") return "blue";
-  const stored = window.localStorage.getItem(ACCENT_KEY);
-  return isThemeAccent(stored) ? stored : "blue";
+  try {
+    const stored = window.localStorage.getItem(ACCENT_KEY);
+    return isThemeAccent(stored) ? stored : "blue";
+  } catch {
+    return "blue";
+  }
 }
 
 function systemMode(): Exclude<ThemeMode, "system"> {
@@ -69,11 +77,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       accent,
       resolvedMode,
       setMode: (nextMode) => {
-        window.localStorage.setItem(MODE_KEY, nextMode);
+        try {
+          window.localStorage.setItem(MODE_KEY, nextMode);
+        } catch {
+          // Keep the current session usable when storage is unavailable.
+        }
         setModeState(nextMode);
       },
       setAccent: (nextAccent) => {
-        window.localStorage.setItem(ACCENT_KEY, nextAccent);
+        try {
+          window.localStorage.setItem(ACCENT_KEY, nextAccent);
+        } catch {
+          // Keep the current session usable when storage is unavailable.
+        }
         setAccentState(nextAccent);
       },
     }),

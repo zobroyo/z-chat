@@ -73,8 +73,9 @@ export async function requestNotificationPermission(): Promise<NotificationState
     return "unsupported";
   }
   console.log("[notifications] Permission before asking:", getNotificationState());
-  await registerNotificationWorker();
   try {
+    // Call synchronously from the user's click handler. Waiting for service
+    // worker setup first can lose the transient activation some browsers need.
     const result = await Notification.requestPermission();
     console.log("[notifications] Permission after asking:", result);
     return result as NotificationState;
