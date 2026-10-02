@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Gamepad2, Hash, LogOut, Menu, Search, Settings, Shield, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Composer } from "@/components/chat/Composer";
+import { GamesAnnouncementDialog } from "@/components/chat/GamesAnnouncementDialog";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { NewGroupDialog } from "@/components/chat/NewGroupDialog";
 import { NotificationGate } from "@/components/NotificationGate";
@@ -978,6 +979,8 @@ function ChatPage() {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden">
+      <GamesAnnouncementDialog userId={user?.id ?? ""} />
+
       <aside className="hidden w-80 shrink-0 border-r border-border md:block">
         {sidebar}
       </aside>
