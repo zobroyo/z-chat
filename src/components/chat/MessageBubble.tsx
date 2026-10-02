@@ -22,6 +22,7 @@ type Props = {
   onJumpToReply?: (() => void) | undefined;
   receipts?: MessageReceipt[] | undefined;
   groupChat?: boolean | undefined;
+  animateIn?: boolean | undefined;
 };
 
 export function MessageBubble({
@@ -34,6 +35,7 @@ export function MessageBubble({
   onJumpToReply,
   receipts = [],
   groupChat = false,
+  animateIn = false,
 }: Props) {
   const bubbleRef = useRef<HTMLDivElement>(null);
   const [previewIsVisible, setPreviewIsVisible] = useState(false);
@@ -116,7 +118,8 @@ export function MessageBubble({
     <div
       id={`message-${message.id}`}
       className={cn(
-        "group flex animate-in items-end gap-2 fade-in slide-in-from-bottom-1 duration-200",
+        "group flex items-end gap-2",
+        animateIn && "message-enter",
         self ? "flex-row-reverse" : "flex-row",
       )}
     >
@@ -148,7 +151,7 @@ export function MessageBubble({
           <div
             ref={bubbleRef}
             className={cn(
-              "overflow-hidden rounded-2xl text-sm leading-relaxed",
+              "message-bubble overflow-hidden rounded-2xl text-sm leading-relaxed",
               self
                 ? "bg-bubble text-bubble-foreground rounded-br-md"
                 : "bg-surface-2 text-foreground rounded-bl-md",

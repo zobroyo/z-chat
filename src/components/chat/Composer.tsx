@@ -1,10 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ImagePlus, Loader2, SendHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { IMAGE_ACCEPT, MAX_IMAGE_BYTES, validateImage } from "@/lib/media";
+import { cn } from "@/lib/utils";
 
 type ReplyingTo = {
   senderName: string;
@@ -24,7 +25,31 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [visibleReply, setVisibleReply] = useState<ReplyingTo>(replyingTo ?? null);
+  const [replyClosing, setReplyClosing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const replySenderName = replyingTo?.senderName;
+  const replySnippet = replyingTo?.snippet;
+  const replyPreview = replyingTo ?? visibleReply;
+
+  useEffect(() => {
+    if (replySenderName !== undefined && replySnippet !== undefined) {
+      setVisibleReply((current) =>
+        current?.senderName === replySenderName && current.snippet === replySnippet
+          ? current
+          : { senderName: replySenderName, snippet: replySnippet },
+      );
+      setReplyClosing(false);
+      return;
+    }
+
+    setReplyClosing(true);
+    const timer = window.setTimeout(() => {
+      setVisibleReply(null);
+      setReplyClosing(false);
+    }, 130);
+    return () => window.clearTimeout(timer);
+  }, [replySenderName, replySnippet]);
 
   const clearFile = () => {
     setFile(null);
@@ -60,19 +85,24 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
 
   return (
     <div className="ios-safe-bottom shrink-0 border-t border-border bg-surface/80 px-3 py-3 backdrop-blur">
-      {replyingTo && (
-        <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border-l-2 border-primary bg-surface-2 px-3 py-2">
+      {replyPreview && (
+        <div
+          className={cn(
+            "mb-2 flex items-center justify-between gap-2 rounded-xl border-l-2 border-primary bg-surface-2 px-3 py-2",
+            replyClosing ? "reply-preview-exit" : "message-reply-enter",
+          )}
+        >
           <div className="min-w-0">
             <p className="text-xs font-medium text-foreground">
-              Replying to {replyingTo.senderName}
+              Replying to {replyPreview.senderName}
             </p>
-            <p className="truncate text-xs text-muted-foreground">{replyingTo.snippet}</p>
+            <p className="truncate text-xs text-muted-foreground">{replyPreview.snippet}</p>
           </div>
           <button
             type="button"
             onClick={onCancelReply}
             aria-label="Cancel reply"
-            className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-surface"
+            className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-surface active:scale-95"
           >
             <X className="size-3.5" />
           </button>
@@ -80,13 +110,13 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
       )}
 
       {preview && (
-        <div className="relative mb-2 inline-block">
+        <div className="message-reply-enter relative mb-2 inline-block">
           <img src={preview} alt="Selected" className="h-20 rounded-xl object-cover" />
           <button
             type="button"
             onClick={clearFile}
             aria-label="Remove image"
-            className="absolute -top-2 -right-2 rounded-full bg-surface-2 p-1 text-muted-foreground ring-1 ring-border"
+            className="absolute -top-2 -right-2 rounded-full bg-surface-2 p-1 text-muted-foreground ring-1 ring-border transition-transform active:scale-90"
           >
             <X className="size-3" />
           </button>

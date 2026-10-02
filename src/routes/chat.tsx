@@ -90,6 +90,8 @@ function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [messageReceipts, setMessageReceipts] = useState<MessageReceipt[]>([]);
   const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
+  const [enteringMessageIds, setEnteringMessageIds] = useState<Set<string>>(() => new Set());
+  const [switchingConversation, setSwitchingConversation] = useState(false);
 
   // Start empty so we NEVER fetch messages using the fake placeholder ID.
   // A valid ?c= link is resolved after conversations have loaded.
@@ -104,6 +106,8 @@ function ChatPage() {
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const isNearBottomRef = useRef(true);
+  const messageEntryTimersRef = useRef(new Map<string, number>());
+  const conversationSwitchTimerRef = useRef<number | null>(null);
 
   const handleSelectConversation = useCallback(
     (id: string) => {
@@ -131,6 +135,41 @@ function ChatPage() {
   const typingChannelReadyRef = useRef(false);
   const isTypingRef = useRef(false);
   const presenceTrackedRef = useRef(false);
+
+  const animateMessageEntry = useCallback((messageId: string) => {
+    setEnteringMessageIds((current) => new Set(current).add(messageId));
+    const previousTimer = messageEntryTimersRef.current.get(messageId);
+    if (previousTimer !== undefined) window.clearTimeout(previousTimer);
+    const timer = window.setTimeout(() => {
+      setEnteringMessageIds((current) => {
+        if (!current.has(messageId)) return current;
+        const next = new Set(current);
+        next.delete(messageId);
+        return next;
+      });
+      messageEntryTimersRef.current.delete(messageId);
+    }, 260);
+    messageEntryTimersRef.current.set(messageId, timer);
+  }, []);
+
+  const clearMessageEntry = useCallback((messageId: string) => {
+    const timer = messageEntryTimersRef.current.get(messageId);
+    if (timer !== undefined) window.clearTimeout(timer);
+    messageEntryTimersRef.current.delete(messageId);
+    setEnteringMessageIds((current) => {
+      if (!current.has(messageId)) return current;
+      const next = new Set(current);
+      next.delete(messageId);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => () => {
+    messageEntryTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    if (conversationSwitchTimerRef.current !== null) {
+      window.clearTimeout(conversationSwitchTimerRef.current);
+    }
+  }, []);
 
   activeIdRef.current = activeId;
   profilesRef.current = profiles;
@@ -343,6 +382,7 @@ function ChatPage() {
           if (message.sender_id === user.id) return;
 
           if (isActive) {
+            animateMessageEntry(message.id);
             setMessages((current) =>
               current.some((item) => item.id === message.id)
                 ? current
@@ -400,7 +440,7 @@ function ChatPage() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [user, reload, queueReceipt]);
+  }, [user, reload, queueReceipt, animateMessageEntry]);
 
   useEffect(() => {
     if (!user || !activeId) return;
@@ -706,6 +746,16 @@ function ChatPage() {
 
   const openConversation = (id: string) => {
     isNearBottomRef.current = true;
+    if (id !== activeId) {
+      setSwitchingConversation(true);
+      if (conversationSwitchTimerRef.current !== null) {
+        window.clearTimeout(conversationSwitchTimerRef.current);
+      }
+      conversationSwitchTimerRef.current = window.setTimeout(() => {
+        setSwitchingConversation(false);
+        conversationSwitchTimerRef.current = null;
+      }, 180);
+    }
     setActiveId(id);
     setSheetOpen(false);
   };
@@ -797,6 +847,7 @@ function ChatPage() {
         reply_to_message_id: replyToMessageId,
       };
 
+      animateMessageEntry(tempId);
       setMessages((current) => [
         ...current,
         optimisticMessage,
@@ -818,6 +869,7 @@ function ChatPage() {
 
       if (tempId && inserted) {
         const finalTempId = tempId;
+        clearMessageEntry(finalTempId);
 
         setMessages((current) =>
           current.map((item) =>
@@ -825,6 +877,7 @@ function ChatPage() {
           ),
         );
       } else if (inserted) {
+        animateMessageEntry(inserted.id);
         setMessages((current) =>
           current.some((item) => item.id === inserted.id)
             ? current
@@ -834,6 +887,7 @@ function ChatPage() {
     } catch (error) {
       if (tempId) {
         const finalTempId = tempId;
+        clearMessageEntry(finalTempId);
 
         setMessages((current) =>
           current.filter((item) => item.id !== finalTempId),
@@ -1122,11 +1176,14 @@ function ChatPage() {
         <div
           ref={messageListRef}
           onScroll={updateNearBottom}
-          className="chat-message-list scroll-slim min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto px-3 py-4"
+          className={cn(
+            "chat-message-list scroll-slim min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto px-3 py-4",
+            switchingConversation && "conversation-enter",
+          )}
         >
           {messages.length === 0 && (
             <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-muted-foreground">
+              <p className="empty-state-enter text-sm text-muted-foreground">
                 No messages yet. Say hi.
               </p>
             </div>
@@ -1166,6 +1223,7 @@ function ChatPage() {
               <MessageBubble
                 key={message.id}
                 message={message}
+                animateIn={enteringMessageIds.has(message.id)}
                 self={
                   message.sender_id === user?.id
                 }
@@ -1185,17 +1243,21 @@ function ChatPage() {
                 onJumpToReply={
                   message.reply_to_message_id
                     ? () => {
-                        document
-                          .getElementById(
-                            `message-${message.reply_to_message_id}`,
-                          )
-                          ?.scrollIntoView({
-                            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-                              ? "auto"
-                              : "smooth",
-                            block: "center",
-                          });
+                      const target = document.getElementById(
+                        `message-${message.reply_to_message_id}`,
+                      );
+                      target?.scrollIntoView({
+                        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                          ? "auto"
+                          : "smooth",
+                        block: "center",
+                      });
+                      const bubble = target?.querySelector<HTMLElement>(".message-bubble");
+                      if (bubble) {
+                        bubble.classList.remove("message-highlight");
+                        requestAnimationFrame(() => bubble.classList.add("message-highlight"));
                       }
+                    }
                     : undefined
                 }
               />
@@ -1206,7 +1268,7 @@ function ChatPage() {
         </div>
 
         {typingLabel && (
-          <p className="shrink-0 px-5 pb-1 text-xs text-muted-foreground" aria-live="polite">
+          <p className="typing-enter shrink-0 px-5 pb-1 text-xs text-muted-foreground" aria-live="polite">
             <span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-muted-foreground align-middle" />
             {typingLabel}
           </p>
@@ -1279,7 +1341,7 @@ function Row({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors",
+        "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-[background-color,transform] duration-150 ease-out active:scale-[0.99]",
         active
           ? "bg-surface-2"
           : "hover:bg-surface-2/60",

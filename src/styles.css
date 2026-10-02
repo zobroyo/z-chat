@@ -226,6 +226,71 @@
   }
 }
 
+@keyframes zchat-message-enter {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zchat-conversation-enter {
+  from {
+    opacity: 0.88;
+    transform: translateY(3px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes zchat-message-highlight {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  18% {
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+}
+
+@keyframes zchat-reply-preview-exit {
+  to {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+.message-enter {
+  animation: zchat-message-enter 180ms ease-out both;
+}
+
+.conversation-enter {
+  animation: zchat-conversation-enter 150ms ease-out both;
+}
+
+.message-reply-enter,
+.typing-enter,
+.empty-state-enter {
+  animation: zchat-message-enter 160ms ease-out both;
+}
+
+.reply-preview-exit {
+  animation: zchat-reply-preview-exit 130ms ease-in both;
+  pointer-events: none;
+}
+
+.message-highlight {
+  animation: zchat-message-highlight 1050ms ease-out both;
+}
+
 /* Apply device insets in both installed mode and iOS Safari's full-width viewport. */
 .chat-app-shell {
   height: 100vh;
