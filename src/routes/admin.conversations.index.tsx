@@ -26,7 +26,9 @@ function icon(kind: string) {
 
 function label(c: ConversationSummary) {
   if (c.name) return c.name;
-  return c.kind === "public" ? "General" : c.kind === "dm" ? "Direct message" : "Group";
+  if (c.kind === "dm")
+    return c.participantNames?.length ? c.participantNames.join(" ↔ ") : "Direct message";
+  return c.kind === "public" ? "General" : "Group";
 }
 
 function AdminConversations() {
