@@ -1,8 +1,10 @@
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, CheckCheck, Reply } from "lucide-react";
 
 import { UserAvatar } from "@/components/UserAvatar";
 import { CHAT_BUCKET, useSignedUrl } from "@/lib/media";
 import type { Message, MessageReceipt, Profile } from "@/lib/chat";
+import { fetchLinkPreview, findMessageLinks, uniquePreviewUrls, type LinkPreview } from "@/lib/messageLinks";
 import { cn } from "@/lib/utils";
 
 type ReplyPreview = {
@@ -33,6 +35,11 @@ export function MessageBubble({
   receipts = [],
   groupChat = false,
 }: Props) {
+  const bubbleRef = useRef<HTMLDivElement>(null);
+  const [previewIsVisible, setPreviewIsVisible] = useState(false);
+  const [previews, setPreviews] = useState<Record<string, LinkPreview | null>>({});
+  const links = useMemo(() => findMessageLinks(message.body ?? ""), [message.body]);
+  const previewUrls = useMemo(() => uniquePreviewUrls(links), [links]);
   const imageUrl = useSignedUrl(CHAT_BUCKET, message.image_url);
   const time = new Date(message.created_at).toLocaleTimeString([], {
     hour: "2-digit",
@@ -50,6 +57,60 @@ export function MessageBubble({
         : deliveredCount > 0
           ? "Delivered"
           : "Sent";
+
+  useEffect(() => {
+    if (!previewUrls.length) return;
+    const element = bubbleRef.current;
+    if (!element || typeof IntersectionObserver === "undefined") {
+      setPreviewIsVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          setPreviewIsVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "280px" },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [previewUrls.length]);
+
+  useEffect(() => {
+    if (!previewIsVisible || !previewUrls.length) return;
+    let active = true;
+    void Promise.all(previewUrls.map(async (url) => [url, await fetchLinkPreview(url)] as const)).then((results) => {
+      if (active) setPreviews((current) => ({ ...current, ...Object.fromEntries(results) }));
+    });
+    return () => { active = false; };
+  }, [previewIsVisible, previewUrls]);
+
+  function renderLinkedMessage() {
+    const body = message.body ?? "";
+    if (!links.length) return body;
+    const parts = [];
+    let cursor = 0;
+    for (const link of links) {
+      if (link.start > cursor) parts.push(body.slice(cursor, link.start));
+      parts.push(
+        <a
+          key={link.start}
+          href={link.href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="break-all text-primary underline decoration-current/40 underline-offset-2 hover:decoration-current"
+        >
+          {link.text}
+        </a>,
+      );
+      cursor = link.end;
+    }
+    if (cursor < body.length) parts.push(body.slice(cursor));
+    return parts;
+  }
 
   return (
     <div
@@ -85,6 +146,7 @@ export function MessageBubble({
           )}
 
           <div
+            ref={bubbleRef}
             className={cn(
               "overflow-hidden rounded-2xl text-sm leading-relaxed",
               self
@@ -119,7 +181,41 @@ export function MessageBubble({
               />
             )}
             {message.body && (
-              <p className="px-3.5 py-2 whitespace-pre-wrap break-words">{message.body}</p>
+              <>
+                <p className="px-3.5 py-2 whitespace-pre-wrap break-words">{renderLinkedMessage()}</p>
+                {previewUrls.map((url) => {
+                  const preview = previews[url];
+                  if (!preview) return null;
+                  return (
+                    <a
+                      key={url}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mx-2.5 mb-2.5 flex max-w-[22rem] items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-background/50 p-2 text-left transition-colors hover:bg-background/75"
+                    >
+                      {preview.image && (
+                        <img
+                          src={preview.image}
+                          alt=""
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          className="size-16 shrink-0 rounded-lg bg-surface object-cover"
+                        />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-semibold">{preview.title ?? preview.siteName}</span>
+                        {preview.description && (
+                          <span className="mt-0.5 line-clamp-2 block break-words text-[11px] leading-snug text-muted-foreground">
+                            {preview.description}
+                          </span>
+                        )}
+                        <span className="mt-1 block truncate text-[10px] text-muted-foreground">{preview.siteName}</span>
+                      </span>
+                    </a>
+                  );
+                })}
+              </>
             )}
           </div>
         </div>
