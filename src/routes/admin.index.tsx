@@ -86,7 +86,10 @@ function AdminDashboard() {
             >
               <div className="min-w-0">
                 <div className="truncate font-medium text-foreground">
-                  {c.name ?? kindLabel(c.kind)}
+                  {c.name ??
+                    (c.kind === "dm" && c.participantNames?.length
+                      ? c.participantNames.join(" ↔ ")
+                      : kindLabel(c.kind))}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {kindLabel(c.kind)} • {c.memberCount} members • {c.messageCount} messages
