@@ -103,9 +103,11 @@ function ChatPage() {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const isNearBottomRef = useRef(true);
 
   const handleSelectConversation = useCallback(
     (id: string) => {
+      isNearBottomRef.current = true;
       setActiveId(id);
 
       // This explicitly pushes the ?c= ID string into the TanStack router lifecycle state
@@ -120,6 +122,7 @@ function ChatPage() {
 
   const activeIdRef = useRef(activeId);
   const profilesRef = useRef<Profile[]>([]);
+  const messageListRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const receiptQueueRef = useRef(new Map<string, { conversationId: string; read: boolean }>());
   const receiptTimerRef = useRef<number | null>(null);
@@ -131,6 +134,63 @@ function ChatPage() {
 
   activeIdRef.current = activeId;
   profilesRef.current = profiles;
+
+  const updateNearBottom = useCallback(() => {
+    const list = messageListRef.current;
+    if (!list) return;
+    isNearBottomRef.current = list.scrollHeight - list.scrollTop - list.clientHeight <= 120;
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const viewport = window.visualViewport;
+    let frame = 0;
+    let keepMessagesAtBottom = false;
+
+    const updateViewport = (keepBottom = false) => {
+      keepMessagesAtBottom ||= keepBottom;
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        root.style.setProperty(
+          "--zchat-visual-viewport-height",
+          `${viewport?.height ?? window.innerHeight}px`,
+        );
+        root.style.setProperty(
+          "--zchat-visual-viewport-offset-top",
+          `${Math.max(0, viewport?.offsetTop ?? 0)}px`,
+        );
+        root.style.setProperty(
+          "--zchat-dialog-center-y",
+          `${Math.max(0, viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight) / 2}px`,
+        );
+        if (keepMessagesAtBottom && isNearBottomRef.current) {
+          bottomRef.current?.scrollIntoView({ block: "end" });
+        }
+        keepMessagesAtBottom = false;
+      });
+    };
+    const updateAfterResize = () => updateViewport(true);
+    const updateAfterScroll = () => updateViewport();
+
+    updateAfterResize();
+    viewport?.addEventListener("resize", updateAfterResize);
+    viewport?.addEventListener("scroll", updateAfterScroll);
+    window.addEventListener("resize", updateAfterResize);
+    window.addEventListener("orientationchange", updateAfterResize);
+    window.addEventListener("pageshow", updateAfterResize);
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      viewport?.removeEventListener("resize", updateAfterResize);
+      viewport?.removeEventListener("scroll", updateAfterScroll);
+      window.removeEventListener("resize", updateAfterResize);
+      window.removeEventListener("orientationchange", updateAfterResize);
+      window.removeEventListener("pageshow", updateAfterResize);
+      root.style.removeProperty("--zchat-visual-viewport-height");
+      root.style.removeProperty("--zchat-visual-viewport-offset-top");
+      root.style.removeProperty("--zchat-dialog-center-y");
+    };
+  }, []);
 
   const queueReceipt = useCallback((messageId: string, conversationId: string, read: boolean) => {
     if (messageId.startsWith("temp-")) return;
@@ -471,11 +531,13 @@ function ChatPage() {
     };
     window.addEventListener("focus", refresh);
     window.addEventListener("online", refresh);
+    window.addEventListener("pageshow", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       window.clearTimeout(timer);
       window.removeEventListener("focus", refresh);
       window.removeEventListener("online", refresh);
+      window.removeEventListener("pageshow", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
   }, [user, activeId, queueReceipt]);
@@ -547,9 +609,9 @@ function ChatPage() {
   }, [user, activeId, stopTyping]);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      block: "end",
-    });
+    if (isNearBottomRef.current) {
+      bottomRef.current?.scrollIntoView({ block: "end" });
+    }
   }, [messages]);
 
   const profileMap = useMemo(
@@ -643,6 +705,7 @@ function ChatPage() {
             : `${typingNames[0]}, ${typingNames[1]} and ${typingNames.length - 2} others are typing…`;
 
   const openConversation = (id: string) => {
+    isNearBottomRef.current = true;
     setActiveId(id);
     setSheetOpen(false);
   };
@@ -691,6 +754,7 @@ function ChatPage() {
 
     try {
       await leaveConversation(activeConversation.id, user.id);
+      isNearBottomRef.current = true;
 
       if (generalRoom) {
         setActiveId(generalRoom.id);
@@ -711,6 +775,7 @@ function ChatPage() {
   ) => {
     stopTyping();
     if (!user || !activeId) return;
+    isNearBottomRef.current = true;
 
     const trimmed = body.trim();
     const replyToMessageId = replyingTo?.id ?? null;
@@ -784,7 +849,7 @@ function ChatPage() {
     : undefined;
 
   const sidebar = (
-    <div className="flex h-full flex-col bg-sidebar">
+    <div className="ios-safe-top ios-safe-bottom flex h-full flex-col bg-sidebar">
       <div className="flex items-center gap-2 border-b border-border px-4 py-4">
         <span className="flex size-9 items-center justify-center rounded-xl bg-primary font-display text-sm font-extrabold text-primary-foreground">
           Z
@@ -978,15 +1043,15 @@ function ChatPage() {
   );
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden">
+    <div className="chat-app-shell flex overflow-hidden">
       <GamesAnnouncementDialog userId={user?.id ?? ""} />
 
       <aside className="hidden w-80 shrink-0 border-r border-border md:block">
         {sidebar}
       </aside>
 
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="ios-safe-top flex items-center gap-3 border-b border-border bg-surface/70 px-3 py-3 backdrop-blur">
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="ios-safe-top flex shrink-0 items-center gap-3 border-b border-border bg-surface/70 px-3 py-3 backdrop-blur">
           <Sheet
             open={sheetOpen}
             onOpenChange={setSheetOpen}
@@ -1004,7 +1069,7 @@ function ChatPage() {
 
             <SheetContent
               side="left"
-              className="w-[19rem] p-0"
+              className="ios-mobile-sheet w-[19rem] p-0"
             >
               <SheetTitle className="sr-only">
                 Chats
@@ -1054,7 +1119,11 @@ function ChatPage() {
           )}
         </header>
 
-        <div className="scroll-slim flex-1 space-y-2 overflow-y-auto px-3 py-4">
+        <div
+          ref={messageListRef}
+          onScroll={updateNearBottom}
+          className="chat-message-list scroll-slim min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto px-3 py-4"
+        >
           {messages.length === 0 && (
             <div className="flex h-full items-center justify-center">
               <p className="text-sm text-muted-foreground">
@@ -1121,7 +1190,9 @@ function ChatPage() {
                             `message-${message.reply_to_message_id}`,
                           )
                           ?.scrollIntoView({
-                            behavior: "smooth",
+                            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                              ? "auto"
+                              : "smooth",
                             block: "center",
                           });
                       }
@@ -1135,7 +1206,7 @@ function ChatPage() {
         </div>
 
         {typingLabel && (
-          <p className="px-5 pb-1 text-xs text-muted-foreground" aria-live="polite">
+          <p className="shrink-0 px-5 pb-1 text-xs text-muted-foreground" aria-live="polite">
             <span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-muted-foreground align-middle" />
             {typingLabel}
           </p>

@@ -59,7 +59,7 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
   };
 
   return (
-    <div className="ios-safe-bottom border-t border-border bg-surface/80 px-3 py-3 backdrop-blur">
+    <div className="ios-safe-bottom shrink-0 border-t border-border bg-surface/80 px-3 py-3 backdrop-blur">
       {replyingTo && (
         <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border-l-2 border-primary bg-surface-2 px-3 py-2">
           <div className="min-w-0">

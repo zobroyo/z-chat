@@ -178,6 +178,7 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     overscroll-behavior-y: none;
+    overflow-x: hidden;
     transition: background-color 160ms ease, color 160ms ease;
   }
 
@@ -212,30 +213,93 @@
   }
 }
 
-/*
- * iOS PWA (standalone / added-to-home-screen) fixes.
- * Regular Safari browsing and desktop are untouched — everything here is
- * scoped to display-mode: standalone.
- */
+/* Keep the document fixed in installed mode; chat panes own their scrolling. */
 @media (display-mode: standalone) {
   html,
   body {
     /* Stop the whole page from behaving like a scrollable webpage.
-       The chat layout (h-[100dvh] overflow-hidden) becomes the only
+       The chat layout (viewport-height, overflow-hidden) becomes the only
        scroll boundary; individual panes handle their own scrolling. */
     height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
   }
+}
 
-  /* Header sits below the Dynamic Island / status bar instead of under it. */
-  .ios-safe-top {
-    padding-top: max(env(safe-area-inset-top), 0.75rem);
+/* Apply device insets in both installed mode and iOS Safari's full-width viewport. */
+.chat-app-shell {
+  height: 100vh;
+  height: var(--zchat-visual-viewport-height, 100dvh);
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .chat-app-shell {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--zchat-visual-viewport-offset-top, 0px);
   }
 
-  /* Composer respects the home-indicator area at the bottom. */
+  .ios-safe-top {
+    padding-top: max(env(safe-area-inset-top, 0px), 0.75rem);
+  }
+
   .ios-safe-bottom {
-    padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 0.75rem);
+  }
+
+  .chat-message-list {
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ios-mobile-sheet > button:first-of-type {
+    top: calc(env(safe-area-inset-top, 0px) + 1rem);
+    right: calc(env(safe-area-inset-right, 0px) + 1rem);
+  }
+
+  [role="dialog"]:not(.ios-mobile-sheet) {
+    top: var(--zchat-dialog-center-y, 50%);
+    max-height: calc(
+      var(--zchat-visual-viewport-height, 100dvh) -
+        env(safe-area-inset-top, 0px) -
+        env(safe-area-inset-bottom, 0px) - 2rem
+    );
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  button,
+  [role="button"],
+  a {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button,
+  [role="button"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+@media (hover: none) and (pointer: coarse) and (orientation: landscape) {
+  .ios-safe-top,
+  .ios-safe-bottom,
+  .chat-message-list {
+    padding-left: max(env(safe-area-inset-left, 0px), 0.75rem);
+    padding-right: max(env(safe-area-inset-right, 0px), 0.75rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 
