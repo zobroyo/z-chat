@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Hash, LogOut, Menu, Search, Settings, Shield, Users } from "lucide-react";
+import { Gamepad2, Hash, LogOut, Menu, Search, Settings, Shield, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Composer } from "@/components/chat/Composer";
 import { MessageBubble } from "@/components/chat/MessageBubble";
@@ -932,6 +932,14 @@ function ChatPage() {
           ))}
         </Section>
       </div>
+
+      <a
+        href="https://watchdocumentaries.com/games/"
+        className="mx-3 my-3 flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-3 text-sm font-semibold tracking-wide text-primary-foreground shadow-sm transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Gamepad2 className="size-4" />
+        UNBLOCKED GAMES
+      </a>
 
       {isAdmin && (
         <Link
