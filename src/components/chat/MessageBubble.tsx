@@ -41,8 +41,10 @@ export function MessageBubble({
   const [previewIsVisible, setPreviewIsVisible] = useState(false);
   const [previews, setPreviews] = useState<Record<string, LinkPreview | null>>({});
   const [previewIconErrors, setPreviewIconErrors] = useState<Record<string, boolean>>({});
-  const links = useMemo(() => findMessageLinks(message.body ?? ""), [message.body]);
+  const body = message.body ?? "";
+  const links = useMemo(() => findMessageLinks(body), [body]);
   const previewUrls = useMemo(() => uniquePreviewUrls(links), [links]);
+  const isLinkOnly = !message.image_url && links.length === 1 && body.trim() === links[0]?.text;
   const imageUrl = useSignedUrl(CHAT_BUCKET, message.image_url);
   const time = new Date(message.created_at).toLocaleTimeString([], {
     hour: "2-digit",
@@ -153,9 +155,11 @@ export function MessageBubble({
             ref={bubbleRef}
             className={cn(
               "message-bubble overflow-hidden rounded-2xl text-sm leading-relaxed",
-              self
-                ? "bg-bubble text-bubble-foreground rounded-br-md"
-                : "bg-surface-2 text-foreground rounded-bl-md",
+              isLinkOnly
+                ? "text-foreground"
+                : self
+                  ? "bg-bubble text-bubble-foreground rounded-br-md"
+                  : "bg-surface-2 text-foreground rounded-bl-md",
             )}
           >
             {replyPreview !== undefined && (
@@ -186,10 +190,13 @@ export function MessageBubble({
             )}
             {message.body && (
               <>
-                <p className="px-3.5 py-2 whitespace-pre-wrap break-words">{renderLinkedMessage()}</p>
+                {!isLinkOnly && (
+                  <p className="px-3.5 py-2 whitespace-pre-wrap break-words">{renderLinkedMessage()}</p>
+                )}
                 {previewUrls.map((url) => {
                   const preview = previews[url];
-                  if (!preview) return null;
+                  if (!preview && !isLinkOnly) return null;
+                  const hostname = new URL(url).hostname.replace(/^www\./, "");
                   return (
                     <a
                       key={url}
@@ -199,7 +206,7 @@ export function MessageBubble({
                       className="mx-2.5 mb-2.5 flex max-w-[22rem] items-center gap-3 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-primary/10 to-primary/5 px-3 py-2.5 text-left text-foreground shadow-sm transition-colors hover:border-primary/35 hover:from-primary/20"
                     >
                       <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-primary/15 bg-background/70 text-primary shadow-sm">
-                        {preview.icon && !previewIconErrors[url] ? (
+                        {preview?.icon && !previewIconErrors[url] ? (
                           <img
                             src={preview.icon}
                             alt=""
@@ -212,16 +219,16 @@ export function MessageBubble({
                           />
                         ) : (
                           <span className="font-display text-lg font-bold">
-                            {new URL(url).hostname.replace(/^www\./, "").charAt(0).toUpperCase()}
+                            {hostname.charAt(0).toUpperCase()}
                           </span>
                         )}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-semibold leading-snug">
-                          {preview.title || preview.siteName}
+                          {preview?.title || preview?.siteName || hostname}
                         </span>
                         <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                          {new URL(url).hostname.replace(/^www\./, "")}
+                          {hostname}
                         </span>
                       </span>
                     </a>
