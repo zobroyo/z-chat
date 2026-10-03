@@ -40,7 +40,7 @@ export function MessageBubble({
   const bubbleRef = useRef<HTMLDivElement>(null);
   const [previewIsVisible, setPreviewIsVisible] = useState(false);
   const [previews, setPreviews] = useState<Record<string, LinkPreview | null>>({});
-  const [previewImageErrors, setPreviewImageErrors] = useState<Record<string, boolean>>({});
+  const [previewIconErrors, setPreviewIconErrors] = useState<Record<string, boolean>>({});
   const links = useMemo(() => findMessageLinks(message.body ?? ""), [message.body]);
   const previewUrls = useMemo(() => uniquePreviewUrls(links), [links]);
   const imageUrl = useSignedUrl(CHAT_BUCKET, message.image_url);
@@ -196,30 +196,33 @@ export function MessageBubble({
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mx-2.5 mb-2.5 flex max-w-[22rem] items-center gap-3 overflow-hidden rounded-xl border border-border/60 bg-background/50 p-2 text-left transition-colors hover:bg-background/75"
+                      className="mx-2.5 mb-2.5 flex max-w-[22rem] items-center gap-3 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-primary/10 to-primary/5 px-3 py-2.5 text-left text-foreground shadow-sm transition-colors hover:border-primary/35 hover:from-primary/20"
                     >
-                      {preview.image && !previewImageErrors[url] && (
-                        <img
-                          src={preview.image}
-                          alt=""
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          className="size-16 shrink-0 rounded-lg bg-surface object-cover"
-                          onError={() =>
-                            setPreviewImageErrors((current) => ({ ...current, [url]: true }))
-                          }
-                        />
-                      )}
-                      <span className="min-w-0 flex-1 text-foreground">
-                        <span className="block truncate text-xs font-semibold">
-                          {preview.title || preview.siteName}
-                        </span>
-                        {preview.description && (
-                          <span className="mt-0.5 line-clamp-2 block break-words text-[11px] leading-snug text-muted-foreground">
-                            {preview.description}
+                      <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-primary/15 bg-background/70 text-primary shadow-sm">
+                        {preview.icon && !previewIconErrors[url] ? (
+                          <img
+                            src={preview.icon}
+                            alt=""
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            className="size-7 object-contain"
+                            onError={() =>
+                              setPreviewIconErrors((current) => ({ ...current, [url]: true }))
+                            }
+                          />
+                        ) : (
+                          <span className="font-display text-lg font-bold">
+                            {new URL(url).hostname.replace(/^www\./, "").charAt(0).toUpperCase()}
                           </span>
                         )}
-                        <span className="mt-1 block truncate text-[10px] text-muted-foreground">{preview.siteName}</span>
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-semibold leading-snug">
+                          {preview.title || preview.siteName}
+                        </span>
+                        <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+                          {new URL(url).hostname.replace(/^www\./, "")}
+                        </span>
                       </span>
                     </a>
                   );

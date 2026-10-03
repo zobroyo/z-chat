@@ -10,6 +10,7 @@ export type LinkPreview = {
   title: string | null;
   description: string | null;
   image: string | null;
+  icon: string | null;
   siteName: string;
 };
 
@@ -133,11 +134,24 @@ export function fetchLinkPreview(url: string): Promise<LinkPreview | null> {
         }
       }
 
+      let icon: string | null = null;
+      const rawIcon = safeText(value["icon"], 2048);
+      if (rawIcon) {
+        try {
+          const parsedIcon = new URL(rawIcon);
+          if (parsedIcon.protocol === "https:" && !parsedIcon.username && !parsedIcon.password) {
+            icon = parsedIcon.href;
+          }
+        } catch {
+          icon = null;
+        }
+      }
+
       const title = safeText(value["title"], 160);
       const description = safeText(value["description"], 320);
       const siteName = safeText(value["siteName"], 80);
-      if (!title && !description && !image) return null;
-      return { title, description, image, siteName: siteName || new URL(url).hostname };
+      if (!title && !description && !image && !icon) return null;
+      return { title, description, image, icon, siteName: siteName || new URL(url).hostname };
     })
     .catch(() => null);
 

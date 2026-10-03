@@ -14,6 +14,7 @@ type Preview = {
   title: string | null;
   description: string | null;
   image: string | null;
+  icon: string | null;
   siteName: string;
 };
 
@@ -243,6 +244,24 @@ function parseMetadata(html: string, finalUrl: URL): Preview | null {
     meta.get("twitter:description") ??
     meta.get("description") ??
     null;
+  const iconHref = [...head.matchAll(/<link\b[^>]*>/gi)]
+    .map((match) => getAttributes(match[0]))
+    .find((attributes) =>
+      (attributes["rel"] ?? "")
+        .toLowerCase()
+        .split(/\s+/)
+        .some((relation) => relation === "icon" || relation === "apple-touch-icon"),
+    )?.["href"];
+  let icon: string | null = null;
+  if (iconHref) {
+    try {
+      const candidate = new URL(iconHref, finalUrl);
+      if (candidate.protocol === "https:" && !candidate.username && !candidate.password)
+        icon = candidate.href.slice(0, 2048);
+    } catch {
+      /* Ignore invalid icon URLs. */
+    }
+  }
   const imageValue = meta.get("og:image") ?? meta.get("twitter:image") ?? null;
   let image: string | null = null;
   if (imageValue) {
@@ -260,6 +279,7 @@ function parseMetadata(html: string, finalUrl: URL): Preview | null {
     title: clean(title, 160),
     description: clean(description, 320),
     image,
+    icon,
     siteName:
       clean(meta.get("og:site_name") ?? meta.get("application-name") ?? finalUrl.hostname, 80) ??
       finalUrl.hostname,
