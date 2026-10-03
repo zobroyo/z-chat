@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Gamepad2, Hash, LogOut, Menu, Search, Settings, Shield, Users } from "lucide-react";
+import { Bug, Gamepad2, Hash, LogOut, Menu, Search, Settings, Shield, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Composer } from "@/components/chat/Composer";
 import { GamesAnnouncementDialog } from "@/components/chat/GamesAnnouncementDialog";
@@ -1080,6 +1080,15 @@ function ChatPage() {
       >
         <Gamepad2 className="size-4" />
         UNBLOCKED GAMES
+      </a>
+      <a
+        href="https://forms.gle/FdvZyi4nLM92i1yaA"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="mx-3 mb-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Bug className="size-4" />
+        Bugs &amp; Suggestions
       </a>
 
       {isAdmin && (
