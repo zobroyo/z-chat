@@ -54,7 +54,15 @@ function AuthPage() {
   const [signupPassword, setSignupPassword] = useState("");
 
   useEffect(() => {
-    if (!loading && session) void navigate({ to: "/chat" });
+    if (loading || !session) return;
+
+    const authorizationId = new URLSearchParams(window.location.search).get("oauth_authorization_id");
+    if (authorizationId) {
+      window.location.replace(`/oauth/consent?authorization_id=${encodeURIComponent(authorizationId)}`);
+      return;
+    }
+
+    void navigate({ to: "/chat" });
   }, [loading, session, navigate]);
 
   const logIn = async () => {
@@ -125,11 +133,14 @@ function AuthPage() {
   const withGoogle = async () => {
     setBusy(true);
 
+    const authorizationId = new URLSearchParams(window.location.search).get("oauth_authorization_id");
+    const redirectTo = authorizationId
+      ? `${window.location.origin}/?oauth_authorization_id=${encodeURIComponent(authorizationId)}`
+      : `${window.location.origin}/chat`;
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/chat`,
-      },
+      options: { redirectTo },
     });
 
     if (error) {

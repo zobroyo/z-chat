@@ -19,6 +19,7 @@ import { Route as AdminConversationsRouteImport } from './routes/admin.conversat
 import { Route as AdminMessagesRouteImport } from './routes/admin.messages'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
 import { Route as AdminConversationsIndexRouteImport } from './routes/admin.conversations.index'
 import { Route as AdminConversationsIdRouteImport } from './routes/admin.conversations.$id'
 
@@ -72,6 +73,11 @@ const AdminUsersRoute = AdminUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AdminRoute,
 } as any)
+const OauthConsentRoute = OauthConsentRouteImport.update({
+  id: '/oauth/consent',
+  path: '/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminConversationsIndexRoute = AdminConversationsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -93,6 +99,7 @@ export interface FileRoutesByFullPath {
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/oauth/consent': typeof OauthConsentRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/conversations/$id': typeof AdminConversationsIdRoute
   '/admin/conversations/': typeof AdminConversationsIndexRoute
@@ -105,6 +112,7 @@ export interface FileRoutesByTo {
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/oauth/consent': typeof OauthConsentRoute
   '/admin': typeof AdminIndexRoute
   '/admin/conversations/$id': typeof AdminConversationsIdRoute
   '/admin/conversations': typeof AdminConversationsIndexRoute
@@ -120,6 +128,7 @@ export interface FileRoutesById {
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
+  '/oauth/consent': typeof OauthConsentRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/conversations/$id': typeof AdminConversationsIdRoute
   '/admin/conversations/': typeof AdminConversationsIndexRoute
@@ -136,6 +145,7 @@ export interface FileRouteTypes {
     | '/admin/messages'
     | '/admin/settings'
     | '/admin/users'
+    | '/oauth/consent'
     | '/admin/'
     | '/admin/conversations/$id'
     | '/admin/conversations/'
@@ -148,6 +158,7 @@ export interface FileRouteTypes {
     | '/admin/messages'
     | '/admin/settings'
     | '/admin/users'
+    | '/oauth/consent'
     | '/admin'
     | '/admin/conversations/$id'
     | '/admin/conversations'
@@ -162,6 +173,7 @@ export interface FileRouteTypes {
     | '/admin/messages'
     | '/admin/settings'
     | '/admin/users'
+    | '/oauth/consent'
     | '/admin/'
     | '/admin/conversations/$id'
     | '/admin/conversations/'
@@ -173,6 +185,7 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRoute
   ProfileRoute: typeof ProfileRoute
   RecoveryRoute: typeof RecoveryRoute
+  OauthConsentRoute: typeof OauthConsentRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -247,6 +260,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/oauth/consent': {
+      id: '/oauth/consent'
+      path: '/oauth/consent'
+      fullPath: '/oauth/consent'
+      preLoaderRoute: typeof OauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/conversations/': {
       id: '/admin/conversations/'
       path: '/'
@@ -301,6 +321,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRoute,
   ProfileRoute: ProfileRoute,
   RecoveryRoute: RecoveryRoute,
+  OauthConsentRoute: OauthConsentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
