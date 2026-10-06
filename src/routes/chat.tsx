@@ -1075,7 +1075,7 @@ function ChatPage() {
       </div>
 
       <a
-        href="https://watchdocumentaries.com"
+        href="https://watchdocumentaries.com/games"
         className="mx-3 my-3 flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-3 text-sm font-semibold tracking-wide text-primary-foreground shadow-sm transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Gamepad2 className="size-4" />
