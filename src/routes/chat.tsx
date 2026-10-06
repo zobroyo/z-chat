@@ -1,7 +1,19 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Bug, Gamepad2, Hash, LogOut, Menu, Search, Settings, Shield, Users } from "lucide-react";
+import {
+  Bug,
+  Gamepad2,
+  Hash,
+  LogOut,
+  Menu,
+  Search,
+  Settings,
+  Shield,
+  ShieldCheck,
+  ShieldOff,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { CallButton } from "@/components/call/CallButton";
 import { CallOverlay } from "@/components/call/CallOverlay";
@@ -916,12 +928,26 @@ function ChatPage() {
     try {
       const imagePath = file ? await uploadChatImage(activeId, file) : null;
 
+      // Send the on-screen history with the message so the moderation server
+      // does not need extra database round-trips for context.
+      const moderationHistory = messages
+        .slice(-10)
+        .map((item) => ({
+          username:
+            item.sender_id === user.id
+              ? (me?.display_name ?? "You")
+              : (profileMap.get(item.sender_id)?.display_name ?? "user"),
+          content: (item.body ?? "").slice(0, 140),
+        }))
+        .filter((entry) => entry.content.trim().length > 0);
+
       const inserted = await sendMessage({
         conversationId: activeId,
         senderId: user.id,
         body,
         imagePath,
         replyToMessageId,
+        history: moderationHistory,
       });
 
       if (tempId && inserted) {
@@ -947,6 +973,35 @@ function ChatPage() {
 
       throw error;
     }
+  };
+
+  const toggleGroupModeration = async () => {
+    if (
+      !user ||
+      activeConversation?.kind !== "group" ||
+      activeConversation.created_by !== user.id
+    ) {
+      return;
+    }
+    const next = !activeConversation.ai_moderation_enabled;
+    const { error } = await supabase
+      .from("conversations")
+      .update({ ai_moderation_enabled: next })
+      .eq("id", activeConversation.id);
+    if (error) {
+      toast.error("Couldn't update AI moderation right now");
+      return;
+    }
+    setConversations((current) =>
+      current.map((conversation) =>
+        conversation.id === activeConversation.id
+          ? { ...conversation, ai_moderation_enabled: next }
+          : conversation,
+      ),
+    );
+    toast.success(
+      next ? "AI moderation enabled for this group" : "AI moderation disabled for this group",
+    );
   };
 
   const me = user ? profileMap.get(user.id) : undefined;
@@ -1175,6 +1230,30 @@ function ChatPage() {
               disabled={!activeId}
             />
 
+            {activeConversation?.kind === "group" && activeConversation.created_by === user?.id && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "text-muted-foreground",
+                  !activeConversation.ai_moderation_enabled && "text-destructive",
+                )}
+                title={
+                  activeConversation.ai_moderation_enabled
+                    ? "AI moderation is ON for this group (click to turn off)"
+                    : "AI moderation is OFF for this group (click to turn on)"
+                }
+                onClick={() => void toggleGroupModeration()}
+              >
+                {activeConversation.ai_moderation_enabled ? (
+                  <ShieldCheck className="mr-1.5 size-4" />
+                ) : (
+                  <ShieldOff className="mr-1.5 size-4" />
+                )}
+                AI moderation
+              </Button>
+            )}
+
             {activeConversation?.kind === "group" && (
               <Button
                 variant="ghost"
@@ -1193,7 +1272,7 @@ function ChatPage() {
           ref={messageListRef}
           onScroll={updateNearBottom}
           className={cn(
-            "chat-message-list scroll-slim min-h-0 flex-1 space-y-2 overflow-x-hidden overflow-y-auto px-3 py-4",
+            "chat-message-list scroll-slim min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4",
             switchingConversation && "conversation-enter",
           )}
         >

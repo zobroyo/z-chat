@@ -55,7 +55,7 @@ export function MessageBubble({
   const isLinkOnly = !message.image_url && links.length === 1 && body.trim() === links[0]?.text;
   const imageUrl = useSignedUrl(CHAT_BUCKET, message.image_url);
   const time = new Date(message.created_at).toLocaleTimeString([], {
-    hour: "2-digit",
+    hour: "numeric",
     minute: "2-digit",
   });
   const messageReceipts = receipts.filter((receipt) => receipt.message_id === message.id);
@@ -110,18 +110,20 @@ export function MessageBubble({
       id={`message-${message.id}`}
       className={cn(
         "group relative -mx-3 flex items-start gap-3 rounded px-3 py-0.5 transition-colors hover:bg-surface-2/40",
+        showSender ? "mt-3" : "mt-0.5",
         animateIn && "message-enter",
       )}
     >
       <div className="w-10 shrink-0">
-        {showSender ? (
+        {showSender && (
           <UserAvatar name={sender?.display_name} path={sender?.avatar_url} className="size-10" />
-        ) : (
-          <span className="hidden pr-1 text-right text-[10px] leading-6 text-muted-foreground group-hover:block">
-            {time}
-          </span>
         )}
       </div>
+      {!showSender && (
+        <span className="pointer-events-none absolute top-0.5 left-3 w-10 pr-1 text-right text-[9px] leading-4 whitespace-nowrap text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+          {time}
+        </span>
+      )}
 
       <div className="min-w-0 flex-1">
         {showSender && (

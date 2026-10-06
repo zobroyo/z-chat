@@ -21,6 +21,7 @@ export type Conversation = {
   created_by: string | null;
   dm_key: string | null;
   created_at: string;
+  ai_moderation_enabled: boolean;
 };
 
 export type Member = {
@@ -77,7 +78,7 @@ export async function fetchProfiles() {
 export async function fetchConversations() {
   const { data, error } = await supabase
     .from("conversations")
-    .select("id, kind, name, avatar_url, created_by, dm_key, created_at");
+    .select("id, kind, name, avatar_url, created_by, dm_key, created_at, ai_moderation_enabled");
   if (error) throw error;
   return (data ?? []) as Conversation[];
 }
@@ -184,6 +185,7 @@ export async function sendMessage(input: {
   body?: string;
   imagePath?: string | null;
   replyToMessageId?: string | null;
+  history?: Array<{ username: string; content: string }>;
 }) {
   const trimmed = input.body?.trim() ?? "";
   if (!trimmed && !input.imagePath) return null;
@@ -204,6 +206,7 @@ export async function sendMessage(input: {
       body: trimmed || "",
       image_url: input.imagePath ?? null,
       reply_to_message_id: input.replyToMessageId ?? null,
+      history: input.history,
     }),
   });
 
@@ -230,7 +233,7 @@ export async function ensureDirectConversation(myId: string, otherId: string) {
 
   const existing = await supabase
     .from("conversations")
-    .select("id, kind, name, avatar_url, created_by, dm_key, created_at")
+    .select("id, kind, name, avatar_url, created_by, dm_key, created_at, ai_moderation_enabled")
     .eq("dm_key", key)
     .maybeSingle();
   if (existing.data) return existing.data as Conversation;
@@ -238,7 +241,7 @@ export async function ensureDirectConversation(myId: string, otherId: string) {
   const created = await supabase
     .from("conversations")
     .insert({ kind: "dm", dm_key: key, created_by: myId })
-    .select("id, kind, name, avatar_url, created_by, dm_key, created_at")
+    .select("id, kind, name, avatar_url, created_by, dm_key, created_at, ai_moderation_enabled")
     .single();
   if (created.error) throw created.error;
 
@@ -257,7 +260,7 @@ export async function createGroup(myId: string, name: string, memberIds: string[
   const created = await supabase
     .from("conversations")
     .insert({ kind: "group", name: cleanName, created_by: myId })
-    .select("id, kind, name, avatar_url, created_by, dm_key, created_at")
+    .select("id, kind, name, avatar_url, created_by, dm_key, created_at, ai_moderation_enabled")
     .single();
   if (created.error) throw created.error;
 
