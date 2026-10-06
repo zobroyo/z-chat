@@ -18,6 +18,7 @@ LOG=/srv/zchat/deploy.log
 BRANCH=main
 LOCK_FILE="$STATE/deploy.lock"
 REV_FILE="$STATE/deployed-rev"
+FAIL_FILE="$STATE/deploy-failed"
 
 mkdir -p "$STATE"
 exec >>"$LOG" 2>&1
@@ -35,15 +36,26 @@ if [ "$REMOTE" = "$LAST" ]; then
   exit 0
 fi
 
+# Backoff: if this exact revision failed to build recently, wait 10 minutes
+# before retrying instead of burning a full build every 30 seconds.
+if [ -s "$FAIL_FILE" ]; then
+  read -r FAIL_REV FAIL_TS < "$FAIL_FILE" || true
+  if [ "${FAIL_REV:-}" = "$REMOTE" ] && [ -n "${FAIL_TS:-}" ] && [ $(( $(date +%s) - FAIL_TS )) -lt 600 ]; then
+    exit 0
+  fi
+fi
+
 echo "=== $(date -Is) deploying $REMOTE (last deployed: ${LAST:-none})"
 runuser -u zchat -- git -C "$SRC" reset --hard "origin/$BRANCH"
 
 echo "building $REMOTE ..."
-systemctl start zchat-build.service
+if ! systemctl start zchat-build.service; then
+  echo "BUILD FAILED for $REMOTE at $(date -Is) (retry in ~10 min or on next change)"
+  printf '%s %s\n' "$REMOTE" "$(date +%s)" > "$FAIL_FILE"
+  exit 1
+fi
 
-# Build succeeded: publish atomically and restart. If the build fails, `set -e`
-# aborts here, the deployed revision is NOT recorded, and the next timer run
-# retries while the current build keeps serving.
+# Build succeeded: publish atomically and restart.
 rm -rf "$APP/.output.new"
 cp -a "$SRC/.output" "$APP/.output.new"
 rm -rf "$APP/.output"
@@ -52,4 +64,5 @@ chown -R zchat:zchat "$APP"
 
 systemctl restart zchat-app.service
 echo "$REMOTE" > "$REV_FILE"
+rm -f "$FAIL_FILE"
 echo "deployed $REMOTE"
