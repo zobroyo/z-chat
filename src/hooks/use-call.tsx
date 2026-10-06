@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 
@@ -97,6 +98,7 @@ export function useCall(conversationId: string | null, me: { id: string; name: s
   const [cameraOn, setCameraOn] = useState(false);
   const [deafened, setDeafened] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [incomingCall, setIncomingCall] = useState<{ userId: string; name: string } | null>(null);
 
   // Keep the latest props/state available to stable callbacks without
   // re-creating them (channel handlers need the values at call time).
@@ -113,6 +115,11 @@ export function useCall(conversationId: string | null, me: { id: string; name: s
   const localStreamRef = useRef<MediaStream | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const pageHideRef = useRef<(() => void) | null>(null);
+  const listenChannelRef = useRef<RealtimeChannel | null>(null);
+  const incomingCallRef = useRef<{ userId: string; name: string } | null>(null);
+  const ringtoneRef = useRef<HTMLAudioElement | null>(null);
+  const ringRetryRef = useRef<(() => void) | null>(null);
+  const ringTimeoutRef = useRef<number | null>(null);
 
   const inCallRef = useRef(false);
   const joiningRef = useRef(false);
@@ -548,6 +555,12 @@ export function useCall(conversationId: string | null, me: { id: string; name: s
         })
         .on("broadcast", { event: "leave" }, (message) => {
           handleLeave(asPayload<LeavePayload>(message["payload"]));
+        })
+        .on("broadcast", { event: "decline" }, (message) => {
+          const payload = asPayload<{ userId?: string; name?: string }>(message["payload"]);
+          if (payload?.userId && payload.userId !== meRef.current.id) {
+            toast(`${payload.name ?? "Someone"} declined the call`);
+          }
         });
 
       await new Promise<void>((resolve, reject) => {
@@ -736,6 +749,117 @@ export function useCall(conversationId: string | null, me: { id: string; name: s
     void leaveCall();
   }, [me.id, conversationId, leaveCall]);
 
+  // ---- Incoming call ringing -------------------------------------------------
+
+  const stopRinging = useCallback(() => {
+    const audio = ringtoneRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      ringtoneRef.current = null;
+    }
+    const retry = ringRetryRef.current;
+    if (retry) {
+      window.removeEventListener("pointerdown", retry);
+      window.removeEventListener("keydown", retry);
+      ringRetryRef.current = null;
+    }
+    if (ringTimeoutRef.current !== null) {
+      window.clearTimeout(ringTimeoutRef.current);
+      ringTimeoutRef.current = null;
+    }
+  }, []);
+
+  const clearIncoming = useCallback(() => {
+    incomingCallRef.current = null;
+    setIncomingCall(null);
+    stopRinging();
+  }, [stopRinging]);
+
+  const startRinging = useCallback(() => {
+    if (ringtoneRef.current) return;
+    const audio = new Audio("/ringtone.mp3");
+    audio.loop = true;
+    audio.volume = 0.85;
+    ringtoneRef.current = audio;
+
+    const retry = () => {
+      window.removeEventListener("pointerdown", retry);
+      window.removeEventListener("keydown", retry);
+      if (ringRetryRef.current === retry) ringRetryRef.current = null;
+      void audio.play().catch(() => undefined);
+    };
+    void audio.play().catch(() => {
+      // Autoplay is blocked until the user interacts with the page: retry on
+      // the first click or key press (the visual prompt still shows).
+      ringRetryRef.current = retry;
+      window.addEventListener("pointerdown", retry);
+      window.addEventListener("keydown", retry);
+    });
+
+    ringTimeoutRef.current = window.setTimeout(() => clearIncoming(), 45_000);
+  }, [clearIncoming]);
+
+  // While the conversation is open and we are not in a call, listen for other
+  // people starting one and ring for the recipient.
+  useEffect(() => {
+    const self = meRef.current;
+    if (!conversationId || !self.id || inCall) return;
+
+    const channel = supabase.channel(`call:${conversationId}`, {
+      config: { broadcast: { self: false } },
+    });
+    listenChannelRef.current = channel;
+
+    channel
+      .on("broadcast", { event: "join" }, (message) => {
+        const payload = asPayload<JoinPayload>(message["payload"]);
+        const userId = payload?.userId;
+        if (!userId || userId === meRef.current.id || inCallRef.current) return;
+        const next = { userId, name: payload?.name ?? "Someone" };
+        incomingCallRef.current = next;
+        setIncomingCall(next);
+        startRinging();
+      })
+      .on("broadcast", { event: "leave" }, (message) => {
+        const payload = asPayload<LeavePayload>(message["payload"]);
+        if (payload?.userId && payload.userId === incomingCallRef.current?.userId) {
+          clearIncoming();
+        }
+      })
+      .subscribe();
+
+    return () => {
+      listenChannelRef.current = null;
+      void supabase.removeChannel(channel);
+      clearIncoming();
+    };
+  }, [conversationId, inCall, startRinging, clearIncoming]);
+
+  const acceptIncomingCall = useCallback(async () => {
+    clearIncoming();
+    await joinCall();
+  }, [clearIncoming, joinCall]);
+
+  const declineIncomingCall = useCallback(() => {
+    const incoming = incomingCallRef.current;
+    clearIncoming();
+    const channel = listenChannelRef.current;
+    if (incoming && channel) {
+      try {
+        void channel
+          .send({
+            type: "broadcast",
+            event: "decline",
+            payload: { userId: meRef.current.id, name: meRef.current.name },
+          })
+          .catch(() => undefined);
+      } catch {
+        // Channel not ready; the caller will just see nobody joined.
+      }
+    }
+  }, [clearIncoming]);
+
   return {
     inCall,
     joining,
@@ -746,8 +870,11 @@ export function useCall(conversationId: string | null, me: { id: string; name: s
     cameraOn,
     deafened,
     error,
+    incomingCall,
     joinCall,
     leaveCall,
+    acceptIncomingCall,
+    declineIncomingCall,
     toggleMute,
     toggleCamera,
     toggleDeafen,

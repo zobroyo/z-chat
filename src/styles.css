@@ -377,3 +377,19 @@
   }
 }
 
+
+@keyframes zchat-call-incoming-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.call-incoming-enter {
+  animation: zchat-call-incoming-enter 180ms ease-out both;
+}

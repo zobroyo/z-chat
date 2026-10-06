@@ -124,6 +124,45 @@ function ControlButton({
  * existing surface language.
  */
 export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
+  if (call.incomingCall && !call.inCall && !call.joining) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 p-4 backdrop-blur-xl sm:items-center">
+        <div className="call-incoming-enter w-full max-w-sm rounded-3xl border border-border bg-surface p-6 text-center shadow-2xl">
+          <Avatar className="mx-auto size-20">
+            <AvatarFallback className="bg-surface-2 font-display text-2xl font-semibold text-muted-foreground">
+              {initialsOf(call.incomingCall.name)}
+            </AvatarFallback>
+          </Avatar>
+
+          <p className="mt-4 font-display text-lg font-semibold">{call.incomingCall.name}</p>
+          <p className="mt-1 text-sm text-muted-foreground">is calling in {conversationTitle}…</p>
+
+          <div className="mt-6 flex items-center justify-center gap-4">
+            <Button
+              type="button"
+              variant="destructive"
+              size="icon"
+              className="size-14 rounded-full"
+              aria-label="Decline call"
+              onClick={call.declineIncomingCall}
+            >
+              <PhoneOff className="size-6" />
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              className="size-14 rounded-full bg-green-600 text-white hover:bg-green-500"
+              aria-label="Accept call"
+              onClick={() => void call.acceptIncomingCall()}
+            >
+              <PhoneCall className="size-6" />
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!call.inCall && !call.joining) return null;
 
   const showJoining = call.joining && !call.inCall;
@@ -138,7 +177,11 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
         <div className="min-w-0">
           <p className="truncate font-display text-sm font-semibold">{conversationTitle}</p>
           <p className="truncate text-xs text-muted-foreground">
-            {showJoining ? "Connecting…" : `${call.participants.length + 1} in call`}
+            {showJoining
+              ? "Connecting…"
+              : call.participants.length === 0
+                ? "Ringing…"
+                : `${call.participants.length + 1} in call`}
           </p>
         </div>
       </header>
@@ -179,9 +222,7 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
             </div>
 
             {call.participants.length === 0 && (
-              <p className="mt-4 text-center text-xs text-muted-foreground">
-                Waiting for others to join…
-              </p>
+              <p className="mt-4 text-center text-xs text-muted-foreground">Ringing…</p>
             )}
           </>
         )}

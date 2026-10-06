@@ -2,6 +2,13 @@
 
 All changes to ZChat since the original build (`b265943` — "CHECKPOINT BEFORE CH", the Vercel-hosted React + Supabase app).
 
+## 2026-10-06 (night) — call ringtone + incoming call prompt
+
+- Incoming calls now ring: when someone starts a call in the open conversation, the recipient hears `ringtone.mp3` (looped) and gets an Accept / Decline card with the caller's name.
+- Accepting joins the call; declining stops the tone and tells the caller "X declined the call".
+- The ringtone stops when the caller hangs up, after 45 seconds, or when you switch conversations / the tab closes. Callers see "Ringing…" until someone joins.
+- Autoplay note: browsers may block the first sound until the page has been interacted with once; the visual prompt always shows and the tone starts on the first click/keypress.
+
 ## 2026-10-06 (late) — link policy
 
 - URLs are stripped from message text (and history) before the model sees them (`[link]`), so the AI can no longer flag links as "suspicious/spam".
