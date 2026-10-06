@@ -1,0 +1,25 @@
+[Unit]
+Description=Z Chat web app (TanStack Start on Node)
+After=network-online.target ollama.service
+Wants=network-online.target ollama.service
+
+[Service]
+Type=simple
+User=user
+Group=user
+WorkingDirectory=/home/user/zchat-app
+Environment=PORT=1298
+Environment=HOST=0.0.0.0
+Environment=NITRO_PORT=1298
+Environment=NITRO_HOST=0.0.0.0
+Environment=SUPABASE_URL=https://dwstivxwyqdogzgxnidm.supabase.co
+Environment=SUPABASE_PUBLISHABLE_KEY=sb_publishable_1ToX7uWyKMM_cqFjdWpGmQ_tQak-JF3
+Environment=OLLAMA_URL=http://127.0.0.1:11434
+Environment=NODE_ENV=production
+ExecStart=/usr/bin/node /home/user/zchat-app/.output/server/index.mjs
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

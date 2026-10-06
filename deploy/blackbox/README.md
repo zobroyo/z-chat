@@ -3,6 +3,24 @@
 The chat app is served from the black box through the Cloudflare tunnel;
 everything else lives on Supabase. Only the AI moderation model runs locally.
 
+## Hosting
+
+- Built app lives in `/home/user/zchat-app` and runs via
+  `/usr/bin/node .output/server/index.mjs` under `zchat-app.service`
+  (Restart=always, enabled at boot). Unit file is next to this README.
+- cloudflared runs in Docker (`--network host` is required so the container can
+  reach `localhost:1298`):
+
+  ```
+  docker run -d --name zchat-tunnel --restart unless-stopped --network host \
+    cloudflare/cloudflared:latest tunnel --no-autoupdate run --token <TOKEN>
+  ```
+
+  Dashboard ingress: `z-chat.men` -> `http://localhost:1298`.
+- Rebuild + deploy: `npm run build` with `VITE_SUPABASE_URL` and
+  `VITE_SUPABASE_PUBLISHABLE_KEY` set, copy `.output/` to
+  `/home/user/zchat-app/.output`, then `systemctl restart zchat-app`.
+
 ## Ollama (RTX 4060)
 
 - Model: `llama3.1:8b`, pinned with `keep_alive=-1`.
