@@ -6,12 +6,12 @@
 # model stays resident and warm for every moderation request.
 set -euo pipefail
 
-MODEL="llama3.1:8b"
+MODEL="gemma4:e2b"
 NUM_CTX=2048
 URL="http://127.0.0.1:11434"
 
-curl -sf -m 120 "${URL}/api/chat" \
+curl -sf -m 600 "${URL}/api/chat" \
   -H "Content-Type: application/json" \
-  -d "{\"model\":\"${MODEL}\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"keep_alive\":-1,\"options\":{\"num_predict\":1,\"num_ctx\":${NUM_CTX}}}"
+  -d "{\"model\":\"${MODEL}\",\"think\":false,\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"stream\":false,\"keep_alive\":-1,\"options\":{\"num_predict\":1,\"num_ctx\":${NUM_CTX}}}"
 
 echo "ollama-keepalive: refreshed ${MODEL} (num_ctx=${NUM_CTX}) with keep_alive=-1 at $(date -Is)"

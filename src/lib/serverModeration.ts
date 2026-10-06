@@ -275,10 +275,11 @@ export async function askOllama(input: AskOllamaInput): Promise<ModerationVerdic
         { role: "user", content: userPrompt },
       ],
       stream: false,
+      think: false,
       keep_alive: -1,
       options: { temperature: 0.1, num_predict: 32, num_ctx: 2048 },
     }),
-    signal: AbortSignal.timeout(70_000),
+    signal: AbortSignal.timeout(240_000),
   });
 
   if (!response.ok) throw new Error(`Ollama request failed with status ${response.status}`);
@@ -481,7 +482,7 @@ export async function handleModerateRoute(request: Request): Promise<Response> {
 
     try {
       const verdict = await askOllama({
-        model: settings.moderation_model || "llama3.2:3b",
+        model: settings.moderation_model || "gemma4:e2b",
         systemPrompt: settings.moderation_system_prompt,
         history,
         username: displayNameForUser(auth.user),
@@ -569,7 +570,7 @@ export async function handleSendMessageRoute(request: Request): Promise<Response
     > =
       needsAiCheck && settings
         ? askOllama({
-            model: settings.moderation_model || "llama3.1:8b",
+            model: settings.moderation_model || "gemma4:e2b",
             systemPrompt: settings.moderation_system_prompt,
             history,
             username: displayNameForUser(user),

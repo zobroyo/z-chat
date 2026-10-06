@@ -2,6 +2,13 @@
 
 All changes to ZChat since the original build (`b265943` — "CHECKPOINT BEFORE CH", the Vercel-hosted React + Supabase app).
 
+## 2026-10-06 (evening) — moderation model swap
+
+- Switched the moderation model from `llama3.1:8b` to **`gemma4:e2b`** (with its "thinking" mode disabled — otherwise Ollama returns an empty `content` and moderation breaks).
+- Rewrote the moderation system prompt as a compact few-shot classifier: **20/20 on the moderation test set** (greetings, banter, mild swearing, threats, harassment, doxxing, scam links, spam).
+- Keepalive script now pins `gemma4:e2b`; the per-request timeout was raised to 240s so a cold model load (gemma takes ~2-3 min the first time) doesn't drop messages.
+- Trade-off: `gemma4:e2b` (7.7GB) doesn't fully fit in the 8GB 4060, so it runs ~25% GPU / 75% CPU — AI-checked messages are now ~1.6-1.8s end-to-end (was ~0.9s with llama3.1:8b). Greetings/short messages still skip the model entirely (~350-400ms), and DMs/AI-off groups are unaffected.
+
 ## 2026-10-06 — AI moderation, voice/video, Discord-style formatting, self-hosting
 
 ### Added
