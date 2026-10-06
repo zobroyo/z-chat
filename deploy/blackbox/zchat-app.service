@@ -2,6 +2,8 @@
 Description=Z Chat web app (TanStack Start on Node)
 After=network-online.target ollama.service
 Wants=network-online.target ollama.service
+# Never give up restarting, no matter how many times it fails.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple

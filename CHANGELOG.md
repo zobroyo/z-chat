@@ -2,6 +2,14 @@
 
 All changes to ZChat since the original build (`b265943` — "CHECKPOINT BEFORE CH", the Vercel-hosted React + Supabase app).
 
+## 2026-10-06 (resilience) — auto recovery on the black box
+
+- Deploy polling tightened from 5 minutes to **30 seconds** (pushes deploy in ~1 min).
+- **Health watchdog** every 2 minutes: restarts the app when it doesn't answer 200, restarts Ollama, re-warms the moderation model, revives the tunnel container and any stopped timers, warns on low disk (`/srv/zchat/health.log`).
+- **Infinite restarts** for the app and Ollama (`Restart=always` + `StartLimitIntervalSec=0`).
+- **Hard-lockup recovery**: softdog + systemd `RuntimeWatchdogSec=90s` reboot the box if PID 1 hangs; `kernel.panic=10` reboots after a kernel panic.
+- Everything (app, deploy + keepalive + backup + healthcheck timers, Docker/tunnel, Ollama) is enabled at boot.
+
 ## 2026-10-06 (deploy) — self-hosting sync + push-to-deploy + sandboxing
 
 - **Removed the last Vercel leftovers**: `/api/link-preview` is now a real route in the Nitro server (same SSRF-guarded implementation, moved to `src/lib/serverLinkPreview.ts`) so rich previews work on the black box; `api/link-preview.ts` and `vercel.json` are deleted.

@@ -7,13 +7,13 @@ runs in Docker on the same box.
 
 ## How deploys work (no SSH needed)
 
-Deploys are **pull-based**: the box checks GitHub every 5 minutes and rebuilds
-itself when `main` changes.
+Deploys are **pull-based**: the box checks GitHub every **30 seconds** and
+rebuilds itself when `main` changes. Pushes go live in about a minute.
 
 ```
 collaborator pushes to main  ->  GitHub
         |
-        v  (every 5 min, outbound only)
+        v  (every 30s, outbound only)
 zchat-deploy.timer -> /usr/local/sbin/zchat-deploy (root, fixed steps)
         |                |
         |                +-- git fetch/reset as `zchat`
@@ -55,6 +55,27 @@ action. The repo is public; the box only ever reads from it.
 
 Limits to know: app code can still call the internet (Supabase, link previews)
 and localhost Ollama, and can consume CPU/RAM while running.
+
+## Resilience / auto recovery
+
+- **Infinite restarts**: `zchat-app.service` and `ollama.service` have
+  `Restart=always` with `StartLimitIntervalSec=0` - systemd never gives up.
+- **Health watchdog** (`zchat-healthcheck.timer`, every 2 minutes):
+  - app not answering 200 on `:1298` -> restart `zchat-app.service`
+  - Ollama not responding -> restart `ollama.service`
+  - `gemma4:e2b` not resident -> warm it with `keep_alive=-1`
+  - `zchat-tunnel` container not running -> start Docker + the container
+  - any of the timers (deploy / keepalive / backup / healthcheck) stopped ->
+    start it again
+  - low disk warning
+  - Actions are logged to `/srv/zchat/health.log` (trimmed automatically).
+- **Hard lockup recovery**: `softdog` is loaded and systemd has
+  `RuntimeWatchdogSec=90s` (`/etc/systemd/system.conf.d/watchdog.conf`), so a
+  hung PID 1 triggers a reboot; `kernel.panic=10` reboots after a kernel panic.
+- **Boot**: `zchat-app`, both timers, Docker (and the tunnel container with
+  `--restart unless-stopped`) and Ollama are all enabled at boot.
+- **Failed builds never take the site down**: the previous build keeps serving
+  and the deploy retries every 30 seconds.
 
 ## Components
 

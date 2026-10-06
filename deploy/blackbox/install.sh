@@ -2,7 +2,9 @@
 # One-time bootstrap of Z Chat on a fresh black box (run as root).
 #
 # Creates the sandboxed `zchat` system user, clones the repo, installs the
-# systemd units, builds once and enables the 5-minute GitHub pull deploy.
+# systemd units (app, build, 30-second GitHub pull deploy, health watchdog),
+# the resilience settings (kernel panic reboot, software watchdog), builds
+# once and enables everything.
 set -euo pipefail
 
 if [[ "${EUID}" -ne 0 ]]; then
@@ -22,7 +24,7 @@ fi
 
 echo "==> system user + directories"
 id -u zchat >/dev/null 2>&1 || useradd --system --create-home --home-dir /srv/zchat --shell /usr/sbin/nologin zchat
-mkdir -p /srv/zchat/src /srv/zchat/app
+mkdir -p /srv/zchat/src /srv/zchat/app /srv/zchat/state
 chown -R zchat:zchat /srv/zchat
 
 echo "==> clone / update repository"
@@ -39,8 +41,10 @@ install -m 0644 "${HERE}/zchat-app.service" /etc/systemd/system/zchat-app.servic
 install -m 0644 "${HERE}/zchat-build.service" /etc/systemd/system/zchat-build.service
 install -m 0644 "${HERE}/zchat-deploy.service" /etc/systemd/system/zchat-deploy.service
 install -m 0644 "${HERE}/zchat-deploy.timer" /etc/systemd/system/zchat-deploy.timer
+install -m 0644 "${HERE}/zchat-healthcheck.service" /etc/systemd/system/zchat-healthcheck.service
+install -m 0644 "${HERE}/zchat-healthcheck.timer" /etc/systemd/system/zchat-healthcheck.timer
 
-# Patch the npm path if it is not /usr/bin/npm.
+# Patch the npm/node paths if they are not the defaults.
 if [[ "${NPM_BIN}" != "/usr/bin/npm" ]]; then
   sed -i "s|^ExecStart=/usr/bin/npm|ExecStart=${NPM_BIN}|g" /etc/systemd/system/zchat-build.service
 fi
@@ -48,20 +52,35 @@ if [[ "${NODE_BIN}" != "/usr/bin/node" ]]; then
   sed -i "s|^ExecStart=/usr/bin/node|ExecStart=${NODE_BIN}|g" /etc/systemd/system/zchat-app.service
 fi
 
-echo "==> install root deploy wrapper (deliberately NOT updated by git)"
+echo "==> install root helpers (deliberately NOT updated by git)"
 install -m 0755 "${HERE}/zchat-deploy.sh" /usr/local/sbin/zchat-deploy
+install -m 0755 "${HERE}/zchat-healthcheck.sh" /usr/local/sbin/zchat-healthcheck
+
+echo "==> resilience settings"
+install -m 0644 "${HERE}/ollama-resilience.conf" /etc/systemd/system/ollama.service.d/resilience.conf
+install -m 0644 "${HERE}/99-zchat-resilience.conf" /etc/sysctl.d/99-zchat-resilience.conf
+install -m 0644 "${HERE}/softdog.conf" /etc/modules-load.d/softdog.conf
+install -d -m 0755 /etc/systemd/system.conf.d
+install -m 0644 "${HERE}/watchdog.conf" /etc/systemd/system.conf.d/watchdog.conf
+modprobe softdog 2>/dev/null || true
+sysctl --system >/dev/null 2>&1 || true
 
 systemctl daemon-reload
-systemctl enable zchat-app.service zchat-deploy.timer
+systemctl daemon-reexec
+mkdir -p /etc/systemd/system/ollama.service.d
+systemctl enable zchat-app.service zchat-deploy.timer zchat-healthcheck.timer
+systemctl enable docker.service 2>/dev/null || true
 
 echo "==> first build + deploy"
 systemctl start zchat-deploy.service
 
-echo "==> enable timers"
+echo "==> start timers"
 systemctl start zchat-deploy.timer
+systemctl start zchat-healthcheck.timer
 
 echo "==> status"
 systemctl is-active zchat-app.service || true
 systemctl is-active zchat-deploy.timer || true
+systemctl is-active zchat-healthcheck.timer || true
 tail -n 5 /srv/zchat/deploy.log 2>/dev/null || true
-echo "Done. The site updates automatically within 5 minutes of any push to main."
+echo "Done. Pushes to main deploy within ~30 seconds; the health check runs every 2 minutes."

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Z Chat pull deploy. Installed to /usr/local/sbin/zchat-deploy (root:root 0755).
+# Z Chat pull deploy. Installed to /usr/local/sbin/zchat-deploy (root:root 0755)
+# and run by zchat-deploy.timer every 30 seconds.
 #
 # Security model: this script runs as root but NEVER executes repository code
 # as root. Repository code is only:
@@ -23,20 +24,18 @@ exec >>"$LOG" 2>&1
 
 # Never let two deploys overlap.
 exec 9>"$LOCK_FILE"
-flock -n 9 || { echo "[$(date -Is)] another deploy is already running; skipping"; exit 0; }
-
-echo "=== $(date -Is) deploy check ($BRANCH)"
+flock -n 9 || exit 0
 
 runuser -u zchat -- git -C "$SRC" fetch --quiet origin "$BRANCH"
 REMOTE=$(runuser -u zchat -- git -C "$SRC" rev-parse "origin/$BRANCH")
 LAST=$(cat "$REV_FILE" 2>/dev/null || true)
 
+# Quiet no-op: polling runs every 30s, so only real deploys are logged.
 if [ "$REMOTE" = "$LAST" ]; then
-  echo "already up to date ($REMOTE)"
   exit 0
 fi
 
-echo "new revision $REMOTE (last deployed: ${LAST:-none})"
+echo "=== $(date -Is) deploying $REMOTE (last deployed: ${LAST:-none})"
 runuser -u zchat -- git -C "$SRC" reset --hard "origin/$BRANCH"
 
 echo "building $REMOTE ..."

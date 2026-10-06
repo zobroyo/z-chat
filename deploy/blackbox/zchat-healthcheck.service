@@ -1,0 +1,7 @@
+[Unit]
+Description=Z Chat black box health check + auto recovery
+
+[Service]
+Type=oneshot
+TimeoutStartSec=15min
+ExecStart=/usr/local/sbin/zchat-healthcheck
