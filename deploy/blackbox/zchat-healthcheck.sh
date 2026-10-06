@@ -64,7 +64,7 @@ if command -v docker >/dev/null 2>&1; then
 fi
 
 # 5. Periodic services are still scheduled.
-for unit in zchat-deploy.timer ollama-keepalive.timer backup.timer zchat-healthcheck.timer; do
+for unit in zchat-deploy.timer zchat-deploy.path ollama-keepalive.timer backup.timer zchat-healthcheck.timer; do
   if ! systemctl is-active --quiet "$unit"; then
     recover "$unit inactive -> starting"
     systemctl start "$unit"

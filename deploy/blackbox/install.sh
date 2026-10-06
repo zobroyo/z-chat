@@ -41,6 +41,7 @@ install -m 0644 "${HERE}/zchat-app.service" /etc/systemd/system/zchat-app.servic
 install -m 0644 "${HERE}/zchat-build.service" /etc/systemd/system/zchat-build.service
 install -m 0644 "${HERE}/zchat-deploy.service" /etc/systemd/system/zchat-deploy.service
 install -m 0644 "${HERE}/zchat-deploy.timer" /etc/systemd/system/zchat-deploy.timer
+install -m 0644 "${HERE}/zchat-deploy.path" /etc/systemd/system/zchat-deploy.path
 install -m 0644 "${HERE}/zchat-healthcheck.service" /etc/systemd/system/zchat-healthcheck.service
 install -m 0644 "${HERE}/zchat-healthcheck.timer" /etc/systemd/system/zchat-healthcheck.timer
 
@@ -65,10 +66,17 @@ install -m 0644 "${HERE}/watchdog.conf" /etc/systemd/system.conf.d/watchdog.conf
 modprobe softdog 2>/dev/null || true
 sysctl --system >/dev/null 2>&1 || true
 
+echo "==> deploy webhook secret"
+if [[ ! -s /srv/zchat/deploy-hook.secret ]]; then
+  (umask 177; openssl rand -hex 32 > /srv/zchat/deploy-hook.secret)
+fi
+chown root:root /srv/zchat/deploy-hook.secret
+chmod 600 /srv/zchat/deploy-hook.secret
+
 systemctl daemon-reload
 systemctl daemon-reexec
 mkdir -p /etc/systemd/system/ollama.service.d
-systemctl enable zchat-app.service zchat-deploy.timer zchat-healthcheck.timer
+systemctl enable zchat-app.service zchat-deploy.timer zchat-deploy.path zchat-healthcheck.timer
 systemctl enable docker.service 2>/dev/null || true
 
 echo "==> first build + deploy"
@@ -76,11 +84,24 @@ systemctl start zchat-deploy.service
 
 echo "==> start timers"
 systemctl start zchat-deploy.timer
+systemctl start zchat-deploy.path
 systemctl start zchat-healthcheck.timer
 
 echo "==> status"
 systemctl is-active zchat-app.service || true
 systemctl is-active zchat-deploy.timer || true
+systemctl is-active zchat-deploy.path || true
 systemctl is-active zchat-healthcheck.timer || true
 tail -n 5 /srv/zchat/deploy.log 2>/dev/null || true
-echo "Done. Pushes to main deploy within ~30 seconds; the health check runs every 2 minutes."
+
+cat <<EOF
+
+Done. Deploys trigger on GitHub push (webhook) with a 30s polling fallback,
+and the health check runs every 2 minutes.
+
+Add the webhook in GitHub: repo -> Settings -> Webhooks -> Add webhook
+  Payload URL:  https://z-chat.men/api/deploy-hook
+  Content type: application/json
+  Secret:       $(cat /srv/zchat/deploy-hook.secret)
+  Events:       Just the push event
+EOF

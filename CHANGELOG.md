@@ -4,7 +4,10 @@ All changes to ZChat since the original build (`b265943` — "CHECKPOINT BEFORE 
 
 ## 2026-10-06 (resilience) — auto recovery on the black box
 
-- Deploy polling tightened from 5 minutes to **30 seconds** (pushes deploy in ~1 min).
+- **Instant deploys on push**: GitHub sends a webhook to `/api/deploy-hook`
+  (HMAC-verified, main-branch pushes only); the app drops a trigger file and a
+  root `systemd .path` unit starts the deploy. 30-second polling stays as a
+  fallback, and the webhook secret lives only on the box.
 - **Health watchdog** every 2 minutes: restarts the app when it doesn't answer 200, restarts Ollama, re-warms the moderation model, revives the tunnel container and any stopped timers, warns on low disk (`/srv/zchat/health.log`).
 - **Infinite restarts** for the app and Ollama (`Restart=always` + `StartLimitIntervalSec=0`).
 - **Hard-lockup recovery**: softdog + systemd `RuntimeWatchdogSec=90s` reboot the box if PID 1 hangs; `kernel.panic=10` reboots after a kernel panic.

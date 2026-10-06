@@ -1,0 +1,9 @@
+[Unit]
+Description=Start the Z Chat deploy when the GitHub push webhook fires
+
+[Path]
+PathModified=/srv/zchat/state/deploy-request
+Unit=zchat-deploy.service
+
+[Install]
+WantedBy=multi-user.target
