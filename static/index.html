@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Z Chat</title>
+<link rel="manifest" href="/static/manifest.json">
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%235865f2'/%3E%3Ctext x='32' y='44' font-size='36' font-family='Arial' font-weight='900' fill='white' text-anchor='middle'%3EZ%3C/text%3E%3C/svg%3E">
+</head>
+<body>
+
+<div id="login-view" class="login-wrap hidden">
+  <div class="login-card">
+    <div class="login-logo">Z</div>
+    <h1>Welcome to Z Chat</h1>
+    <p class="login-sub">A friendly place. AI-moderated, voice &amp; video ready.</p>
+    <div class="login-tabs">
+      <button id="tab-login" class="active">Log In</button>
+      <button id="tab-register">Register</button>
+    </div>
+    <form id="login-form" autocomplete="on">
+      <label>Username<input id="login-username" type="text" required minlength="3" maxlength="20" autocomplete="username"></label>
+      <label>Password<input id="login-password" type="password" required minlength="4" autocomplete="current-password"></label>
+      <div id="login-error" class="login-error hidden"></div>
+      <button id="login-submit" type="submit" class="btn-primary">Log In</button>
+    </form>
+  </div>
+</div>
+
+<div id="app" class="app hidden">
+  <nav class="rail">
+    <div class="rail-logo" title="Z Chat">Z</div>
+  </nav>
+
+  <aside class="sidebar">
+    <header class="server-name">
+      <span>Z Chat</span>
+      <span id="conn-dot" class="conn-dot offline" title="Connecting..."></span>
+    </header>
+    <div class="channel-scroll">
+      <div class="channel-group-label">Text Channels</div>
+      <div id="channel-list"></div>
+      <div class="channel-group-label">Voice</div>
+      <div id="voice-channel-list"></div>
+    </div>
+    <div id="voice-panel" class="voice-panel hidden">
+      <div class="voice-info">
+        <div class="voice-dot" id="voice-dot"></div>
+        <div>
+          <div class="voice-title" id="voice-status-text">Voice connected</div>
+          <div class="voice-sub" id="voice-channel-name"></div>
+        </div>
+      </div>
+      <div class="voice-actions">
+        <button id="vp-mute" class="voice-btn" title="Mute microphone">Mic</button>
+        <button id="vp-cam" class="voice-btn" title="Toggle camera">Cam</button>
+        <button id="vp-deafen" class="voice-btn" title="Deafen">Deafen</button>
+        <button id="vp-leave" class="voice-btn danger" title="Disconnect">Leave</button>
+      </div>
+    </div>
+    <div class="me-panel">
+      <div class="avatar" id="me-avatar">?</div>
+      <div class="me-text">
+        <div class="me-name" id="me-name">-</div>
+        <div class="me-role" id="me-role">user</div>
+      </div>
+      <button id="btn-admin" class="icon-btn hidden" title="Admin panel">&#9881;</button>
+      <button id="btn-logout" class="icon-btn" title="Log out">&#10162;</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div id="offline-banner" class="offline-banner hidden">Z Chat server is unreachable — showing cached messages. Messages you send will be queued and delivered automatically.</div>
+    <header class="channel-header">
+      <div class="channel-title-wrap">
+        <span class="hash" id="channel-hash">#</span>
+        <span id="channel-title">general</span>
+        <span id="channel-topic" class="channel-topic"></span>
+      </div>
+      <div class="header-right">
+        <span id="mod-chip" class="mod-chip">AI moderation</span>
+      </div>
+    </header>
+
+    <div id="voice-stage" class="voice-stage hidden">
+      <div id="voice-tiles" class="voice-tiles"></div>
+    </div>
+
+    <div id="messages" class="messages"></div>
+    <div id="typing-bar" class="typing-bar"></div>
+
+    <div id="timeout-banner" class="timeout-banner hidden"></div>
+
+    <div class="composer-wrap">
+      <div id="pending-chip" class="pending-chip hidden"><span class="spinner"></span> AI moderation is checking your message&hellip;</div>
+      <form id="composer" class="composer">
+        <input id="msg-input" type="text" maxlength="2000" placeholder="Message #general" autocomplete="off">
+        <button id="btn-send" type="submit" class="send-btn" title="Send">&#10148;</button>
+      </form>
+      <div class="composer-hint"><b>**bold**</b> &nbsp;<i>*italic*</i> &nbsp;<u>__underline__</u> &nbsp;<s>~~strike~~</s> &nbsp;<code>`code`</code> &nbsp;<span class="hint-head"># heading</span> &nbsp;<span class="hint-sub">-# subtext</span> &nbsp;<span class="hint-spoiler">||spoiler||</span></div>
+    </div>
+  </main>
+
+  <aside class="members">
+    <div id="member-list"></div>
+  </aside>
+</div>
+
+<div id="admin-overlay" class="overlay hidden">
+  <div class="admin-panel">
+    <header class="admin-header">
+      <h2>Admin Panel</h2>
+      <button id="admin-close" class="icon-btn">&#10005;</button>
+    </header>
+    <div class="admin-tabs">
+      <button data-pane="mod" class="active">AI Moderation</button>
+      <button data-pane="members">Members &amp; Timeouts</button>
+      <button data-pane="log">Mod Log</button>
+    </div>
+
+    <section class="admin-pane" data-pane="mod">
+      <div class="admin-row">
+        <label class="switch"><input type="checkbox" id="mod-enabled"> <span>AI moderation enabled (messages are checked before they are sent)</span></label>
+      </div>
+      <div class="admin-row">
+        <label class="switch"><input type="checkbox" id="reg-open"> <span>Open registration (anyone can create an account)</span></label>
+      </div>
+      <div class="admin-meta">Model: <code id="model-name">llama3.2:3b</code> &nbsp;|&nbsp; AI status: <span id="bridge-state">?</span></div>
+      <label class="admin-label">Moderation system prompt <span class="muted">(the AI receives this plus the last 15 chat messages with every check)</span></label>
+      <textarea id="mod-prompt" rows="16" spellcheck="false"></textarea>
+      <div class="admin-actions">
+        <button id="btn-save-prompt" class="btn-primary">Save prompt</button>
+        <button id="btn-reset-prompt" class="btn-secondary">Reset to default</button>
+      </div>
+    </section>
+
+    <section class="admin-pane hidden" data-pane="members">
+      <table class="admin-table" id="admin-members"></table>
+    </section>
+
+    <section class="admin-pane hidden" data-pane="log">
+      <table class="admin-table" id="mod-log"></table>
+    </section>
+  </div>
+</div>
+
+<div id="popover" class="popover hidden"></div>
+<div id="toasts" class="toasts"></div>
+
+<script src="/static/markdown.js"></script>
+<script src="/static/voice.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

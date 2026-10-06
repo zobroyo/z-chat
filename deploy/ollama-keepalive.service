@@ -1,0 +1,9 @@
+[Unit]
+Description=Keep ollama model llama3.2:3b resident (keep_alive=-1)
+After=ollama.service
+Wants=ollama.service
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/bin/bash /home/user/zchat/deploy/ollama-keepalive.sh

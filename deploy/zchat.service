@@ -1,0 +1,19 @@
+[Unit]
+Description=Z Chat server
+After=network-online.target ollama.service
+Wants=network-online.target ollama.service
+
+[Service]
+Type=simple
+User=user
+Group=user
+WorkingDirectory=/home/user/zchat
+Environment=ZCHAT_PORT=8790
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/user/zchat/.venv/bin/hypercorn --bind 0.0.0.0:8790 --workers 1 server:app
+Restart=always
+RestartSec=3
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,18 @@
+[Unit]
+Description=Z Chat cloudflared tunnel (box is the origin host)
+After=network-online.target zchat.service
+Wants=network-online.target zchat.service
+
+[Service]
+Type=simple
+User=user
+Group=user
+ExecStart=/home/user/zchat/deploy/tunnel.sh
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/user/zchat/tunnel.log
+StandardError=append:/home/user/zchat/tunnel.log
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

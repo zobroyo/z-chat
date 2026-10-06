@@ -1,0 +1,11 @@
+[Unit]
+Description=Black box backup to Google Drive (rclone)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/bin/bash /home/user/zchat/deploy/backup.sh
+TimeoutStartSec=0
+TimeoutStopSec=infinity
