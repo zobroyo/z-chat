@@ -2,6 +2,13 @@
 
 All changes to ZChat since the original build (`b265943` — "CHECKPOINT BEFORE CH", the Vercel-hosted React + Supabase app).
 
+## 2026-10-06 (late) — link policy
+
+- URLs are stripped from message text (and history) before the model sees them (`[link]`), so the AI can no longer flag links as "suspicious/spam".
+- Banned sites are handled by a deterministic domain blocklist in the server (adult/OnlyFans and similar): matching messages are blocked instantly (~0.4s) with reason "banned website (adult content)".
+- The moderation prompt no longer blocks messages for links, advertising or offers — it only blocks threats, targeted harassment/hate, sexual content, doxxing and clearly illegal content.
+- The settings cache dropped from 60s to 15s so admin prompt edits take effect quickly.
+
 ## 2026-10-06 (evening) — moderation model swap
 
 - Switched the moderation model from `llama3.1:8b` to **`gemma4:e2b`** (with its "thinking" mode disabled — otherwise Ollama returns an empty `content` and moderation breaks).
