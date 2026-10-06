@@ -13,9 +13,11 @@ import {
   type ChatSettings,
   type BlockedKeyword,
 } from "@/lib/admin";
+import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 
 export const Route = createFileRoute("/admin/settings")({
   component: AdminSettings,
@@ -23,9 +25,32 @@ export const Route = createFileRoute("/admin/settings")({
 
 const LIMIT_PRESETS = [500, 1000, 2000, 4000];
 
+type AiModerationSettings = {
+  ai_moderation_enabled: boolean;
+  moderation_model: string;
+  moderation_system_prompt: string;
+};
+
+async function fetchAiModerationSettings(): Promise<AiModerationSettings> {
+  const { data, error } = await supabase
+    .from("chat_settings")
+    .select("ai_moderation_enabled, moderation_model, moderation_system_prompt")
+    .eq("id", true)
+    .single();
+  if (error) throw error;
+  return data as AiModerationSettings;
+}
+
+async function updateAiModerationSettings(fields: Partial<AiModerationSettings>) {
+  const { error } = await supabase.from("chat_settings").update(fields).eq("id", true);
+  if (error) throw error;
+}
+
 function AdminSettings() {
   const [settings, setSettings] = useState<ChatSettings | null>(null);
   const [keywords, setKeywords] = useState<BlockedKeyword[] | null>(null);
+  const [ai, setAi] = useState<AiModerationSettings | null>(null);
+  const [promptDraft, setPromptDraft] = useState("");
   const [customLimit, setCustomLimit] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
   const [newReplacement, setNewReplacement] = useState("");
@@ -33,10 +58,12 @@ function AdminSettings() {
   const [busy, setBusy] = useState(false);
 
   const load = () => {
-    Promise.all([fetchChatSettings(), fetchBlockedKeywords()])
-      .then(([s, k]) => {
+    Promise.all([fetchChatSettings(), fetchBlockedKeywords(), fetchAiModerationSettings()])
+      .then(([s, k, a]) => {
         setSettings(s);
         setKeywords(k);
+        setAi(a);
+        setPromptDraft(a.moderation_system_prompt);
       })
       .catch((e) => setError(e.message ?? "Failed to load settings"));
   };
@@ -65,6 +92,40 @@ function AdminSettings() {
       setSettings({ ...settings, keyword_moderation_enabled: next });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to update setting");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleAiModeration = async () => {
+    if (!ai) return;
+    const next = !ai.ai_moderation_enabled;
+    setBusy(true);
+    try {
+      await updateAiModerationSettings({ ai_moderation_enabled: next });
+      setAi({ ...ai, ai_moderation_enabled: next });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update setting");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveAiModeration = async () => {
+    if (!ai) return;
+    const prompt = promptDraft.trim();
+    if (!prompt) {
+      toast.error("Moderation system prompt can't be empty");
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateAiModerationSettings({ moderation_system_prompt: prompt });
+      setAi({ ...ai, moderation_system_prompt: prompt });
+      setPromptDraft(prompt);
+      toast.success("AI moderation settings saved");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save AI moderation settings");
     } finally {
       setBusy(false);
     }
@@ -113,7 +174,7 @@ function AdminSettings() {
 
   if (error) return <p className="text-sm text-destructive">{error}</p>;
 
-  if (!settings || !keywords) {
+  if (!settings || !keywords || !ai) {
     return (
       <div className="flex justify-center py-16">
         <Loader2 className="size-6 animate-spin text-muted-foreground" />
@@ -252,6 +313,57 @@ function AdminSettings() {
             ))}
           </div>
         )}
+      </section>
+
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">AI moderation</h2>
+            <p className="text-xs text-muted-foreground">
+              AI moderation (messages are checked by the local AI before sending)
+            </p>
+          </div>
+          <Switch
+            checked={ai.ai_moderation_enabled}
+            disabled={busy}
+            onCheckedChange={() => void toggleAiModeration()}
+          />
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Model: <span className="font-mono text-foreground">{ai.moderation_model}</span> — runs on
+          the self-hosted GPU box.
+        </p>
+
+        <div className="space-y-1.5">
+          <label
+            htmlFor="moderation-system-prompt"
+            className="text-sm font-semibold text-foreground"
+          >
+            Moderation system prompt
+          </label>
+          <Textarea
+            id="moderation-system-prompt"
+            value={promptDraft}
+            onChange={(e) => setPromptDraft(e.target.value)}
+            rows={10}
+            disabled={busy}
+          />
+          <p className="text-xs text-muted-foreground">
+            The AI receives this prompt plus the last 15 messages of the conversation before
+            deciding if a message is safe.
+          </p>
+        </div>
+
+        <Button
+          size="sm"
+          disabled={
+            busy || !promptDraft.trim() || promptDraft.trim() === ai.moderation_system_prompt
+          }
+          onClick={() => void saveAiModeration()}
+        >
+          Save
+        </Button>
       </section>
     </div>
   );

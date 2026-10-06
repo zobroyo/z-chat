@@ -89,7 +89,7 @@ function OAuthConsent() {
           : error ? <>
             <h2 className="text-2xl font-bold">Can’t connect right now</h2>
             <p role="alert" className="mt-3 text-sm leading-6 text-destructive">{error}</p>
-            <Button asChild variant="outline" className="mt-6 w-full"><a href="https://z-chat-five.vercel.app/">Return to ZChat</a></Button>
+            <Button asChild variant="outline" className="mt-6 w-full"><a href="https://z-chat.men/">Return to ZChat</a></Button>
           </>
           : !details ? <p className="text-sm text-muted-foreground">Loading the Z Games request…</p>
           : <>

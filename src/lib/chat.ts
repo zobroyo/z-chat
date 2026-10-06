@@ -189,19 +189,39 @@ export async function sendMessage(input: {
   if (!trimmed && !input.imagePath) return null;
   if (trimmed) messageSchema.parse(trimmed);
 
-  const { data, error } = await supabase
-    .from("messages")
-    .insert({
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("Not signed in");
+
+  const res = await fetch("/api/send-message", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
       conversation_id: input.conversationId,
-      sender_id: input.senderId,
-      body: trimmed || null,
+      body: trimmed || "",
       image_url: input.imagePath ?? null,
       reply_to_message_id: input.replyToMessageId ?? null,
-    })
-    .select("id, conversation_id, sender_id, body, image_url, created_at, reply_to_message_id")
-    .single();
-  if (error) throw error;
-  return data as Message;
+    }),
+  });
+
+  const payload = (await res.json().catch(() => null)) as {
+    error?: string;
+    timeout_until?: string | null;
+    message?: Message;
+  } | null;
+
+  if (!res.ok) {
+    const error = new Error(payload?.error || "Message blocked") as Error & {
+      timeoutUntil?: unknown;
+    };
+    if (payload?.timeout_until) error.timeoutUntil = payload.timeout_until;
+    throw error;
+  }
+
+  return payload?.message as Message;
 }
 
 /** Finds the one-to-one chat with someone, creating it the first time. */

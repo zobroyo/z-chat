@@ -4,7 +4,13 @@ import { Check, CheckCheck, Reply } from "lucide-react";
 import { UserAvatar } from "@/components/UserAvatar";
 import { CHAT_BUCKET, useSignedUrl } from "@/lib/media";
 import type { Message, MessageReceipt, Profile } from "@/lib/chat";
-import { fetchLinkPreview, findMessageLinks, uniquePreviewUrls, type LinkPreview } from "@/lib/messageLinks";
+import { renderMessageBody } from "@/lib/messageFormat";
+import {
+  fetchLinkPreview,
+  findMessageLinks,
+  uniquePreviewUrls,
+  type LinkPreview,
+} from "@/lib/messageLinks";
 import { cn } from "@/lib/utils";
 
 type ReplyPreview = {
@@ -87,35 +93,15 @@ export function MessageBubble({
   useEffect(() => {
     if (!previewIsVisible || !previewUrls.length) return;
     let active = true;
-    void Promise.all(previewUrls.map(async (url) => [url, await fetchLinkPreview(url)] as const)).then((results) => {
+    void Promise.all(
+      previewUrls.map(async (url) => [url, await fetchLinkPreview(url)] as const),
+    ).then((results) => {
       if (active) setPreviews((current) => ({ ...current, ...Object.fromEntries(results) }));
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [previewIsVisible, previewUrls]);
-
-  function renderLinkedMessage() {
-    const body = message.body ?? "";
-    if (!links.length) return body;
-    const parts = [];
-    let cursor = 0;
-    for (const link of links) {
-      if (link.start > cursor) parts.push(body.slice(cursor, link.start));
-      parts.push(
-        <a
-          key={link.start}
-          href={link.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="break-all text-primary underline decoration-current/40 underline-offset-2 hover:decoration-current"
-        >
-          {link.text}
-        </a>,
-      );
-      cursor = link.end;
-    }
-    if (cursor < body.length) parts.push(body.slice(cursor));
-    return parts;
-  }
 
   return (
     <div
@@ -191,7 +177,9 @@ export function MessageBubble({
             {message.body && (
               <>
                 {!isLinkOnly && (
-                  <p className="px-3.5 py-2 whitespace-pre-wrap break-words">{renderLinkedMessage()}</p>
+                  <div className="px-3.5 py-2 whitespace-pre-wrap break-words">
+                    {renderMessageBody(body)}
+                  </div>
                 )}
                 {previewUrls.map((url) => {
                   const preview = previews[url];
@@ -239,12 +227,33 @@ export function MessageBubble({
           </div>
         </div>
 
-        <p className={cn("flex items-center gap-1 px-1 text-[10px] text-muted-foreground", self && "justify-end")}>
+        <p
+          className={cn(
+            "flex items-center gap-1 px-1 text-[10px] text-muted-foreground",
+            self && "justify-end",
+          )}
+        >
           {time}
           {self && (
-            <span className="inline-flex items-center gap-0.5" aria-label={receiptStatus} title={receiptStatus}>
-              {readCount > 0 ? <CheckCheck className="size-3 text-primary" /> : deliveredCount > 0 ? <CheckCheck className="size-3" /> : <Check className="size-3" />}
-              {groupChat && messageReceipts.length > 1 ? <span>{receiptStatus.replace(/^Delivered /, "D ").replace(" · Read ", " · R ")}</span> : <span>{receiptStatus}</span>}
+            <span
+              className="inline-flex items-center gap-0.5"
+              aria-label={receiptStatus}
+              title={receiptStatus}
+            >
+              {readCount > 0 ? (
+                <CheckCheck className="size-3 text-primary" />
+              ) : deliveredCount > 0 ? (
+                <CheckCheck className="size-3" />
+              ) : (
+                <Check className="size-3" />
+              )}
+              {groupChat && messageReceipts.length > 1 ? (
+                <span>
+                  {receiptStatus.replace(/^Delivered /, "D ").replace(" · Read ", " · R ")}
+                </span>
+              ) : (
+                <span>{receiptStatus}</span>
+              )}
             </span>
           )}
         </p>

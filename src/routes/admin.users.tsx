@@ -1,6 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Loader2, Search, X, ShieldCheck, ShieldOff, Ban, CircleCheck, Pencil } from "lucide-react";
+import {
+  Loader2,
+  Search,
+  X,
+  ShieldCheck,
+  ShieldOff,
+  Ban,
+  CircleCheck,
+  Pencil,
+  Clock,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -11,6 +21,7 @@ import {
   PAGE_SIZE,
   type AdminProfile,
 } from "@/lib/admin";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { UserAvatar } from "@/components/UserAvatar";
 import { TechnicalDetails } from "@/components/admin/TechnicalDetails";
@@ -22,25 +33,93 @@ export const Route = createFileRoute("/admin/users")({
   component: AdminUsers,
 });
 
+const TIMEOUT_OPTIONS = [
+  { label: "60s", seconds: 60 },
+  { label: "5m", seconds: 300 },
+  { label: "10m", seconds: 600 },
+  { label: "1h", seconds: 3600 },
+  { label: "1d", seconds: 86400 },
+  { label: "1w", seconds: 604800 },
+];
+
+type AdminUserRow = AdminProfile & {
+  timeout_until: string | null;
+  timeout_reason: string | null;
+  moderation_strikes: number;
+};
+
+function isTimedOut(u: { timeout_until: string | null }) {
+  return u.timeout_until !== null && new Date(u.timeout_until).getTime() > Date.now();
+}
+
+function fmtRemaining(iso: string | null) {
+  if (!iso) return "";
+  const ms = new Date(iso).getTime() - Date.now();
+  if (ms <= 0) return "0m";
+  const minutes = Math.ceil(ms / 60000);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ${minutes % 60}m`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ${hours % 24}h`;
+  return `${Math.floor(days / 7)}w`;
+}
+
 function fmtJoined(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", year: "numeric" });
+}
+
+async function fetchUsersWithTimeouts(page: number, search: string) {
+  const { rows, count } = await fetchAdminUsers(page, search);
+  const timeouts = new Map<
+    string,
+    { timeout_until: string | null; timeout_reason: string | null; moderation_strikes: number }
+  >();
+  if (rows.length) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, timeout_until, timeout_reason, moderation_strikes")
+      .in(
+        "id",
+        rows.map((u) => u.id),
+      );
+    if (error) throw error;
+    for (const row of data ?? []) {
+      timeouts.set(row.id, {
+        timeout_until: row.timeout_until,
+        timeout_reason: row.timeout_reason,
+        moderation_strikes: row.moderation_strikes,
+      });
+    }
+  }
+  return {
+    rows: rows.map((u): AdminUserRow => ({
+      ...u,
+      timeout_until: timeouts.get(u.id)?.timeout_until ?? null,
+      timeout_reason: timeouts.get(u.id)?.timeout_reason ?? null,
+      moderation_strikes: timeouts.get(u.id)?.moderation_strikes ?? 0,
+    })),
+    count,
+  };
 }
 
 function AdminUsers() {
   const { user: me } = useAuth();
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState("");
-  const [rows, setRows] = useState<AdminProfile[] | null>(null);
+  const [rows, setRows] = useState<AdminUserRow[] | null>(null);
   const [count, setCount] = useState(0);
-  const [selected, setSelected] = useState<AdminProfile | null>(null);
+  const [selected, setSelected] = useState<AdminUserRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [timeoutOpen, setTimeoutOpen] = useState(false);
+  const [timeoutReason, setTimeoutReason] = useState("");
 
   const reload = () => {
     setRows(null);
-    fetchAdminUsers(page, search)
+    fetchUsersWithTimeouts(page, search)
       .then(({ rows, count }) => {
         setRows(rows);
         setCount(count);
@@ -51,7 +130,7 @@ function AdminUsers() {
   useEffect(() => {
     setRows(null);
     let cancelled = false;
-    fetchAdminUsers(page, search)
+    fetchUsersWithTimeouts(page, search)
       .then(({ rows, count }) => {
         if (cancelled) return;
         setRows(rows);
@@ -123,6 +202,54 @@ function AdminUsers() {
     }
   };
 
+  const applyTimeout = async (seconds: number, label: string) => {
+    if (!selected) return;
+    const timeoutUntil = new Date(Date.now() + seconds * 1000).toISOString();
+    const reason = timeoutReason.trim() || null;
+    setBusy(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ timeout_until: timeoutUntil, timeout_reason: reason })
+        .eq("id", selected.id);
+      if (error) throw error;
+      toast.success(`${selected.display_name || "User"} timed out for ${label}`);
+      setTimeoutOpen(false);
+      setTimeoutReason("");
+      setSelected({ ...selected, timeout_until: timeoutUntil, timeout_reason: reason });
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to time out user");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const removeTimeout = async () => {
+    if (!selected) return;
+    if (!window.confirm(`Remove the timeout for ${selected.display_name || "this user"}?`)) return;
+    setBusy(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ timeout_until: null, timeout_reason: null, moderation_strikes: 0 })
+        .eq("id", selected.id);
+      if (error) throw error;
+      toast.success("Timeout removed");
+      setSelected({
+        ...selected,
+        timeout_until: null,
+        timeout_reason: null,
+        moderation_strikes: 0,
+      });
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to remove timeout");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3">
@@ -158,6 +285,7 @@ function AdminUsers() {
                 setSelected(u);
                 setEditingName(false);
                 setNameDraft(u.display_name);
+                setTimeoutOpen(false);
               }}
               className="flex items-center gap-3 rounded-xl border border-border bg-surface p-3 text-left hover:bg-surface-2"
             >
@@ -171,6 +299,11 @@ function AdminUsers() {
                 <div className="text-xs text-muted-foreground">
                   Joined {fmtJoined(u.created_at)}
                 </div>
+                {isTimedOut(u) && (
+                  <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
+                    <Clock className="size-2.5" /> Timed out · {fmtRemaining(u.timeout_until)}
+                  </span>
+                )}
               </div>
             </button>
           ))}
@@ -253,7 +386,10 @@ function AdminUsers() {
                 </div>
               </div>
               <button
-                onClick={() => setSelected(null)}
+                onClick={() => {
+                  setSelected(null);
+                  setTimeoutOpen(false);
+                }}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <X className="size-4" />
@@ -275,7 +411,19 @@ function AdminUsers() {
                   <Ban className="size-3" /> Banned
                 </span>
               )}
+              {isTimedOut(selected) && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-500">
+                  <Clock className="size-3" /> Timed out · {fmtRemaining(selected.timeout_until)}{" "}
+                  left
+                </span>
+              )}
             </div>
+
+            {isTimedOut(selected) && selected.timeout_reason && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Timeout reason: {selected.timeout_reason}
+              </p>
+            )}
 
             {isSelf ? (
               <p className="mt-4 text-xs text-muted-foreground">
@@ -311,10 +459,85 @@ function AdminUsers() {
                   )}
                   {selected.is_admin ? "Remove admin" : "Make admin"}
                 </Button>
+                {isTimedOut(selected) ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => void removeTimeout()}
+                    className="gap-1.5"
+                  >
+                    <CircleCheck className="size-3.5" />
+                    Remove timeout
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => {
+                      setTimeoutReason("");
+                      setTimeoutOpen(true);
+                    }}
+                    className="gap-1.5"
+                  >
+                    <Clock className="size-3.5" />
+                    Timeout
+                  </Button>
+                )}
               </div>
             )}
 
             <TechnicalDetails items={[{ label: "User UUID", value: selected.id }]} />
+          </div>
+        </div>
+      )}
+
+      {selected && timeoutOpen && (
+        <div
+          className="fixed inset-0 z-30 flex items-end justify-center bg-black/50 sm:items-center"
+          onClick={() => setTimeoutOpen(false)}
+        >
+          <div
+            className="w-full max-w-xs rounded-t-2xl border border-border bg-surface p-5 sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-foreground">
+              Timeout {selected.display_name || "user"}
+            </h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              They won't be able to send messages until the timeout ends.
+            </p>
+            <Input
+              value={timeoutReason}
+              onChange={(e) => setTimeoutReason(e.target.value)}
+              placeholder="Reason (optional)"
+              className="mt-3 h-8"
+            />
+            <div className="mt-3 grid grid-cols-3 gap-1.5">
+              {TIMEOUT_OPTIONS.map((option) => (
+                <Button
+                  key={option.seconds}
+                  variant="outline"
+                  size="sm"
+                  disabled={busy}
+                  onClick={() => void applyTimeout(option.seconds, option.label)}
+                  className="h-8 text-xs"
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+            <div className="mt-3 flex justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy}
+                onClick={() => setTimeoutOpen(false)}
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
         </div>
       )}

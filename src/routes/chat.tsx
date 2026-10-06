@@ -3,6 +3,8 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Bug, Gamepad2, Hash, LogOut, Menu, Search, Settings, Shield, Users } from "lucide-react";
 import { toast } from "sonner";
+import { CallButton } from "@/components/call/CallButton";
+import { CallOverlay } from "@/components/call/CallOverlay";
 import { Composer } from "@/components/chat/Composer";
 import { GamesAnnouncementDialog } from "@/components/chat/GamesAnnouncementDialog";
 import { MessageBubble } from "@/components/chat/MessageBubble";
@@ -13,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
+import { useCall } from "@/hooks/use-call";
 import { checkIsAdmin } from "@/lib/admin";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -923,6 +926,15 @@ function ChatPage() {
     ? profileMap.get(user.id)
     : undefined;
 
+  const call = useCall(activeId || null, {
+    id: user?.id ?? "",
+    name: me?.display_name || "You",
+  });
+
+  useEffect(() => {
+    if (call.error) toast.error(call.error);
+  }, [call.error]);
+
   const sidebar = (
     <div className="ios-safe-top ios-safe-bottom flex h-full flex-col bg-sidebar">
       <div className="flex items-center gap-2 border-b border-border px-4 py-4">
@@ -1190,17 +1202,26 @@ function ChatPage() {
             </p>
           </div>
 
-          {activeConversation?.kind === "group" && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-auto text-muted-foreground"
-              onClick={() => void leaveGroup()}
-            >
-              <LogOut className="mr-1.5 size-4" />
-              Leave group
-            </Button>
-          )}
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <CallButton
+              onJoin={() => void call.joinCall()}
+              joining={call.joining}
+              inCall={call.inCall}
+              disabled={!activeId}
+            />
+
+            {activeConversation?.kind === "group" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                onClick={() => void leaveGroup()}
+              >
+                <LogOut className="mr-1.5 size-4" />
+                Leave group
+              </Button>
+            )}
+          </div>
         </header>
 
         <div
@@ -1329,6 +1350,8 @@ function ChatPage() {
           }
         />
       </main>
+
+      <CallOverlay call={call} conversationTitle={activeTitle} />
     </div>
   );
 }

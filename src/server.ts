@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { handleModerateRoute, handleSendMessageRoute } from "./lib/serverModeration";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -46,6 +47,21 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    const url = new URL(request.url);
+    if (url.pathname === "/api/moderate" || url.pathname === "/api/send-message") {
+      try {
+        return url.pathname === "/api/moderate"
+          ? await handleModerateRoute(request)
+          : await handleSendMessageRoute(request);
+      } catch (error) {
+        console.error(error);
+        return new Response(JSON.stringify({ error: "Internal server error" }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);

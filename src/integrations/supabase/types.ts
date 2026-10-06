@@ -159,6 +159,10 @@ export type Database = {
           id: string
           is_admin: boolean
           last_seen: string
+          last_strike_at: string | null
+          moderation_strikes: number
+          timeout_reason: string | null
+          timeout_until: string | null
           updated_at: string
         }
         Insert: {
@@ -169,6 +173,10 @@ export type Database = {
           id: string
           is_admin?: boolean
           last_seen?: string
+          last_strike_at?: string | null
+          moderation_strikes?: number
+          timeout_reason?: string | null
+          timeout_until?: string | null
           updated_at?: string
         }
         Update: {
@@ -179,6 +187,10 @@ export type Database = {
           id?: string
           is_admin?: boolean
           last_seen?: string
+          last_strike_at?: string | null
+          moderation_strikes?: number
+          timeout_reason?: string | null
+          timeout_until?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -186,20 +198,77 @@ export type Database = {
       chat_settings: {
         Row: {
           id: boolean
+          ai_moderation_enabled: boolean
           character_limit: number
           keyword_moderation_enabled: boolean
+          moderation_model: string
+          moderation_system_prompt: string
         }
         Insert: {
           id?: boolean
+          ai_moderation_enabled?: boolean
           character_limit?: number
           keyword_moderation_enabled?: boolean
+          moderation_model?: string
+          moderation_system_prompt?: string
         }
         Update: {
           id?: boolean
+          ai_moderation_enabled?: boolean
           character_limit?: number
           keyword_moderation_enabled?: boolean
+          moderation_model?: string
+          moderation_system_prompt?: string
         }
         Relationships: []
+      }
+      moderation_log: {
+        Row: {
+          action: string | null
+          body: string | null
+          conversation_id: string | null
+          created_at: string
+          id: string
+          reason: string | null
+          user_id: string
+          verdict: string
+        }
+        Insert: {
+          action?: string | null
+          body?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          user_id: string
+          verdict?: string
+        }
+        Update: {
+          action?: string | null
+          body?: string | null
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          user_id?: string
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_log_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_log_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       blocked_keywords: {
         Row: {
@@ -237,6 +306,10 @@ export type Database = {
       admin_set_is_admin: {
         Args: { _target: string; _value: boolean }
         Returns: undefined
+      }
+      record_moderation_block: {
+        Args: { p_body: string; p_conversation_id: string; p_reason: string }
+        Returns: Json
       }
     }
     Enums: {
