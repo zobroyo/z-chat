@@ -82,3 +82,5 @@ All changes to ZChat since the original build (`b265943` — "CHECKPOINT BEFORE 
 - `zchat-app.service` (Node) with `Restart=always`, enabled at boot; LAN access on `10.10.0.13:1298`.
 - Daily 04:30 Google Drive backup of the box via rclone (`backup.timer`).
 - Measured Ollama verdict: ~520–580 ms warm; Supabase round-trip from the box: ~360 ms — these two set the ~0.9 s floor for AI-checked messages.
+
+<!-- webhook pipeline test -->
