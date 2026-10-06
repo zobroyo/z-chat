@@ -11,6 +11,7 @@ export type Profile = {
   display_name: string;
   avatar_url: string | null;
   last_seen: string;
+  banned: boolean;
 };
 
 export type Conversation = {
@@ -69,7 +70,7 @@ export function dmKeyFor(a: string, b: string) {
 export async function fetchProfiles() {
   const { data, error } = await supabase
     .from("profiles")
-    .select("id, display_name, avatar_url, last_seen")
+    .select("id, display_name, avatar_url, last_seen, banned")
     .order("display_name");
   if (error) throw error;
   return (data ?? []) as Profile[];
@@ -212,6 +213,7 @@ export async function sendMessage(input: {
 
   const payload = (await res.json().catch(() => null)) as {
     error?: string;
+    banned?: boolean;
     timeout_until?: string | null;
     message?: Message;
   } | null;
@@ -219,7 +221,9 @@ export async function sendMessage(input: {
   if (!res.ok) {
     const error = new Error(payload?.error || "Message blocked") as Error & {
       timeoutUntil?: unknown;
+      banned?: boolean;
     };
+    if (payload?.banned) error.banned = true;
     if (payload?.timeout_until) error.timeoutUntil = payload.timeout_until;
     throw error;
   }

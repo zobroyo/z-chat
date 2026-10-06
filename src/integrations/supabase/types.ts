@@ -152,6 +152,7 @@ export type Database = {
           avatar_url: string | null;
           banned: boolean;
           created_at: string;
+          device_fingerprint: string | null;
           display_name: string;
           id: string;
           is_admin: boolean;
@@ -166,6 +167,7 @@ export type Database = {
           avatar_url?: string | null;
           banned?: boolean;
           created_at?: string;
+          device_fingerprint?: string | null;
           display_name?: string;
           id: string;
           is_admin?: boolean;
@@ -180,6 +182,7 @@ export type Database = {
           avatar_url?: string | null;
           banned?: boolean;
           created_at?: string;
+          device_fingerprint?: string | null;
           display_name?: string;
           id?: string;
           is_admin?: boolean;
@@ -291,6 +294,30 @@ export type Database = {
         };
         Relationships: [];
       };
+      banned_appeals: {
+        Row: {
+          created_at: string;
+          id: string;
+          message: string;
+          resolved: boolean;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          message: string;
+          resolved?: boolean;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          message?: string;
+          resolved?: boolean;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;
@@ -302,6 +329,10 @@ export type Database = {
       };
       admin_set_is_admin: {
         Args: { _target: string; _value: boolean };
+        Returns: undefined;
+      };
+      backfill_device_fingerprint: {
+        Args: { p_fingerprint: string };
         Returns: undefined;
       };
       record_moderation_block: {

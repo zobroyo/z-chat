@@ -12,6 +12,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
 import { displayNameSchema } from "@/lib/chat";
+import { getDeviceFingerprint } from "@/lib/fingerprint";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -105,11 +106,18 @@ function AuthPage() {
 
     setBusy(true);
 
+    // Device fingerprint lets handle_new_user() auto-ban new accounts created
+    // from the browser of an already-banned account (no IP addresses used).
+    const fingerprint = await getDeviceFingerprint();
+
     const { data, error } = await supabase.auth.signUp({
       email: email.data,
       password: password.data,
       options: {
-        data: { display_name: parsedName.data },
+        data: {
+          display_name: parsedName.data,
+          ...(fingerprint ? { device_fingerprint: fingerprint } : {}),
+        },
         emailRedirectTo: `${window.location.origin}/chat`,
       },
     });

@@ -658,7 +658,7 @@ export async function handleSendMessageRoute(request: Request): Promise<Response
       throw new Error("Profile not found");
     }
 
-    if (profile.banned) return json({ error: "You are banned" }, 403, request);
+    if (profile.banned) return json({ error: "You are banned", banned: true }, 403, request);
 
     if (profile.timeout_until) {
       const until = new Date(profile.timeout_until);
@@ -714,7 +714,7 @@ export async function handleSendMessageRoute(request: Request): Promise<Response
           .select("banned, timeout_until, timeout_reason")
           .eq("id", user.id)
           .single();
-        if (fresh?.banned) return json({ error: "You are banned" }, 403, request);
+        if (fresh?.banned) return json({ error: "You are banned", banned: true }, 403, request);
         if (fresh?.timeout_until && new Date(fresh.timeout_until).getTime() > Date.now()) {
           return json(
             {

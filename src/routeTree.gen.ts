@@ -15,6 +15,7 @@ import { Route as ChatRouteImport } from './routes/chat'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RecoveryRouteImport } from './routes/recovery'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
+import { Route as AdminAppealsRouteImport } from './routes/admin.appeals'
 import { Route as AdminConversationsRouteImport } from './routes/admin.conversations'
 import { Route as AdminMessagesRouteImport } from './routes/admin.messages'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
@@ -51,6 +52,11 @@ const RecoveryRoute = RecoveryRouteImport.update({
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAppealsRoute = AdminAppealsRouteImport.update({
+  id: '/appeals',
+  path: '/appeals',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminConversationsRoute = AdminConversationsRouteImport.update({
@@ -95,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
+  '/admin/appeals': typeof AdminAppealsRoute
   '/admin/conversations': typeof AdminConversationsRouteWithChildren
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -109,6 +116,7 @@ export interface FileRoutesByTo {
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
+  '/admin/appeals': typeof AdminAppealsRoute
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -124,6 +132,7 @@ export interface FileRoutesById {
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
+  '/admin/appeals': typeof AdminAppealsRoute
   '/admin/conversations': typeof AdminConversationsRouteWithChildren
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -141,6 +150,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/profile'
     | '/recovery'
+    | '/admin/appeals'
     | '/admin/conversations'
     | '/admin/messages'
     | '/admin/settings'
@@ -155,6 +165,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/profile'
     | '/recovery'
+    | '/admin/appeals'
     | '/admin/messages'
     | '/admin/settings'
     | '/admin/users'
@@ -169,6 +180,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/profile'
     | '/recovery'
+    | '/admin/appeals'
     | '/admin/conversations'
     | '/admin/messages'
     | '/admin/settings'
@@ -230,6 +242,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/appeals': {
+      id: '/admin/appeals'
+      path: '/appeals'
+      fullPath: '/admin/appeals'
+      preLoaderRoute: typeof AdminAppealsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/conversations': {
@@ -298,6 +317,7 @@ const AdminConversationsRouteWithChildren =
   AdminConversationsRoute._addFileChildren(AdminConversationsRouteChildren)
 
 interface AdminRouteChildren {
+  AdminAppealsRoute: typeof AdminAppealsRoute
   AdminConversationsRoute: typeof AdminConversationsRouteWithChildren
   AdminMessagesRoute: typeof AdminMessagesRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -306,6 +326,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAppealsRoute: AdminAppealsRoute,
   AdminConversationsRoute: AdminConversationsRouteWithChildren,
   AdminMessagesRoute: AdminMessagesRoute,
   AdminSettingsRoute: AdminSettingsRoute,

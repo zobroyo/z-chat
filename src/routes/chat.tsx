@@ -10,11 +10,13 @@ import {
   Search,
   Settings,
   Shield,
+  ShieldAlert,
   ShieldCheck,
   ShieldOff,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
+import { BanAppealDialog } from "@/components/chat/BanAppealDialog";
 import { CallButton } from "@/components/call/CallButton";
 import { CallOverlay } from "@/components/call/CallOverlay";
 import { Composer } from "@/components/chat/Composer";
@@ -54,6 +56,7 @@ import {
   type Profile,
 } from "@/lib/chat";
 import { uploadChatImage } from "@/lib/media";
+import { recordDeviceFingerprint } from "@/lib/fingerprint";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/chat")({
@@ -120,6 +123,7 @@ function ChatPage() {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [banAppealOpen, setBanAppealOpen] = useState(false);
   const isNearBottomRef = useRef(true);
   const messageEntryTimersRef = useRef(new Map<string, number>());
   const conversationSwitchTimerRef = useRef<number | null>(null);
@@ -390,6 +394,7 @@ function ChatPage() {
     void reload();
     void deliverPendingMessages(user.id).catch(() => undefined);
     void touchPresence(user.id);
+    void recordDeviceFingerprint();
 
     const presence = window.setInterval(() => void touchPresence(user.id), 45_000);
 
@@ -971,6 +976,12 @@ function ChatPage() {
         setMessages((current) => current.filter((item) => item.id !== finalTempId));
       }
 
+      // Make the ban obvious instead of a generic "failed to send": open the
+      // appeal dialog (the one channel that stays open while banned).
+      if (error instanceof Error && (error as Error & { banned?: boolean }).banned) {
+        setBanAppealOpen(true);
+      }
+
       throw error;
     }
   };
@@ -1180,6 +1191,11 @@ function ChatPage() {
   return (
     <div className="chat-app-shell flex overflow-hidden">
       <GamesAnnouncementDialog userId={user?.id ?? ""} />
+      <BanAppealDialog
+        open={banAppealOpen}
+        onOpenChange={setBanAppealOpen}
+        userId={user?.id ?? ""}
+      />
 
       <aside className="hidden w-80 shrink-0 border-r border-border md:block">{sidebar}</aside>
 
@@ -1267,6 +1283,23 @@ function ChatPage() {
             )}
           </div>
         </header>
+
+        {me?.banned && (
+          <div className="flex shrink-0 items-center gap-3 border-b border-destructive/40 bg-destructive/10 px-4 py-2.5">
+            <ShieldAlert className="size-4 shrink-0 text-destructive" />
+            <p className="min-w-0 flex-1 text-sm text-foreground">
+              Your account is banned — you can&apos;t send messages.
+            </p>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setBanAppealOpen(true)}
+              className="shrink-0"
+            >
+              Appeal ban
+            </Button>
+          </div>
+        )}
 
         <div
           ref={messageListRef}

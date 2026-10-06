@@ -6,6 +6,7 @@ import {
   Users,
   MessagesSquare,
   MessageCircle,
+  Scale,
   Settings,
   ArrowLeft,
 } from "lucide-react";
@@ -21,6 +22,7 @@ export const Route = createFileRoute("/admin")({
 const NAV = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/users", label: "Users", icon: Users },
+  { to: "/admin/appeals", label: "Appeals", icon: Scale },
   { to: "/admin/conversations", label: "Conversations", icon: MessagesSquare },
   { to: "/admin/messages", label: "Messages", icon: MessageCircle },
   { to: "/admin/settings", label: "Settings", icon: Settings },
