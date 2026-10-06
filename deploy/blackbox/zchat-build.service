@@ -9,7 +9,6 @@ User=zchat
 Group=zchat
 WorkingDirectory=/srv/zchat/src
 Environment=HOME=/srv/zchat
-Environment=NODE_ENV=development
 Environment=NITRO_PRESET=node-server
 Environment=VITE_SUPABASE_URL=https://dwstivxwyqdogzgxnidm.supabase.co
 Environment=VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_1ToX7uWyKMM_cqFjdWpGmQ_tQak-JF3
