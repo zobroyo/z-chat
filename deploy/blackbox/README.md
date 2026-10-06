@@ -21,6 +21,35 @@ everything else lives on Supabase. Only the AI moderation model runs locally.
   `VITE_SUPABASE_PUBLISHABLE_KEY` set, copy `.output/` to
   `/home/user/zchat-app/.output`, then `systemctl restart zchat-app`.
 
+## Auto-deploy (optional, install once)
+
+Instead of deploying by hand every time, the box can watch `origin/main` and
+redeploy itself when a new commit lands. On the box, after pulling this commit:
+
+```
+cd /home/user/zchat
+git pull origin main
+sudo bash deploy/blackbox/install-auto-deploy.sh
+```
+
+That installs and starts `zchat-deploy.timer`, which runs every 2 minutes:
+
+1. `deploy/blackbox/auto-deploy.sh` fetches `origin/main`;
+2. if the commit changed, it resets the tree, runs `npm install` + `npm run build`;
+3. publishes `.output/` to `/home/user/zchat-app/.output`;
+4. `systemctl restart zchat-app`.
+
+Notes:
+
+- The install creates `/etc/sudoers.d/zchat-deploy` granting `user` passwordless
+  `systemctl restart zchat-app` (and nothing else).
+- It is a normal user-level systemd timer; it does not touch Ollama or any other
+  service. Untracked files such as `.env` are preserved (only tracked files are
+  reset).
+- Manage it with `journalctl -u zchat-deploy -f`,
+  `sudo systemctl start zchat-deploy.service` (deploy now), or
+  `sudo systemctl disable --now zchat-deploy.timer` (stop).
+
 ## Ollama (RTX 4060)
 
 - Model: `llama3.1:8b`, pinned with `keep_alive=-1`.

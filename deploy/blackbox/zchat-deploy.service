@@ -1,0 +1,18 @@
+[Unit]
+Description=ZChat auto-deploy (pull + build + restart)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+Group=__USER__
+WorkingDirectory=__REPO_DIR__
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=ZCHAT_REPO_DIR=__REPO_DIR__
+Environment=ZCHAT_APP_DIR=__APP_DIR__
+Environment=ZCHAT_APP_SERVICE=__APP_SERVICE__
+Environment=ZCHAT_BRANCH=__BRANCH__
+ExecStart=/bin/bash __REPO_DIR__/deploy/blackbox/auto-deploy.sh
+# A cold build (npm install + vite build) can take a while on the box.
+TimeoutStartSec=20min

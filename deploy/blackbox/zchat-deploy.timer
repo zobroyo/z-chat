@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ZChat auto-deploy every few minutes
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=2min
+RandomizedDelaySec=20
+Persistent=true
+
+[Install]
+WantedBy=timers.target
