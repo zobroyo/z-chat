@@ -68,7 +68,7 @@ sysctl --system >/dev/null 2>&1 || true
 
 echo "==> deploy webhook secret"
 if [[ ! -s /srv/zchat/deploy-hook.secret ]]; then
-  (umask 177; openssl rand -hex 32 > /srv/zchat/deploy-hook.secret)
+  (umask 177; printf 'DEPLOY_HOOK_SECRET=%s\n' "$(openssl rand -hex 32)" > /srv/zchat/deploy-hook.secret)
 fi
 chown root:root /srv/zchat/deploy-hook.secret
 chmod 600 /srv/zchat/deploy-hook.secret
@@ -102,6 +102,6 @@ and the health check runs every 2 minutes.
 Add the webhook in GitHub: repo -> Settings -> Webhooks -> Add webhook
   Payload URL:  https://z-chat.men/api/deploy-hook
   Content type: application/json
-  Secret:       $(cat /srv/zchat/deploy-hook.secret)
+  Secret:       $(sed -n 's/^DEPLOY_HOOK_SECRET=//p' /srv/zchat/deploy-hook.secret)
   Events:       Just the push event
 EOF
