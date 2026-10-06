@@ -2,7 +2,18 @@ import { lookup as dnsLookup } from "node:dns/promises";
 import { isIP } from "node:net";
 import https from "node:https";
 import http from "node:http";
-import type { IncomingMessage, ServerResponse } from "node:http";
+
+/*
+ * Link preview metadata for the chat's rich preview cards.
+ *
+ * This was a Vercel serverless function (api/link-preview.ts) before the site
+ * moved to the black box; it now runs as a plain route in the Nitro server so
+ * previews keep working without Vercel.
+ *
+ * SSRF protection: the target hostname is resolved up front and every address
+ * must be public; the request is pinned to the resolved address so a DNS
+ * rebind between check and connect cannot redirect it somewhere internal.
+ */
 
 const MAX_HTML_BYTES = 1024 * 1024;
 const MAX_REDIRECTS = 3;
@@ -304,21 +315,32 @@ async function fetchPreview(input: string): Promise<Preview | null> {
   return null;
 }
 
-export default async function handler(request: IncomingMessage, response: ServerResponse) {
-  response.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=600");
-  response.setHeader("X-Content-Type-Options", "nosniff");
+function jsonPreview(
+  body: { preview: Preview | null },
+  status: number,
+  baseHeaders: Record<string, string>,
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...baseHeaders, "Content-Type": "application/json; charset=utf-8" },
+  });
+}
+
+export async function handleLinkPreviewRoute(request: Request): Promise<Response> {
+  const baseHeaders = {
+    "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+    "X-Content-Type-Options": "nosniff",
+  };
+
   if (request.method !== "GET") {
-    response.setHeader("Allow", "GET");
-    response.writeHead(405).end();
-    return;
+    return new Response(null, { status: 405, headers: { ...baseHeaders, Allow: "GET" } });
   }
-  const input = new URL(request.url ?? "/", "https://zchat.invalid").searchParams.get("url");
+
+  const input = new URL(request.url).searchParams.get("url");
   if (!input || input.length > 2048) {
-    response
-      .writeHead(400, { "Content-Type": "application/json" })
-      .end(JSON.stringify({ preview: null }));
-    return;
+    return jsonPreview({ preview: null }, 400, baseHeaders);
   }
+
   let url: URL;
   try {
     url = new URL(input);
@@ -326,10 +348,7 @@ export default async function handler(request: IncomingMessage, response: Server
       throw new Error("Invalid URL");
     url.hash = "";
   } catch {
-    response
-      .writeHead(400, { "Content-Type": "application/json" })
-      .end(JSON.stringify({ preview: null }));
-    return;
+    return jsonPreview({ preview: null }, 400, baseHeaders);
   }
 
   const cached = cache.get(url.href);
@@ -346,6 +365,6 @@ export default async function handler(request: IncomingMessage, response: Server
       if (oldest) cache.delete(oldest);
     }
   }
-  response.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-  response.end(JSON.stringify({ preview }));
+
+  return jsonPreview({ preview }, 200, baseHeaders);
 }

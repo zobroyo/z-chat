@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { handleLinkPreviewRoute } from "./lib/serverLinkPreview";
 import { handleModerateRoute, handleSendMessageRoute } from "./lib/serverModeration";
 
 type ServerEntry = {
@@ -48,6 +49,18 @@ function isH3SwallowedErrorBody(body: string): boolean {
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const url = new URL(request.url);
+    if (url.pathname === "/api/link-preview") {
+      try {
+        return await handleLinkPreviewRoute(request);
+      } catch (error) {
+        console.error(error);
+        return new Response(JSON.stringify({ preview: null }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+
     if (url.pathname === "/api/moderate" || url.pathname === "/api/send-message") {
       try {
         return url.pathname === "/api/moderate"

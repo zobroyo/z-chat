@@ -1,0 +1,37 @@
+[Unit]
+Description=Z Chat build (npm install + vite build, sandboxed)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=zchat
+Group=zchat
+WorkingDirectory=/srv/zchat/src
+Environment=HOME=/srv/zchat
+Environment=NODE_ENV=development
+Environment=NITRO_PRESET=node-server
+Environment=VITE_SUPABASE_URL=https://dwstivxwyqdogzgxnidm.supabase.co
+Environment=VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_1ToX7uWyKMM_cqFjdWpGmQ_tQak-JF3
+Environment=NPM_CONFIG_AUDIT=false
+Environment=NPM_CONFIG_FUND=false
+Environment=NPM_CONFIG_PACKAGE_LOCK=false
+TimeoutStartSec=0
+
+# The build executes repository code (npm lifecycle scripts, vite plugins).
+# It runs as the locked-down `zchat` user with no access to the host user's
+# home, root, or system files; it can only write inside /srv/zchat.
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+ReadWritePaths=/srv/zchat
+
+ExecStart=/usr/bin/npm install
+ExecStart=/usr/bin/npm run build

@@ -1,92 +1,103 @@
-# Black box deployment notes (AI moderation)
+# Z Chat on the black box
 
-The chat app is served from the black box through the Cloudflare tunnel;
-everything else lives on Supabase. Only the AI moderation model runs locally.
+The site at **https://z-chat.men** is served from the black box. Everything
+else - auth, messages, storage, settings - lives on Supabase. The only local
+service is the AI moderation model (Ollama, RTX 4060). The Cloudflare tunnel
+runs in Docker on the same box.
 
-## Hosting
+## How deploys work (no SSH needed)
 
-- Built app lives in `/home/user/zchat-app` and runs via
-  `/usr/bin/node .output/server/index.mjs` under `zchat-app.service`
-  (Restart=always, enabled at boot). Unit file is next to this README.
-- cloudflared runs in Docker (`--network host` is required so the container can
-  reach `localhost:1298`):
-
-  ```
-  docker run -d --name zchat-tunnel --restart unless-stopped --network host \
-    cloudflare/cloudflared:latest tunnel --no-autoupdate run --token <TOKEN>
-  ```
-
-  Dashboard ingress: `z-chat.men` -> `http://localhost:1298`.
-- Rebuild + deploy: `npm run build` with `VITE_SUPABASE_URL` and
-  `VITE_SUPABASE_PUBLISHABLE_KEY` set, copy `.output/` to
-  `/home/user/zchat-app/.output`, then `systemctl restart zchat-app`.
-
-## Auto-deploy (optional, install once)
-
-Instead of deploying by hand every time, the box can watch `origin/main` and
-redeploy itself when a new commit lands. On the box, after pulling this commit:
+Deploys are **pull-based**: the box checks GitHub every 5 minutes and rebuilds
+itself when `main` changes.
 
 ```
-cd /home/user/zchat
-git pull origin main
-sudo bash deploy/blackbox/install-auto-deploy.sh
+collaborator pushes to main  ->  GitHub
+        |
+        v  (every 5 min, outbound only)
+zchat-deploy.timer -> /usr/local/sbin/zchat-deploy (root, fixed steps)
+        |                |
+        |                +-- git fetch/reset as `zchat`
+        |                +-- zchat-build.service  (npm install + build, sandboxed)
+        |                +-- publish .output -> /srv/zchat/app + restart
+        v
+zchat-app.service  (Node on :1298, sandboxed)  <-  cloudflared tunnel
 ```
 
-That installs and starts `zchat-deploy.timer`, which runs every 2 minutes:
+- Nobody (including collaborators) gets SSH or any inbound access to the box.
+- A failed build is logged and retried on the next run; the currently deployed
+  build keeps serving.
+- The last successfully deployed revision is tracked in
+  `/srv/zchat/state/deployed-rev`; two deploys can never overlap (flock).
+- Log: `/srv/zchat/deploy.log`. Run now: `systemctl start zchat-deploy.service`.
 
-1. `deploy/blackbox/auto-deploy.sh` fetches `origin/main`;
-2. if the commit changed, it resets the tree, runs `npm install` + `npm run build`;
-3. publishes `.output/` to `/home/user/zchat-app/.output`;
-4. `systemctl restart zchat-app`.
+> Earlier revisions of this folder contained `auto-deploy.sh` /
+> `install-auto-deploy.sh`, which built and deployed as the login user with
+> `sudo`. They were replaced by this sandboxed pipeline - repository code must
+> never run with that level of access.
 
-Notes:
+## Security model - repository code cannot harm the machine
 
-- The install creates `/etc/sudoers.d/zchat-deploy` granting `user` passwordless
-  `systemctl restart zchat-app` (and nothing else).
-- It is a normal user-level systemd timer; it does not touch Ollama or any other
-  service. Untracked files such as `.env` are preserved (only tracked files are
-  reset).
-- Manage it with `journalctl -u zchat-deploy -f`,
-  `sudo systemctl start zchat-deploy.service` (deploy now), or
-  `sudo systemctl disable --now zchat-deploy.timer` (stop).
+Everything from git runs as the dedicated `zchat` system user with systemd
+sandboxing, so collaborator code cannot reach the host:
 
-## Ollama (RTX 4060)
+| Protection | Effect |
+| --- | --- |
+| `User=zchat` (nologin, own home) | no access to `/home/user`, no sudo, no SSH keys |
+| `ProtectHome=yes` | `/home`, `/root` and `/run/user` are invisible |
+| `ProtectSystem=strict` | whole filesystem read-only (build can only write `/srv/zchat`) |
+| `NoNewPrivileges`, `CapabilityBoundingSet=` | cannot gain or keep privileges |
+| `PrivateTmp`, `ProtectKernel*`, `LockPersonality` | isolated temp, kernel and namespaces |
+| Root deploy wrapper | never runs repo code; only fixed `git`/`systemctl`/`cp` steps |
 
-- Model: `llama3.1:8b`, pinned with `keep_alive=-1`.
-- Drop-in: `/etc/systemd/system/ollama.service.d/keepalive.conf`
-  (OLLAMA_KEEP_ALIVE=-1, OLLAMA_FLASH_ATTENTION=1, OLLAMA_KV_CACHE_TYPE=q8_0,
-  OLLAMA_NUM_PARALLEL=1)
-- The app requests `num_ctx=2048`; the keepalive ping must use the same value
-  or Ollama reloads the model on every context change.
-- Keepalive timer (`ollama-keepalive.timer`, every 5 min) runs
-  `/home/user/zchat/deploy/ollama-keepalive.sh` — a 1-token ping that keeps the
-  model permanently resident. The script here is the synced copy of that file.
-- Do NOT send `format: "json"` to Ollama for the moderation call: the JSON
-  grammar adds ~750ms per request. The prompt asks for JSON and the server
-  parses prose/fenced JSON tolerantly.
+The installed deploy script (`/usr/local/sbin/zchat-deploy`) is root-owned and
+is **not** updated by git - changing the deploy logic is a deliberate root-only
+action. The repo is public; the box only ever reads from it.
 
-## Latency notes (measured)
+Limits to know: app code can still call the internet (Supabase, link previews)
+and localhost Ollama, and can consume CPU/RAM while running.
 
-- Ollama warm: ~520-580ms per verdict (~230ms runner scheduling + ~240ms
-  generation + ~30ms cached prefill). The ~230ms scheduling cost is inherent to
-  Ollama 0.23.1 on this box (unchanged by NUM_PARALLEL / flash attention).
-- Supabase round-trip from the box: ~360ms. The server keeps short-lived caches
-  (settings 60s, conversation 5s, profile 15s) and takes the chat history from
-  the client so a send needs only one DB write.
-- End-to-end send (warm):
-  - greetings / DMs / AI-off groups: ~350-400ms
-  - AI-checked messages: ~850-950ms (Ollama verdict + Supabase insert, serial)
+## Components
 
-## GPU clock warning
+### zchat-app.service
+Node server for the built app (`/srv/zchat/app/.output`), listening on
+`0.0.0.0:1298` (tunnel + LAN). Restarts on failure, enabled at boot.
 
-`kryptex_kaspa/start_miner.sh` locks the memory clock to 810 MHz for mining.
-Those locks persist after the miner stops and make inference ~11x slower
-(4.8 tok/s instead of ~53 tok/s). Reset with:
+### zchat-build.service
+Runs `npm install` and `npm run build` in `/srv/zchat/src` with the Supabase
+Vite env vars and `NITRO_PRESET=node-server`. Invoked by the deploy script;
+can also be started by hand.
 
+### zchat-deploy.service + .timer
+The 5-minute GitHub polling deploy described above.
+
+### ollama-keepalive (from the AI moderation setup)
+`ollama-keepalive.timer` pings `gemma4:e2b` every 5 minutes with
+`keep_alive=-1` and `num_ctx=2048` so the moderation model stays resident.
+See `ollama-keepalive.conf` for the required Ollama drop-in
+(`OLLAMA_KEEP_ALIVE=-1`, flash attention + q8_0 KV cache, `NUM_PARALLEL=1`).
+
+### Cloudflare tunnel (Docker)
 ```
-nvidia-smi --reset-gpu-clocks
-nvidia-smi --reset-memory-clocks
+docker run -d --name zchat-tunnel --restart unless-stopped --network host \
+  cloudflare/cloudflared:latest tunnel --no-autoupdate run --token <TOKEN>
+```
+Ingress `z-chat.men` -> `http://localhost:1298` is configured dashboard-side.
+
+## Fresh install
+
+```bash
+sudo bash deploy/blackbox/install.sh
 ```
 
-If you want to mine and chat at the same time, remove the `--lock-memory-clocks`
-line from the miner start script (or stop the miner while using the AI).
+Creates the `zchat` user, clones the repo to `/srv/zchat/src`, installs the
+units, builds once, publishes to `/srv/zchat/app`, enables the app service and
+the deploy timer.
+
+## Manual operations
+
+```bash
+systemctl start zchat-deploy.service   # deploy now instead of waiting
+systemctl status zchat-deploy.timer    # is polling active?
+tail -f /srv/zchat/deploy.log          # what happened on the last deploy
+systemctl restart zchat-app.service    # restart the site
+```

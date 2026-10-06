@@ -2,6 +2,13 @@
 
 All changes to ZChat since the original build (`b265943` — "CHECKPOINT BEFORE CH", the Vercel-hosted React + Supabase app).
 
+## 2026-10-06 (deploy) — self-hosting sync + push-to-deploy + sandboxing
+
+- **Removed the last Vercel leftovers**: `/api/link-preview` is now a real route in the Nitro server (same SSRF-guarded implementation, moved to `src/lib/serverLinkPreview.ts`) so rich previews work on the black box; `api/link-preview.ts` and `vercel.json` are deleted.
+- **Push-to-deploy from GitHub**: the box polls `main` every 5 minutes and rebuilds itself (`zchat-deploy.timer`). Collaborators just push - no SSH or server access needed. Failed builds keep the previous version serving.
+- **Sandboxing for collaborator code**: the build and the running app now execute as a dedicated `zchat` system user with systemd hardening (`ProtectHome`, `ProtectSystem=strict`, `NoNewPrivileges`, empty capability set, write access limited to `/srv/zchat`). The root deploy wrapper only performs fixed steps and never executes repository code as root.
+- README rewritten for the real setup (stack, features, deploy flow, security model); install/deploy scripts and units added under `deploy/blackbox/`.
+
 ## 2026-10-06 (night) — call ringtone + incoming call prompt
 
 - Incoming calls now ring: when someone starts a call in the open conversation, the recipient hears `ringtone.mp3` (looped) and gets an Accept / Decline card with the caller's name.
