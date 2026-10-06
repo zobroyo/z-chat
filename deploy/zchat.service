@@ -8,9 +8,9 @@ Type=simple
 User=user
 Group=user
 WorkingDirectory=/home/user/zchat
-Environment=ZCHAT_PORT=8790
+Environment=ZCHAT_PORT=1298
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/home/user/zchat/.venv/bin/hypercorn --bind 0.0.0.0:8790 --workers 1 server:app
+ExecStart=/home/user/zchat/.venv/bin/hypercorn --bind 0.0.0.0:1298 --workers 1 server:app
 Restart=always
 RestartSec=3
 TimeoutStopSec=10
