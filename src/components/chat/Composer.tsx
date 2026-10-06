@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ImagePlus, Loader2, SendHorizontal, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Clock, ImagePlus, Loader2, SendHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,26 +12,76 @@ type ReplyingTo = {
   snippet: string;
 } | null;
 
+type MentionOption = { kind: "person"; id: string; name: string } | { kind: "time"; label: string };
+
 type Props = {
   onSend: (body: string, file: File | null) => Promise<void>;
   onTypingChange?: (isTyping: boolean) => void;
   placeholder?: string;
   replyingTo?: ReplyingTo;
   onCancelReply?: () => void;
+  mentionCandidates?: Array<{ id: string; name: string }>;
 };
 
-export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCancelReply }: Props) {
+export function Composer({
+  onSend,
+  onTypingChange,
+  placeholder,
+  replyingTo,
+  onCancelReply,
+  mentionCandidates = [],
+}: Props) {
   const [value, setValue] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [visibleReply, setVisibleReply] = useState<ReplyingTo>(replyingTo ?? null);
   const [replyClosing, setReplyClosing] = useState(false);
+  const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewUrlRef = useRef<string | null>(null);
   const replySenderName = replyingTo?.senderName;
   const replySnippet = replyingTo?.snippet;
   const replyPreview = replyingTo ?? visibleReply;
+
+  const mentionOptions = useMemo<MentionOption[]>(() => {
+    const query = (mention?.query ?? "").toLowerCase();
+    const people = mentionCandidates
+      .filter((candidate) => candidate.name.toLowerCase().includes(query))
+      .slice(0, 6)
+      .map((candidate) => ({ kind: "person" as const, id: candidate.id, name: candidate.name }));
+    const time =
+      mention && "time".startsWith(query) && query.length <= 4
+        ? [{ kind: "time" as const, label: "Time" }]
+        : [];
+    return [...people, ...time];
+  }, [mentionCandidates, mention]);
+
+  const detectMention = (text: string, caret: number) => {
+    const before = text.slice(0, caret);
+    const match = /(^|\s)@([^\s@]{0,32})$/.exec(before);
+    if (!match) return null;
+    const query = match[2] ?? "";
+    return { query, start: caret - query.length - 1 };
+  };
+
+  const insertMention = (option: MentionOption) => {
+    const textarea = textareaRef.current;
+    if (!textarea || !mention) return;
+    const token =
+      option.kind === "time" ? `<t:${Math.floor(Date.now() / 1000)}>` : `<@${option.id}>`;
+    const caret = textarea.selectionStart ?? value.length;
+    const next = `${value.slice(0, mention.start)}${token} ${value.slice(caret)}`;
+    setValue(next);
+    setMention(null);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const position = mention.start + token.length + 1;
+      textarea.setSelectionRange(position, position);
+    });
+  };
 
   useEffect(() => {
     if (replySenderName !== undefined && replySnippet !== undefined) {
@@ -60,13 +110,17 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  useEffect(() => () => {
-    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+    },
+    [],
+  );
 
   const submit = async () => {
     if (sending) return;
     if (!value.trim() && !file) return;
+    setMention(null);
 
     const body = value;
     const pickedFile = file;
@@ -90,7 +144,7 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
   };
 
   return (
-    <div className="ios-safe-bottom shrink-0 border-t border-border bg-surface/80 px-3 py-3 backdrop-blur">
+    <div className="ios-safe-bottom relative shrink-0 border-t border-border bg-surface/80 px-3 py-3 backdrop-blur">
       {replyPreview && (
         <div
           className={cn(
@@ -126,6 +180,43 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
           >
             <X className="size-3" />
           </button>
+        </div>
+      )}
+
+      {mention && mentionOptions.length > 0 && (
+        <div className="absolute bottom-full left-3 z-20 mb-2 w-64 overflow-hidden rounded-xl border border-border bg-surface-2 shadow-xl">
+          <p className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+            {mentionOptions.some((option) => option.kind === "time") ? "Members & Time" : "Members"}
+          </p>
+          {mentionOptions.map((option, index) => (
+            <button
+              key={option.kind === "time" ? "time" : option.id}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => insertMention(option)}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm",
+                index === mentionIndex
+                  ? "bg-primary/15 text-foreground"
+                  : "text-muted-foreground hover:bg-surface",
+              )}
+            >
+              {option.kind === "time" ? (
+                <>
+                  <Clock className="size-3.5" />
+                  <span>@time</span>
+                  <span className="text-[11px] text-muted-foreground">live timestamp</span>
+                </>
+              ) : (
+                <>
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
+                    {option.name.charAt(0).toUpperCase()}
+                  </span>
+                  <span className="truncate">{option.name}</span>
+                </>
+              )}
+            </button>
+          ))}
         </div>
       )}
 
@@ -169,18 +260,47 @@ export function Composer({ onSend, onTypingChange, placeholder, replyingTo, onCa
         </Button>
 
         <Textarea
+          ref={textareaRef}
           value={value}
           onChange={(event) => {
             const nextValue = event.target.value;
             setValue(nextValue);
             onTypingChange?.(Boolean(nextValue.trim()));
+            const caret = event.target.selectionStart ?? nextValue.length;
+            setMention(detectMention(nextValue, caret));
+            setMentionIndex(0);
           }}
           onKeyDown={(event) => {
+            if (mention && mentionOptions.length > 0) {
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setMentionIndex((index) => (index + 1) % mentionOptions.length);
+                return;
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setMentionIndex(
+                  (index) => (index - 1 + mentionOptions.length) % mentionOptions.length,
+                );
+                return;
+              }
+              if (event.key === "Enter" || event.key === "Tab") {
+                event.preventDefault();
+                insertMention(mentionOptions[mentionIndex] ?? mentionOptions[0]!);
+                return;
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setMention(null);
+                return;
+              }
+            }
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
               void submit();
             }
           }}
+          onBlur={() => setMention(null)}
           rows={1}
           maxLength={4000}
           placeholder={placeholder ?? "Write a message"}

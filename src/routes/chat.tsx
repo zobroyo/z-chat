@@ -167,12 +167,15 @@ function ChatPage() {
     });
   }, []);
 
-  useEffect(() => () => {
-    messageEntryTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    if (conversationSwitchTimerRef.current !== null) {
-      window.clearTimeout(conversationSwitchTimerRef.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      messageEntryTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      if (conversationSwitchTimerRef.current !== null) {
+        window.clearTimeout(conversationSwitchTimerRef.current);
+      }
+    },
+    [],
+  );
 
   activeIdRef.current = activeId;
   profilesRef.current = profiles;
@@ -234,47 +237,71 @@ function ChatPage() {
     };
   }, []);
 
-  const queueReceipt = useCallback((messageId: string, conversationId: string, read: boolean) => {
-    if (messageId.startsWith("temp-")) return;
-    const queued = receiptQueueRef.current.get(messageId);
-    receiptQueueRef.current.set(messageId, {
-      conversationId,
-      read: read || queued?.read === true,
-    });
-    if (receiptTimerRef.current !== null) return;
-    receiptTimerRef.current = window.setTimeout(() => {
-      receiptTimerRef.current = null;
-      const batch = [...receiptQueueRef.current.entries()];
-      receiptQueueRef.current.clear();
-      const byConversation = new Map<string, { delivered: string[]; read: string[] }>();
-      for (const [id, value] of batch) {
-        const rows = byConversation.get(value.conversationId) ?? { delivered: [], read: [] };
-        if (value.read && value.conversationId === activeIdRef.current && document.visibilityState === "visible" && document.hasFocus()) {
-          rows.read.push(id);
-        } else {
-          rows.delivered.push(id);
+  const queueReceipt = useCallback(
+    (messageId: string, conversationId: string, read: boolean) => {
+      if (messageId.startsWith("temp-")) return;
+      const queued = receiptQueueRef.current.get(messageId);
+      receiptQueueRef.current.set(messageId, {
+        conversationId,
+        read: read || queued?.read === true,
+      });
+      if (receiptTimerRef.current !== null) return;
+      receiptTimerRef.current = window.setTimeout(() => {
+        receiptTimerRef.current = null;
+        const batch = [...receiptQueueRef.current.entries()];
+        receiptQueueRef.current.clear();
+        const byConversation = new Map<string, { delivered: string[]; read: string[] }>();
+        for (const [id, value] of batch) {
+          const rows = byConversation.get(value.conversationId) ?? { delivered: [], read: [] };
+          if (
+            value.read &&
+            value.conversationId === activeIdRef.current &&
+            document.visibilityState === "visible" &&
+            document.hasFocus()
+          ) {
+            rows.read.push(id);
+          } else {
+            rows.delivered.push(id);
+          }
+          byConversation.set(value.conversationId, rows);
         }
-        byConversation.set(value.conversationId, rows);
-      }
-      for (const [conversationId, ids] of byConversation) {
-        if (ids.delivered.length) {
-          if (user) {
-            const deliveredAt = new Date().toISOString();
-            void markMessagesDelivered(conversationId, user.id, ids.delivered)
-              .then(() => setMessageReceipts((current) => mergeReceipts(current, ids.delivered, user.id, conversationId, deliveredAt, false)))
+        for (const [conversationId, ids] of byConversation) {
+          if (ids.delivered.length) {
+            if (user) {
+              const deliveredAt = new Date().toISOString();
+              void markMessagesDelivered(conversationId, user.id, ids.delivered)
+                .then(() =>
+                  setMessageReceipts((current) =>
+                    mergeReceipts(
+                      current,
+                      ids.delivered,
+                      user.id,
+                      conversationId,
+                      deliveredAt,
+                      false,
+                    ),
+                  ),
+                )
+                .catch(() => undefined);
+            }
+          }
+          if (ids.read.length && user) {
+            const readAt = new Date().toISOString();
+            void markMessagesRead(conversationId, user.id, ids.read)
+              .then(() =>
+                setMessageReceipts((current) =>
+                  mergeReceipts(current, ids.read, user.id, conversationId, readAt, true),
+                ),
+              )
               .catch(() => undefined);
+            if (conversationId === activeIdRef.current)
+              void markConversationRead(conversationId, user.id).catch(() => undefined);
           }
         }
-        if (ids.read.length && user) {
-          const readAt = new Date().toISOString();
-          void markMessagesRead(conversationId, user.id, ids.read)
-            .then(() => setMessageReceipts((current) => mergeReceipts(current, ids.read, user.id, conversationId, readAt, true)))
-            .catch(() => undefined);
-          if (conversationId === activeIdRef.current) void markConversationRead(conversationId, user.id).catch(() => undefined);
-        }
-      }
-    }, 250);
-  }, [user]);
+      }, 250);
+    },
+    [user],
+  );
 
   const stopTyping = useCallback(() => {
     if (typingTimeoutRef.current !== null) {
@@ -315,15 +342,12 @@ function ChatPage() {
       if (event.data?.type !== "zchat:get-active-conversation") return;
 
       const conversationId =
-        document.visibilityState === "visible" && document.hasFocus()
-          ? activeIdRef.current
-          : null;
+        document.visibilityState === "visible" && document.hasFocus() ? activeIdRef.current : null;
       event.ports[0]?.postMessage({ conversationId });
     };
 
     navigator.serviceWorker?.addEventListener("message", handleWorkerMessage);
-    return () =>
-      navigator.serviceWorker?.removeEventListener("message", handleWorkerMessage);
+    return () => navigator.serviceWorker?.removeEventListener("message", handleWorkerMessage);
   }, []);
 
   useEffect(() => {
@@ -355,10 +379,7 @@ function ChatPage() {
     void deliverPendingMessages(user.id).catch(() => undefined);
     void touchPresence(user.id);
 
-    const presence = window.setInterval(
-      () => void touchPresence(user.id),
-      45_000,
-    );
+    const presence = window.setInterval(() => void touchPresence(user.id), 45_000);
 
     return () => window.clearInterval(presence);
   }, [user, reload]);
@@ -387,9 +408,7 @@ function ChatPage() {
           if (isActive) {
             animateMessageEntry(message.id);
             setMessages((current) =>
-              current.some((item) => item.id === message.id)
-                ? current
-                : [...current, message],
+              current.some((item) => item.id === message.id) ? current : [...current, message],
             );
           }
 
@@ -402,15 +421,12 @@ function ChatPage() {
           if (!isActive) {
             setUnread((current) => ({
               ...current,
-              [message.conversation_id]:
-                (current[message.conversation_id] ?? 0) + 1,
+              [message.conversation_id]: (current[message.conversation_id] ?? 0) + 1,
             }));
           }
 
           if (!isActive || document.visibilityState !== "visible") {
-            const sender = profilesRef.current.find(
-              (item) => item.id === message.sender_id,
-            );
+            const sender = profilesRef.current.find((item) => item.id === message.sender_id);
 
             const title = sender?.display_name ?? "New message";
             const body = message.body ?? "Sent a photo";
@@ -418,8 +434,6 @@ function ChatPage() {
             toast(title, {
               description: body,
             });
-
-
           }
         },
       )
@@ -431,7 +445,8 @@ function ChatPage() {
           table: "profiles",
         },
         (payload) => {
-          const profileId = (payload.new as Partial<Profile> | null)?.id ??
+          const profileId =
+            (payload.new as Partial<Profile> | null)?.id ??
             (payload.old as Partial<Profile> | null)?.id;
           if (!profileId) return;
 
@@ -448,8 +463,16 @@ function ChatPage() {
           });
         },
       )
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "conversation_members" }, () => void reload())
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "conversation_members" }, () => void reload())
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "conversation_members" },
+        () => void reload(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "conversation_members" },
+        () => void reload(),
+      )
       .subscribe();
 
     return () => {
@@ -461,36 +484,42 @@ function ChatPage() {
     if (!user || !activeId) return;
     const channel = supabase
       .channel(`z-chat-receipts-${activeId}`)
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "message_receipts",
-        filter: `conversation_id=eq.${activeId}`,
-      }, (payload) => {
-        const receipt = (payload.new ?? payload.old) as MessageReceipt;
-        if (!receipt?.message_id) return;
-        setMessageReceipts((current) => {
-          const index = current.findIndex((item) => item.message_id === receipt.message_id && item.recipient_id === receipt.recipient_id);
-          if (index < 0) return [...current, receipt];
-          const next = current.slice();
-          const previous = next[index];
-          if (!previous) return [...current, receipt];
-          next[index] = {
-            ...previous,
-            ...receipt,
-            delivered_at: receipt.delivered_at ?? previous.delivered_at,
-            read_at: receipt.read_at ?? previous.read_at,
-          };
-          return next;
-        });
-      })
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "message_receipts",
+          filter: `conversation_id=eq.${activeId}`,
+        },
+        (payload) => {
+          const receipt = (payload.new ?? payload.old) as MessageReceipt;
+          if (!receipt?.message_id) return;
+          setMessageReceipts((current) => {
+            const index = current.findIndex(
+              (item) =>
+                item.message_id === receipt.message_id &&
+                item.recipient_id === receipt.recipient_id,
+            );
+            if (index < 0) return [...current, receipt];
+            const next = current.slice();
+            const previous = next[index];
+            if (!previous) return [...current, receipt];
+            next[index] = {
+              ...previous,
+              ...receipt,
+              delivered_at: receipt.delivered_at ?? previous.delivered_at,
+              read_at: receipt.read_at ?? previous.read_at,
+            };
+            return next;
+          });
+        },
+      )
       .subscribe();
     return () => void supabase.removeChannel(channel);
   }, [user, activeId]);
 
-  const generalRoom = conversations.find(
-    (item) => item.kind === "public",
-  );
+  const generalRoom = conversations.find((item) => item.kind === "public");
 
   // Resolve the active conversation only after conversations have loaded.
   const conversationInitializedRef = useRef(false);
@@ -500,9 +529,7 @@ function ChatPage() {
     if (conversationInitializedRef.current) return;
 
     const requestedId =
-      typeof window !== "undefined"
-        ? new URLSearchParams(window.location.search).get("c")
-        : null;
+      typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("c") : null;
 
     const requestedConversation = requestedId
       ? conversations.find((item) => item.id === requestedId)
@@ -533,13 +560,21 @@ function ChatPage() {
       .then(async (rows) => {
         if (active) {
           setMessages(rows);
-          const receipts = await fetchMessageReceipts(activeId, rows.map((row) => row.id));
+          const receipts = await fetchMessageReceipts(
+            activeId,
+            rows.map((row) => row.id),
+          );
           if (!active) return;
           setMessageReceipts(receipts);
           const incomingIds = rows.filter((row) => row.sender_id !== user.id).map((row) => row.id);
-          const isViewing = document.visibilityState === "visible" && document.hasFocus() && activeIdRef.current === activeId;
+          const isViewing =
+            document.visibilityState === "visible" &&
+            document.hasFocus() &&
+            activeIdRef.current === activeId;
           const toAcknowledge = incomingIds.filter((id) => {
-            const receipt = receipts.find((item) => item.message_id === id && item.recipient_id === user.id);
+            const receipt = receipts.find(
+              (item) => item.message_id === id && item.recipient_id === user.id,
+            );
             return isViewing ? !receipt?.read_at : !receipt?.delivered_at;
           });
           toAcknowledge.forEach((id) => queueReceipt(id, activeId, isViewing));
@@ -568,20 +603,39 @@ function ChatPage() {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         void deliverPendingMessages(user.id).catch(() => undefined);
-        void fetchMessages(activeId).then(async (rows) => {
-          if (activeIdRef.current !== activeId) return;
-          setMessages(rows);
-          const receipts = await fetchMessageReceipts(activeId, rows.map((row) => row.id));
-          if (activeIdRef.current !== activeId) return;
-          setMessageReceipts((current) => mergeFetchedReceipts(current, receipts));
-          const ids = rows.filter((row) => row.sender_id !== user.id)
-            .map((row) => row.id)
-            .filter((id) => !receipts.some((receipt) => receipt.message_id === id && receipt.recipient_id === user.id && receipt.read_at));
-          ids.forEach((id) => queueReceipt(id, activeId, true));
-          if (ids.length && activeIdRef.current === activeId && document.visibilityState === "visible" && document.hasFocus()) {
-            void markConversationRead(activeId, user.id).catch(() => undefined);
-          }
-        }).catch(() => undefined);
+        void fetchMessages(activeId)
+          .then(async (rows) => {
+            if (activeIdRef.current !== activeId) return;
+            setMessages(rows);
+            const receipts = await fetchMessageReceipts(
+              activeId,
+              rows.map((row) => row.id),
+            );
+            if (activeIdRef.current !== activeId) return;
+            setMessageReceipts((current) => mergeFetchedReceipts(current, receipts));
+            const ids = rows
+              .filter((row) => row.sender_id !== user.id)
+              .map((row) => row.id)
+              .filter(
+                (id) =>
+                  !receipts.some(
+                    (receipt) =>
+                      receipt.message_id === id &&
+                      receipt.recipient_id === user.id &&
+                      receipt.read_at,
+                  ),
+              );
+            ids.forEach((id) => queueReceipt(id, activeId, true));
+            if (
+              ids.length &&
+              activeIdRef.current === activeId &&
+              document.visibilityState === "visible" &&
+              document.hasFocus()
+            ) {
+              void markConversationRead(activeId, user.id).catch(() => undefined);
+            }
+          })
+          .catch(() => undefined);
       }, 200);
     };
     window.addEventListener("focus", refresh);
@@ -597,9 +651,12 @@ function ChatPage() {
     };
   }, [user, activeId, queueReceipt]);
 
-  useEffect(() => () => {
-    if (receiptTimerRef.current !== null) window.clearTimeout(receiptTimerRef.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (receiptTimerRef.current !== null) window.clearTimeout(receiptTimerRef.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!user || !activeId) return;
@@ -673,6 +730,14 @@ function ChatPage() {
     () => new Map(profiles.map((profile) => [profile.id, profile])),
     [profiles],
   );
+  const mentionNames = useMemo(
+    () => Object.fromEntries(profiles.map((profile) => [profile.id, profile.display_name])),
+    [profiles],
+  );
+  const mentionCandidates = useMemo(
+    () => profiles.map((profile) => ({ id: profile.id, name: profile.display_name })),
+    [profiles],
+  );
   const receiptsByMessage = useMemo(() => {
     const grouped = new Map<string, MessageReceipt[]>();
     for (const receipt of messageReceipts) {
@@ -688,9 +753,7 @@ function ChatPage() {
       if (!user) return undefined;
 
       const partnerId = members.find(
-        (member) =>
-          member.conversation_id === conversation.id &&
-          member.user_id !== user.id,
+        (member) => member.conversation_id === conversation.id && member.user_id !== user.id,
       )?.user_id;
 
       return partnerId ? profileMap.get(partnerId) : undefined;
@@ -698,17 +761,13 @@ function ChatPage() {
     [members, profileMap, user],
   );
 
-  const groups = conversations.filter(
-    (item) => item.kind === "group",
-  );
+  const groups = conversations.filter((item) => item.kind === "group");
 
   const directChats = conversations.filter((item) => {
     if (item.kind !== "dm" || !user) return false;
 
     return members.some(
-      (member) =>
-        member.conversation_id === item.id &&
-        member.user_id === user.id,
+      (member) => member.conversation_id === item.id && member.user_id === user.id,
     );
   });
 
@@ -722,21 +781,14 @@ function ChatPage() {
 
     if (!needle) return others;
 
-    return others.filter((profile) =>
-      profile.display_name.toLowerCase().includes(needle),
-    );
+    return others.filter((profile) => profile.display_name.toLowerCase().includes(needle));
   }, [others, query]);
 
-  const activeConversation =
-    conversations.find((item) => item.id === activeId) ?? generalRoom;
+  const activeConversation = conversations.find((item) => item.id === activeId) ?? generalRoom;
 
-  const activePartner = activeConversation
-    ? partnerOf(activeConversation)
-    : undefined;
+  const activePartner = activeConversation ? partnerOf(activeConversation) : undefined;
 
-  const memberCount = members.filter(
-    (member) => member.conversation_id === activeId,
-  ).length;
+  const memberCount = members.filter((member) => member.conversation_id === activeId).length;
 
   const activeTitle =
     activeConversation?.kind === "public"
@@ -788,10 +840,7 @@ function ChatPage() {
     if (!user) return;
 
     try {
-      const conversation = await ensureDirectConversation(
-        user.id,
-        otherId,
-      );
+      const conversation = await ensureDirectConversation(user.id, otherId);
 
       await reload();
       openConversation(conversation.id);
@@ -803,11 +852,7 @@ function ChatPage() {
   const makeGroup = async (name: string, memberIds: string[]) => {
     if (!user) return;
 
-    const conversation = await createGroup(
-      user.id,
-      name,
-      memberIds,
-    );
+    const conversation = await createGroup(user.id, name, memberIds);
 
     await reload();
     openConversation(conversation.id);
@@ -818,11 +863,7 @@ function ChatPage() {
       return;
     }
 
-    if (
-      !window.confirm(
-        `Leave ${activeConversation.name ?? "this group"}?`,
-      )
-    ) {
+    if (!window.confirm(`Leave ${activeConversation.name ?? "this group"}?`)) {
       return;
     }
 
@@ -843,10 +884,7 @@ function ChatPage() {
     }
   };
 
-  const handleSend = async (
-    body: string,
-    file: File | null,
-  ) => {
+  const handleSend = async (body: string, file: File | null) => {
     stopTyping();
     if (!user || !activeId) return;
     isNearBottomRef.current = true;
@@ -872,16 +910,11 @@ function ChatPage() {
       };
 
       animateMessageEntry(tempId);
-      setMessages((current) => [
-        ...current,
-        optimisticMessage,
-      ]);
+      setMessages((current) => [...current, optimisticMessage]);
     }
 
     try {
-      const imagePath = file
-        ? await uploadChatImage(activeId, file)
-        : null;
+      const imagePath = file ? await uploadChatImage(activeId, file) : null;
 
       const inserted = await sendMessage({
         conversationId: activeId,
@@ -896,16 +929,12 @@ function ChatPage() {
         clearMessageEntry(finalTempId);
 
         setMessages((current) =>
-          current.map((item) =>
-            item.id === finalTempId ? inserted : item,
-          ),
+          current.map((item) => (item.id === finalTempId ? inserted : item)),
         );
       } else if (inserted) {
         animateMessageEntry(inserted.id);
         setMessages((current) =>
-          current.some((item) => item.id === inserted.id)
-            ? current
-            : [...current, inserted],
+          current.some((item) => item.id === inserted.id) ? current : [...current, inserted],
         );
       }
     } catch (error) {
@@ -913,18 +942,14 @@ function ChatPage() {
         const finalTempId = tempId;
         clearMessageEntry(finalTempId);
 
-        setMessages((current) =>
-          current.filter((item) => item.id !== finalTempId),
-        );
+        setMessages((current) => current.filter((item) => item.id !== finalTempId));
       }
 
       throw error;
     }
   };
 
-  const me = user
-    ? profileMap.get(user.id)
-    : undefined;
+  const me = user ? profileMap.get(user.id) : undefined;
 
   const call = useCall(activeId || null, {
     id: user?.id ?? "",
@@ -942,15 +967,10 @@ function ChatPage() {
           Z
         </span>
 
-        <span className="font-display text-base font-bold">
-          ZChat
-        </span>
+        <span className="font-display text-base font-bold">ZChat</span>
 
         <div className="ml-auto flex items-center">
-          <NewGroupDialog
-            people={others}
-            onCreate={makeGroup}
-          />
+          <NewGroupDialog people={others} onCreate={makeGroup} />
 
           <NotificationGate userId={user?.id ?? ""} />
         </div>
@@ -973,10 +993,7 @@ function ChatPage() {
         <Section title="Room">
           <Row
             active={activeId === generalRoom?.id}
-            onClick={() =>
-              generalRoom &&
-              openConversation(generalRoom.id)
-            }
+            onClick={() => generalRoom && openConversation(generalRoom.id)}
             leading={
               <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
                 <Hash className="size-4" />
@@ -994,9 +1011,7 @@ function ChatPage() {
               <Row
                 key={group.id}
                 active={activeId === group.id}
-                onClick={() =>
-                  openConversation(group.id)
-                }
+                onClick={() => openConversation(group.id)}
                 leading={
                   <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
                     <Users className="size-4" />
@@ -1013,18 +1028,13 @@ function ChatPage() {
         {directChats.length > 0 && (
           <Section title="Chats">
             {directChats.map((conversation) => {
-              const partner =
-                partnerOf(conversation);
+              const partner = partnerOf(conversation);
 
               return (
                 <Row
                   key={conversation.id}
-                  active={
-                    activeId === conversation.id
-                  }
-                  onClick={() =>
-                    openConversation(conversation.id)
-                  }
+                  active={activeId === conversation.id}
+                  onClick={() => openConversation(conversation.id)}
                   leading={
                     <UserAvatar
                       name={partner?.display_name}
@@ -1033,18 +1043,9 @@ function ChatPage() {
                       className="size-9"
                     />
                   }
-                  title={
-                    partner?.display_name ??
-                    "Someone"
-                  }
-                  subtitle={
-                    isOnline(partner)
-                      ? "Online"
-                      : "Offline"
-                  }
-                  badge={
-                    unread[conversation.id] ?? 0
-                  }
+                  title={partner?.display_name ?? "Someone"}
+                  subtitle={isOnline(partner) ? "Online" : "Offline"}
+                  badge={unread[conversation.id] ?? 0}
                 />
               );
             })}
@@ -1053,17 +1054,13 @@ function ChatPage() {
 
         <Section title="People">
           {filteredOthers.length === 0 && (
-            <p className="px-2 py-1 text-sm text-muted-foreground">
-              No one else here yet.
-            </p>
+            <p className="px-2 py-1 text-sm text-muted-foreground">No one else here yet.</p>
           )}
 
           {filteredOthers.map((person) => (
             <Row
               key={person.id}
-              onClick={() =>
-                void startDirect(person.id)
-              }
+              onClick={() => void startDirect(person.id)}
               leading={
                 <UserAvatar
                   name={person.display_name}
@@ -1072,15 +1069,8 @@ function ChatPage() {
                   className="size-9"
                 />
               }
-              title={
-                person.display_name ||
-                "Someone"
-              }
-              subtitle={
-                isOnline(person)
-                  ? "Online"
-                  : "Offline"
-              }
+              title={person.display_name || "Someone"}
+              subtitle={isOnline(person) ? "Online" : "Offline"}
             />
           ))}
         </Section>
@@ -1117,20 +1107,14 @@ function ChatPage() {
         to="/profile"
         className="flex items-center gap-3 border-t border-border px-4 py-3 transition-colors hover:bg-surface-2"
       >
-        <UserAvatar
-          name={me?.display_name}
-          path={me?.avatar_url}
-          className="size-9"
-        />
+        <UserAvatar name={me?.display_name} path={me?.avatar_url} className="size-9" />
 
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">
             {me?.display_name || "Set your name"}
           </span>
 
-          <span className="block truncate text-xs text-muted-foreground">
-            Profile & settings
-          </span>
+          <span className="block truncate text-xs text-muted-foreground">Profile & settings</span>
         </span>
 
         <Settings className="size-4 text-muted-foreground" />
@@ -1142,34 +1126,19 @@ function ChatPage() {
     <div className="chat-app-shell flex overflow-hidden">
       <GamesAnnouncementDialog userId={user?.id ?? ""} />
 
-      <aside className="hidden w-80 shrink-0 border-r border-border md:block">
-        {sidebar}
-      </aside>
+      <aside className="hidden w-80 shrink-0 border-r border-border md:block">{sidebar}</aside>
 
       <main className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="ios-safe-top flex shrink-0 items-center gap-3 border-b border-border bg-surface/70 px-3 py-3 backdrop-blur">
-          <Sheet
-            open={sheetOpen}
-            onOpenChange={setSheetOpen}
-          >
+          <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden"
-                aria-label="Open chats"
-              >
+              <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open chats">
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
 
-            <SheetContent
-              side="left"
-              className="ios-mobile-sheet w-[19rem] p-0"
-            >
-              <SheetTitle className="sr-only">
-                Chats
-              </SheetTitle>
+            <SheetContent side="left" className="ios-mobile-sheet w-[19rem] p-0">
+              <SheetTitle className="sr-only">Chats</SheetTitle>
 
               {sidebar}
             </SheetContent>
@@ -1193,13 +1162,9 @@ function ChatPage() {
           )}
 
           <div className="min-w-0">
-            <p className="truncate font-display text-sm font-semibold">
-              {activeTitle}
-            </p>
+            <p className="truncate font-display text-sm font-semibold">{activeTitle}</p>
 
-            <p className="truncate text-xs text-muted-foreground">
-              {activeSubtitle}
-            </p>
+            <p className="truncate text-xs text-muted-foreground">{activeSubtitle}</p>
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -1244,71 +1209,52 @@ function ChatPage() {
             const previous = messages[index - 1];
 
             const replyTarget = message.reply_to_message_id
-              ? messages.find(
-                  (item) =>
-                    item.id ===
-                    message.reply_to_message_id,
-                )
+              ? messages.find((item) => item.id === message.reply_to_message_id)
               : undefined;
 
-            const replyPreview =
-              message.reply_to_message_id
-                ? replyTarget
-                  ? {
-                      senderName:
-                        replyTarget.sender_id ===
-                        user?.id
-                          ? "You"
-                          : (profileMap.get(
-                              replyTarget.sender_id,
-                            )?.display_name ??
-                            "Someone"),
-                      snippet:
-                        replyTarget.body ??
-                        "Sent a photo",
-                    }
-                  : null
-                : undefined;
+            const replyPreview = message.reply_to_message_id
+              ? replyTarget
+                ? {
+                    senderName:
+                      replyTarget.sender_id === user?.id
+                        ? "You"
+                        : (profileMap.get(replyTarget.sender_id)?.display_name ?? "Someone"),
+                    snippet: replyTarget.body ?? "Sent a photo",
+                  }
+                : null
+              : undefined;
 
             return (
               <MessageBubble
                 key={message.id}
                 message={message}
                 animateIn={enteringMessageIds.has(message.id)}
-                self={
-                  message.sender_id === user?.id
-                }
-                sender={profileMap.get(
-                  message.sender_id,
-                )}
-                showSender={
-                  previous?.sender_id !==
-                  message.sender_id
-                }
+                self={message.sender_id === user?.id}
+                sender={profileMap.get(message.sender_id)}
+                showSender={previous?.sender_id !== message.sender_id}
                 replyPreview={replyPreview}
                 receipts={receiptsByMessage.get(message.id) ?? []}
                 groupChat={activeConversation?.kind !== "dm"}
-                onReply={() =>
-                  setReplyingTo(message)
-                }
+                mentionNames={mentionNames}
+                onReply={() => setReplyingTo(message)}
                 onJumpToReply={
                   message.reply_to_message_id
                     ? () => {
-                      const target = document.getElementById(
-                        `message-${message.reply_to_message_id}`,
-                      );
-                      target?.scrollIntoView({
-                        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-                          ? "auto"
-                          : "smooth",
-                        block: "center",
-                      });
-                      const bubble = target?.querySelector<HTMLElement>(".message-bubble");
-                      if (bubble) {
-                        bubble.classList.remove("message-highlight");
-                        requestAnimationFrame(() => bubble.classList.add("message-highlight"));
+                        const target = document.getElementById(
+                          `message-${message.reply_to_message_id}`,
+                        );
+                        target?.scrollIntoView({
+                          behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                            ? "auto"
+                            : "smooth",
+                          block: "center",
+                        });
+                        const bubble = target?.querySelector<HTMLElement>(".message-bubble");
+                        if (bubble) {
+                          bubble.classList.remove("message-highlight");
+                          requestAnimationFrame(() => bubble.classList.add("message-highlight"));
+                        }
                       }
-                    }
                     : undefined
                 }
               />
@@ -1319,7 +1265,10 @@ function ChatPage() {
         </div>
 
         {typingLabel && (
-          <p className="typing-enter shrink-0 px-5 pb-1 text-xs text-muted-foreground" aria-live="polite">
+          <p
+            className="typing-enter shrink-0 px-5 pb-1 text-xs text-muted-foreground"
+            aria-live="polite"
+          >
             <span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-muted-foreground align-middle" />
             {typingLabel}
           </p>
@@ -1328,26 +1277,19 @@ function ChatPage() {
           onSend={handleSend}
           onTypingChange={(isTyping) => (isTyping ? startTyping() : stopTyping())}
           placeholder={`Message ${activeTitle}`}
+          mentionCandidates={mentionCandidates}
           replyingTo={
             replyingTo
               ? {
                   senderName:
-                    replyingTo.sender_id ===
-                    user?.id
+                    replyingTo.sender_id === user?.id
                       ? "yourself"
-                      : (profileMap.get(
-                          replyingTo.sender_id,
-                        )?.display_name ??
-                        "Someone"),
-                  snippet:
-                    replyingTo.body ??
-                    "Sent a photo",
+                      : (profileMap.get(replyingTo.sender_id)?.display_name ?? "Someone"),
+                  snippet: replyingTo.body ?? "Sent a photo",
                 }
               : null
           }
-          onCancelReply={() =>
-            setReplyingTo(null)
-          }
+          onCancelReply={() => setReplyingTo(null)}
         />
       </main>
 
@@ -1356,13 +1298,7 @@ function ChatPage() {
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-1">
       <h2 className="px-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
@@ -1395,21 +1331,15 @@ function Row({
       onClick={onClick}
       className={cn(
         "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-[background-color,transform] duration-150 ease-out active:scale-[0.99]",
-        active
-          ? "bg-surface-2"
-          : "hover:bg-surface-2/60",
+        active ? "bg-surface-2" : "hover:bg-surface-2/60",
       )}
     >
       {leading}
 
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium">
-          {title}
-        </span>
+        <span className="block truncate text-sm font-medium">{title}</span>
 
-        <span className="block truncate text-xs text-muted-foreground">
-          {subtitle}
-        </span>
+        <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>
       </span>
 
       {badge > 0 && (
@@ -1437,17 +1367,18 @@ function mergeReceipts(
     return {
       ...receipt,
       delivered_at: receipt.delivered_at ?? timestamp,
-      read_at: read ? receipt.read_at ?? timestamp : receipt.read_at,
+      read_at: read ? (receipt.read_at ?? timestamp) : receipt.read_at,
     };
   });
   for (const id of ids) {
-    if (!found.has(id)) next.push({
-      message_id: id,
-      conversation_id: conversationId,
-      recipient_id: recipientId,
-      delivered_at: timestamp,
-      read_at: read ? timestamp : null,
-    });
+    if (!found.has(id))
+      next.push({
+        message_id: id,
+        conversation_id: conversationId,
+        recipient_id: recipientId,
+        delivered_at: timestamp,
+        read_at: read ? timestamp : null,
+      });
   }
   return next;
 }
@@ -1457,11 +1388,16 @@ function mergeFetchedReceipts(current: MessageReceipt[], fetched: MessageReceipt
   for (const row of fetched) {
     const key = `${row.message_id}:${row.recipient_id}`;
     const previous = byKey.get(key);
-    byKey.set(key, previous ? {
-      ...row,
-      delivered_at: row.delivered_at ?? previous.delivered_at,
-      read_at: row.read_at ?? previous.read_at,
-    } : row);
+    byKey.set(
+      key,
+      previous
+        ? {
+            ...row,
+            delivered_at: row.delivered_at ?? previous.delivered_at,
+            read_at: row.read_at ?? previous.read_at,
+          }
+        : row,
+    );
   }
   return [...byKey.values()];
 }

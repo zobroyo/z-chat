@@ -29,6 +29,7 @@ type Props = {
   receipts?: MessageReceipt[] | undefined;
   groupChat?: boolean | undefined;
   animateIn?: boolean | undefined;
+  mentionNames?: Record<string, string> | undefined;
 };
 
 export function MessageBubble({
@@ -42,6 +43,7 @@ export function MessageBubble({
   receipts = [],
   groupChat = false,
   animateIn = false,
+  mentionNames,
 }: Props) {
   const bubbleRef = useRef<HTMLDivElement>(null);
   const [previewIsVisible, setPreviewIsVisible] = useState(false);
@@ -107,55 +109,62 @@ export function MessageBubble({
     <div
       id={`message-${message.id}`}
       className={cn(
-        "group flex items-end gap-2",
+        "group relative -mx-3 flex items-start gap-3 rounded px-3 py-0.5 transition-colors hover:bg-surface-2/40",
         animateIn && "message-enter",
-        self ? "flex-row-reverse" : "flex-row",
       )}
     >
-      <div className="size-7">
-        {showSender && !self && (
-          <UserAvatar name={sender?.display_name} path={sender?.avatar_url} className="size-7" />
+      <div className="w-10 shrink-0">
+        {showSender ? (
+          <UserAvatar name={sender?.display_name} path={sender?.avatar_url} className="size-10" />
+        ) : (
+          <span className="hidden pr-1 text-right text-[10px] leading-6 text-muted-foreground group-hover:block">
+            {time}
+          </span>
         )}
       </div>
 
-      <div className={cn("max-w-[76%] space-y-1", self && "items-end text-right")}>
-        {showSender && !self && (
-          <p className="px-1 text-[11px] font-medium text-muted-foreground">
-            {sender?.display_name ?? "Someone"}
-          </p>
+      <div className="min-w-0 flex-1">
+        {showSender && (
+          <div className="flex items-center gap-2 px-0.5">
+            <span className="text-[15px] font-semibold text-foreground">
+              {sender?.display_name ?? "Someone"}
+            </span>
+            <span className="text-[11px] text-muted-foreground">{time}</span>
+            {self && (
+              <span
+                className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground"
+                aria-label={receiptStatus}
+                title={receiptStatus}
+              >
+                {readCount > 0 ? (
+                  <CheckCheck className="size-3 text-primary" />
+                ) : deliveredCount > 0 ? (
+                  <CheckCheck className="size-3" />
+                ) : (
+                  <Check className="size-3" />
+                )}
+                {groupChat && messageReceipts.length > 1 && (
+                  <span>
+                    {receiptStatus.replace(/^Delivered /, "D ").replace(" · Read ", " · R ")}
+                  </span>
+                )}
+              </span>
+            )}
+          </div>
         )}
 
-        <div className={cn("flex items-end gap-1", self ? "flex-row-reverse" : "flex-row")}>
-          {onReply && (
-            <button
-              type="button"
-              onClick={onReply}
-              aria-label="Reply"
-              className="mb-1 shrink-0 rounded-full p-1.5 text-muted-foreground opacity-60 transition-opacity hover:bg-surface-2 hover:opacity-100 active:opacity-100"
-            >
-              <Reply className="size-3.5" />
-            </button>
-          )}
-
+        <div className="flex items-start gap-1">
           <div
             ref={bubbleRef}
             className={cn(
-              "message-bubble overflow-hidden rounded-2xl text-sm leading-relaxed",
-              isLinkOnly
-                ? "text-foreground"
-                : self
-                  ? "bg-bubble text-bubble-foreground rounded-br-md"
-                  : "bg-surface-2 text-foreground rounded-bl-md",
+              "message-bubble min-w-0 flex-1 text-[15px] leading-relaxed text-foreground",
             )}
           >
             {replyPreview !== undefined && (
               <button
                 type="button"
                 onClick={onJumpToReply}
-                className={cn(
-                  "block w-full border-l-2 px-3 pt-2 pb-1 text-left text-xs opacity-80 hover:opacity-100",
-                  self ? "border-bubble-foreground/40" : "border-foreground/30",
-                )}
+                className="mb-0.5 block w-full border-l-2 border-foreground/30 pl-2 text-left text-xs text-muted-foreground hover:text-foreground"
               >
                 <span className="block font-medium">
                   {replyPreview?.senderName ?? "Original message"}
@@ -171,14 +180,15 @@ export function MessageBubble({
                 src={imageUrl ?? undefined}
                 alt="Shared image"
                 loading="lazy"
-                className="max-h-72 w-full bg-surface object-cover"
+                className="mt-1 max-h-72 w-full rounded-xl bg-surface object-cover"
               />
             )}
             {message.body && (
               <>
                 {!isLinkOnly && (
-                  <div className="px-3.5 py-2 whitespace-pre-wrap break-words">
-                    {renderMessageBody(body)}
+                  <div className="whitespace-pre-wrap break-words">
+                    {" "}
+                    {renderMessageBody(body, mentionNames)}
                   </div>
                 )}
                 {previewUrls.map((url) => {
@@ -191,7 +201,7 @@ export function MessageBubble({
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mx-2.5 mb-2.5 flex max-w-[22rem] items-center gap-3 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-primary/10 to-primary/5 px-3 py-2.5 text-left text-foreground shadow-sm transition-colors hover:border-primary/35 hover:from-primary/20"
+                      className="mt-1 flex max-w-[22rem] items-center gap-3 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-primary/10 to-primary/5 px-3 py-2.5 text-left text-foreground shadow-sm transition-colors hover:border-primary/35 hover:from-primary/20"
                     >
                       <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-primary/15 bg-background/70 text-primary shadow-sm">
                         {preview?.icon && !previewIconErrors[url] ? (
@@ -225,38 +235,17 @@ export function MessageBubble({
               </>
             )}
           </div>
-        </div>
-
-        <p
-          className={cn(
-            "flex items-center gap-1 px-1 text-[10px] text-muted-foreground",
-            self && "justify-end",
-          )}
-        >
-          {time}
-          {self && (
-            <span
-              className="inline-flex items-center gap-0.5"
-              aria-label={receiptStatus}
-              title={receiptStatus}
+          {onReply && (
+            <button
+              type="button"
+              onClick={onReply}
+              aria-label="Reply"
+              className="mt-1 shrink-0 rounded-full p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100 active:opacity-100"
             >
-              {readCount > 0 ? (
-                <CheckCheck className="size-3 text-primary" />
-              ) : deliveredCount > 0 ? (
-                <CheckCheck className="size-3" />
-              ) : (
-                <Check className="size-3" />
-              )}
-              {groupChat && messageReceipts.length > 1 ? (
-                <span>
-                  {receiptStatus.replace(/^Delivered /, "D ").replace(" · Read ", " · R ")}
-                </span>
-              ) : (
-                <span>{receiptStatus}</span>
-              )}
-            </span>
+              <Reply className="size-3.5" />
+            </button>
           )}
-        </p>
+        </div>
       </div>
     </div>
   );
