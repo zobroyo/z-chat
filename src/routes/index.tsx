@@ -57,9 +57,10 @@ function AuthPage() {
   useEffect(() => {
     if (loading || !session) return;
 
-    const authorizationId = new URLSearchParams(window.location.search).get("oauth_authorization_id");
-    if (authorizationId) {
-      window.location.replace(`/oauth/consent?authorization_id=${encodeURIComponent(authorizationId)}`);
+    // Returning from the Z Games OAuth consent flow: send the user straight back there.
+    const zoauthNext = new URLSearchParams(window.location.search).get("zoauth_next");
+    if (zoauthNext && zoauthNext.startsWith("/") && !zoauthNext.startsWith("//")) {
+      window.location.replace(zoauthNext);
       return;
     }
 
@@ -141,10 +142,11 @@ function AuthPage() {
   const withGoogle = async () => {
     setBusy(true);
 
-    const authorizationId = new URLSearchParams(window.location.search).get("oauth_authorization_id");
-    const redirectTo = authorizationId
-      ? `${window.location.origin}/?oauth_authorization_id=${encodeURIComponent(authorizationId)}`
-      : `${window.location.origin}/chat`;
+    const zoauthNext = new URLSearchParams(window.location.search).get("zoauth_next");
+    const redirectTo =
+      zoauthNext && zoauthNext.startsWith("/") && !zoauthNext.startsWith("//")
+        ? `${window.location.origin}/?zoauth_next=${encodeURIComponent(zoauthNext)}`
+        : `${window.location.origin}/chat`;
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
