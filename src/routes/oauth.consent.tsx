@@ -77,10 +77,15 @@ function OAuthConsent() {
       });
       const result = (await response.json().catch(() => null)) as { redirect?: string; error?: string } | null;
       if (!response.ok || !result?.redirect) {
+        const reason = result?.error;
         setError(
-          result?.error === "invalid_token"
+          reason === "invalid_token"
             ? "Your ZChat session is no longer valid. Log in again, then retry."
-            : "Could not connect to Z Games. Please try again.",
+            : reason === "banned"
+              ? "This ZChat account is banned, so it can't use Z Games."
+              : reason === "timed_out"
+                ? "This ZChat account is timed out. Try again once the timeout ends."
+                : "Could not connect to Z Games. Please try again.",
         );
         setBusy(false);
         return;
