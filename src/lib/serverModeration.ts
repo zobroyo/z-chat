@@ -218,7 +218,24 @@ function parseJsonObject(raw: string): Record<string, unknown> {
 }
 
 function parseVerdict(raw: string): ModerationVerdict {
-  const parsed = parseJsonObject(raw);
+  let parsed: Record<string, unknown> | null = null;
+  try {
+    parsed = parseJsonObject(raw);
+  } catch {
+    parsed = null;
+  }
+  if (!parsed) {
+    // Tolerant fallback: small models occasionally answer with prose instead
+    // of JSON. Only runs when no JSON object exists at all in the response.
+    const lower = raw.toLowerCase();
+    if (/"safe"\s*:\s*false|\bunsafe\b|not safe|violat/.test(lower)) {
+      return { safe: false, reason: "Message violates the chat rules" };
+    }
+    if (/"safe"\s*:\s*true|\bsafe\b|\ballowed\b/.test(lower)) {
+      return { safe: true, reason: "OK" };
+    }
+    throw new Error("Could not parse moderation JSON");
+  }
   // Strict: only an explicit true/"true"/"yes"/"1" counts as safe.
   const safe =
     parsed["safe"] === true ||
