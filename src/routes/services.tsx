@@ -34,7 +34,7 @@ const SERVICES = [
   {
     name: "Z Admin Console",
     url: "https://access.z-chat.men",
-    description: "Ops dashboard for the black box �?" service health, deploy log, restarts. Admins only.",
+    description: "Ops dashboard for the black box — service health, deploy log, restarts. Admins only.",
     icon: ShieldCheck,
   },
 ] as const;

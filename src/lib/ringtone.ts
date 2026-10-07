@@ -13,8 +13,9 @@ type AudioContextCtor = new () => AudioContext;
 
 function audioContextCtor(): AudioContextCtor | null {
   if (typeof window === "undefined") return null;
-  const candidate = window as Window & { webkitAudioContext?: AudioContextCtor };
-  return candidate.AudioContext ?? candidate.webkitAudioContext ?? null;
+  if (typeof AudioContext !== "undefined") return AudioContext;
+  const legacy = (window as Window & { webkitAudioContext?: AudioContextCtor }).webkitAudioContext;
+  return legacy ?? null;
 }
 
 export type RingtoneHandle = {
@@ -121,7 +122,9 @@ export function startRingtone(onBlockedChange?: (blocked: boolean) => void): Rin
     resume: () => {
       if (!context) return;
       resumeContext();
-      window.setTimeout(() => onBlockedChange?.(context?.state !== "running"), 250);
+      window.setTimeout(() => {
+        if (!stopped) onBlockedChange?.(context?.state !== "running");
+      }, 250);
     },
     isBlocked: () => !context || context.state !== "running",
   };
