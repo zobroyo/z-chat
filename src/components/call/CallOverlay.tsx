@@ -1,11 +1,13 @@
-import { useEffect, useRef } from "react";
 import {
   AlertTriangle,
+  DoorOpen,
   HeadphoneOff,
   Headphones,
+  Link2,
   Loader2,
   Mic,
   MicOff,
+  Music,
   PhoneCall,
   PhoneOff,
   Video,
@@ -14,8 +16,13 @@ import {
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import type { UseCallResult } from "@/hooks/use-call";
+import { CallBreakoutPanel } from "@/components/call/CallBreakoutPanel";
+import { CallGuestInvitePanel } from "@/components/call/CallGuestInvitePanel";
+import { CallParticipantTile } from "@/components/call/CallParticipantTile";
+import { CallSoundboardPanel } from "@/components/call/CallSoundboardPanel";
+import type { BreakoutRoom, UseCallResult } from "@/hooks/use-call";
 import { initialsOf } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
@@ -32,57 +39,9 @@ type ControlButtonProps = {
   children: React.ReactNode;
 };
 
-/** Video element that always follows the supplied MediaStream. */
-function StreamVideo({ stream }: { stream: MediaStream }) {
-  const ref = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-    if (element.srcObject !== stream) element.srcObject = stream;
-    void element.play().catch(() => undefined);
-  }, [stream]);
-
-  // Always muted: remote audio is played by the hook's hidden <audio> element,
-  // so unmuting here would double the sound.
-  return <video ref={ref} autoPlay playsInline muted className="size-full object-cover" />;
-}
-
-function ParticipantTile({
-  name,
-  muted,
-  video,
-  stream,
-  self = false,
-}: {
-  name: string;
-  muted: boolean;
-  video: boolean;
-  stream?: MediaStream | null;
-  self?: boolean;
-}) {
-  const showVideo = video && stream instanceof MediaStream;
-
-  return (
-    <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-2xl border border-border bg-surface">
-      {showVideo ? (
-        <StreamVideo stream={stream} />
-      ) : (
-        <Avatar className="size-16">
-          <AvatarFallback className="bg-surface-2 font-display text-lg font-semibold text-muted-foreground">
-            {initialsOf(name)}
-          </AvatarFallback>
-        </Avatar>
-      )}
-
-      <div className="absolute inset-x-2 bottom-2 flex items-center gap-1.5">
-        <span className="flex min-w-0 items-center gap-1.5 rounded-lg bg-background/70 px-2 py-1 text-xs font-medium text-foreground backdrop-blur">
-          {muted && <MicOff className="size-3.5 shrink-0 text-destructive" />}
-          <span className="max-w-40 truncate">{self ? "You" : name}</span>
-        </span>
-      </div>
-    </div>
-  );
+function roomName(roomId: string | null, rooms: BreakoutRoom[]): string {
+  if (!roomId) return "Main room";
+  return rooms.find((room) => room.id === roomId)?.name ?? "Breakout room";
 }
 
 function ControlButton({
@@ -119,9 +78,8 @@ function ControlButton({
 }
 
 /**
- * Full-screen call surface shown while joining or inside a call. Renders the
- * participant grid plus mic / camera / deafen / leave controls in the app's
- * existing surface language.
+ * Full-screen call surface: incoming ring, participant grid, breakout rooms,
+ * soundboard, guest invite link and the mic / camera / deafen / leave controls.
  */
 export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   if (call.incomingCall && !call.inCall && !call.joining) {
@@ -136,6 +94,16 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
 
           <p className="mt-4 font-display text-lg font-semibold">{call.incomingCall.name}</p>
           <p className="mt-1 text-sm text-muted-foreground">is calling in {conversationTitle}…</p>
+
+          {call.ringAudioBlocked && (
+            <button
+              type="button"
+              onClick={call.retryRingtone}
+              className="mt-4 w-full rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-300 transition-colors hover:bg-amber-400/20"
+            >
+              Ringing sound is blocked by your browser — tap to enable it
+            </button>
+          )}
 
           <div className="mt-6 flex items-center justify-center gap-4">
             <Button
@@ -166,6 +134,14 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   if (!call.inCall && !call.joining) return null;
 
   const showJoining = call.joining && !call.inCall;
+  const myRoomId = call.myRoomId ?? null;
+  const roomParticipants = call.participants.filter(
+    (participant) => (participant.roomId ?? null) === myRoomId,
+  );
+  const otherRoomParticipants = call.participants.filter(
+    (participant) => (participant.roomId ?? null) !== myRoomId,
+  );
+  const inBreakout = myRoomId !== null;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-xl">
@@ -174,22 +150,85 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
           <PhoneCall className="size-4" />
         </span>
 
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate font-display text-sm font-semibold">{conversationTitle}</p>
           <p className="truncate text-xs text-muted-foreground">
             {showJoining
               ? "Connecting…"
               : call.participants.length === 0
                 ? "Ringing…"
-                : `${call.participants.length + 1} in call`}
+                : inBreakout
+                  ? `${roomParticipants.length + 1} in ${roomName(myRoomId, call.breakoutRooms)}`
+                  : `${roomParticipants.length + 1} in call`}
           </p>
         </div>
+
+        {!call.isGuest && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Guest join link"
+                title="Guest join link"
+              >
+                <Link2 className="size-5" />
+              </Button>
+            </PopoverTrigger>
+            <CallGuestInvitePanel
+              isHost={call.isHost}
+              guestKey={call.guestKey}
+              conversationId={call.conversationId}
+              onEnsureKey={call.ensureGuestKey}
+            />
+          </Popover>
+        )}
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "text-muted-foreground hover:text-foreground",
+                inBreakout && "text-amber-400 hover:text-amber-300",
+              )}
+              aria-label="Breakout rooms"
+              title="Breakout rooms"
+            >
+              <DoorOpen className="size-5" />
+            </Button>
+          </PopoverTrigger>
+          <CallBreakoutPanel
+            rooms={call.breakoutRooms}
+            participants={call.participants}
+            selfId={call.selfId}
+            myRoomId={myRoomId}
+            isHost={call.isHost}
+            onCreateRoom={call.createBreakoutRoom}
+            onMove={call.moveParticipantToRoom}
+            onCloseAll={call.closeBreakoutRooms}
+          />
+        </Popover>
       </header>
 
       {call.error && (
         <div className="mx-4 mt-3 flex items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           <AlertTriangle className="size-4 shrink-0" />
           <span className="min-w-0">{call.error}</span>
+        </div>
+      )}
+
+      {!showJoining && inBreakout && (
+        <div className="mx-4 mt-3 flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
+          <DoorOpen className="size-4 shrink-0" />
+          <span className="min-w-0">
+            You&apos;re in {roomName(myRoomId, call.breakoutRooms)} — only people in this room can
+            hear you.
+          </span>
         </div>
       )}
 
@@ -202,27 +241,58 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
         ) : (
           <>
             <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <ParticipantTile
+              <CallParticipantTile
                 name="You"
-                muted={call.muted || call.deafened}
+                muted={call.muted || call.deafened || call.serverMuted}
                 video={call.cameraOn}
                 stream={call.localStream}
                 self
+                deafened={call.deafened}
+                serverMuted={call.serverMuted}
+                isHost={call.isHost}
               />
 
-              {call.participants.map((participant) => (
-                <ParticipantTile
+              {roomParticipants.map((participant) => (
+                <CallParticipantTile
                   key={participant.id}
                   name={participant.name}
-                  muted={participant.muted}
+                  muted={participant.muted || participant.serverMuted}
                   video={participant.video}
                   stream={call.remoteStreams[participant.id] ?? null}
+                  deafened={participant.deafened}
+                  serverMuted={participant.serverMuted}
+                  localMuted={participant.localMuted}
+                  isHost={participant.id === call.hostId}
+                  isGuest={participant.isGuest}
+                  volume={participant.volume}
+                  canModerate={call.isHost}
+                  onVolumeChange={(volume) => call.setParticipantVolume(participant.id, volume)}
+                  onToggleLocalMute={() => call.toggleParticipantLocalMute(participant.id)}
+                  onToggleServerMute={() =>
+                    call.setParticipantServerMute(participant.id, !participant.serverMuted)
+                  }
                 />
               ))}
             </div>
 
             {call.participants.length === 0 && (
               <p className="mt-4 text-center text-xs text-muted-foreground">Ringing…</p>
+            )}
+
+            {otherRoomParticipants.length > 0 && (
+              <div className="mx-auto mt-4 w-full max-w-5xl rounded-xl border border-border bg-surface/60 px-3 py-2">
+                <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                  In other rooms
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {otherRoomParticipants
+                    .map(
+                      (participant) =>
+                        `${participant.name} · ${roomName(participant.roomId, call.breakoutRooms)}`,
+                    )
+                    .join("   ")}
+                </p>
+              </div>
             )}
           </>
         )}
@@ -232,10 +302,14 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
         <TooltipProvider delayDuration={200}>
           <ControlButton
             label={call.muted ? "Unmute" : "Mute"}
-            active={call.muted}
+            active={call.muted || call.serverMuted}
             onClick={call.toggleMute}
           >
-            {call.muted ? <MicOff className="size-5" /> : <Mic className="size-5" />}
+            {call.muted || call.serverMuted ? (
+              <MicOff className="size-5" />
+            ) : (
+              <Mic className="size-5" />
+            )}
           </ControlButton>
 
           <ControlButton
@@ -257,6 +331,22 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
               <Headphones className="size-5" />
             )}
           </ControlButton>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-12 rounded-full border border-border bg-surface-2 text-foreground hover:bg-surface"
+                aria-label="Soundboard"
+                title="Soundboard"
+              >
+                <Music className="size-5" />
+              </Button>
+            </PopoverTrigger>
+            <CallSoundboardPanel sounds={call.sounds} onPlay={call.playSound} />
+          </Popover>
 
           <ControlButton label="Leave call" danger onClick={() => void call.leaveCall()}>
             <PhoneOff className="size-5" />

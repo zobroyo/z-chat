@@ -58,7 +58,7 @@ export function BanAppealDialog({ open, onOpenChange, userId }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="discord-portal max-w-md">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">Your account is banned</DialogTitle>
           <DialogDescription>

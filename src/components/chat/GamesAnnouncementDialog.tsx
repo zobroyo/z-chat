@@ -68,7 +68,7 @@ export function GamesAnnouncementDialog({ userId }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="discord-portal max-w-sm">
         <DialogHeader>
           <div className="mb-2 flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <Gamepad2 className="size-5" />

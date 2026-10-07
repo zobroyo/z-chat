@@ -12,18 +12,17 @@ import { getCallAudioContext, resumeCallAudio } from "./call-audio";
 export type CallSound = {
   id: string;
   label: string;
-  emoji: string;
 };
 
 export const CALL_SOUNDS: CallSound[] = [
-  { id: "ding", label: "Ding", emoji: "🔔" },
-  { id: "pop", label: "Pop", emoji: "🫧" },
-  { id: "chime", label: "Chime", emoji: "🎶" },
-  { id: "tada", label: "Tada", emoji: "🎉" },
-  { id: "boing", label: "Boing", emoji: "🪀" },
-  { id: "drumroll", label: "Drumroll", emoji: "🥁" },
-  { id: "buzz", label: "Buzz", emoji: "🐝" },
-  { id: "applause", label: "Applause", emoji: "👏" },
+  { id: "ding", label: "Ding" },
+  { id: "pop", label: "Pop" },
+  { id: "chime", label: "Chime" },
+  { id: "tada", label: "Tada" },
+  { id: "boing", label: "Boing" },
+  { id: "drumroll", label: "Drumroll" },
+  { id: "buzz", label: "Buzz" },
+  { id: "applause", label: "Applause" },
 ];
 
 type ToneOptions = {

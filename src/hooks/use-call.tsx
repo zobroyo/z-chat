@@ -1438,6 +1438,7 @@ export function useCall(
     incomingCall,
     isHost: hostId !== null && hostId === me.id,
     hostId,
+    selfId: me.id,
     isGuest,
     conversationId: activeConversationId,
     myRoomId,

@@ -183,6 +183,7 @@
 .chat-app-shell,
 .discord-scope,
 .discord-portal {
+  color: #f2f3f5;
   --background: #1e1f22;
   --foreground: #f2f3f5;
   --surface: #2b2d31;

@@ -64,7 +64,7 @@ export function NewGroupDialog({ people, onCreate }: Props) {
           <Users className="size-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="discord-portal max-w-sm">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">New group</DialogTitle>
           <DialogDescription>Name it and pick who&apos;s in.</DialogDescription>
