@@ -561,7 +561,7 @@ export async function handleModerateRoute(request: Request): Promise<Response> {
 
     try {
       const verdict = await askOllama({
-        model: settings.moderation_model || "gemma4:e2b",
+        model: settings.moderation_model || "llama3.2:3b",
         systemPrompt: settings.moderation_system_prompt,
         history,
         username: displayNameForUser(auth.user),
@@ -656,7 +656,7 @@ export async function handleSendMessageRoute(request: Request): Promise<Response
         ? Promise.resolve({ ok: true as const, verdict: { safe: false, reason: banned.reason } })
         : needsAiCheck && settings
           ? askOllama({
-              model: settings.moderation_model || "gemma4:e2b",
+              model: settings.moderation_model || "llama3.2:3b",
               systemPrompt: settings.moderation_system_prompt,
               history,
               username: displayNameForUser(user),
