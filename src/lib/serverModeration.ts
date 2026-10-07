@@ -226,22 +226,14 @@ function parseVerdict(raw: string): ModerationVerdict {
   }
   if (!parsed) {
     // Tolerant fallback: small models occasionally answer with prose instead
-    // of JSON. Only runs when no JSON object exists at all in the response.
+    // of JSON. Only an explicit block signal blocks; anything else is allowed
+    // (policy: block only the really bad stuff, never kick out a message on a
+    // formatting quirk).
     const lower = raw.toLowerCase();
     if (/"safe"\s*:\s*false|\bunsafe\b|not safe|violat/.test(lower)) {
       return { safe: false, reason: "Message violates the chat rules" };
     }
-    if (
-      /cannot provide|can'?t provide|cannot help|can'?t help|won'?t provide|won'?t help|refuse|not able to (provide|help)|against (my|the) (policy|policies|guidelines)/.test(
-        lower,
-      )
-    ) {
-      return { safe: false, reason: "Dangerous request" };
-    }
-    if (/"safe"\s*:\s*true|\bsafe\b|\ballowed\b/.test(lower)) {
-      return { safe: true, reason: "OK" };
-    }
-    throw new Error("Could not parse moderation JSON");
+    return { safe: true, reason: "OK" };
   }
   // Strict: only an explicit true/"true"/"yes"/"1" counts as safe.
   const safe =
