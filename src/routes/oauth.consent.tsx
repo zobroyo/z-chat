@@ -10,7 +10,20 @@ import { supabase } from "@/integrations/supabase/client";
    which verifies it and returns the redirect URL containing its own signed
    auth code. No third-party OAuth server involved. */
 
-const GAMES_APPROVE_URL = "https://game.z-chat.men/api/oauth/approve";
+const APPROVE_URL_FALLBACK = "https://game.z-chat.men/api/oauth/approve";
+
+/* Only Z Chat family apps may receive the approval token. */
+function resolveApproveUrl(raw: string): string {
+  try {
+    const url = new URL(raw);
+    if (url.protocol === "https:" && (url.hostname === "z-chat.men" || url.hostname.endsWith(".z-chat.men"))) {
+      return raw;
+    }
+  } catch {
+    /* fall through */
+  }
+  return APPROVE_URL_FALLBACK;
+}
 
 type ConsentParams = {
   client_id: string;
@@ -18,6 +31,7 @@ type ConsentParams = {
   state: string;
   code_challenge: string;
   code_challenge_method: string;
+  approve_url: string;
 };
 
 export const Route = createFileRoute("/oauth/consent")({
@@ -28,6 +42,7 @@ export const Route = createFileRoute("/oauth/consent")({
     code_challenge: typeof search["code_challenge"] === "string" ? search["code_challenge"] : "",
     code_challenge_method:
       typeof search["code_challenge_method"] === "string" ? search["code_challenge_method"] : "",
+    approve_url: typeof search["approve_url"] === "string" ? search["approve_url"] : "",
   }),
   head: () => ({ meta: [{ title: "Connect Z Games with ZChat" }] }),
   component: OAuthConsent,
@@ -66,7 +81,7 @@ function OAuthConsent() {
         setBusy(false);
         return;
       }
-      const response = await fetch(GAMES_APPROVE_URL, {
+      const response = await fetch(resolveApproveUrl(params.approve_url), {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
