@@ -144,11 +144,11 @@ export function Composer({
   };
 
   return (
-    <div className="ios-safe-bottom relative shrink-0 bg-chat px-4 pt-1 pb-4">
+    <div className="ios-safe-bottom relative shrink-0 border-t border-border bg-surface/80 px-3 py-3 backdrop-blur">
       {replyPreview && (
         <div
           className={cn(
-            "mb-2 flex items-center justify-between gap-2 rounded-md border-l-4 border-blurple bg-elevated px-3 py-2",
+            "mb-2 flex items-center justify-between gap-2 rounded-xl border-l-2 border-primary bg-surface-2 px-3 py-2",
             replyClosing ? "reply-preview-exit" : "message-reply-enter",
           )}
         >
@@ -162,7 +162,7 @@ export function Composer({
             type="button"
             onClick={onCancelReply}
             aria-label="Cancel reply"
-            className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-rail hover:text-foreground active:scale-95"
+            className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-surface active:scale-95"
           >
             <X className="size-3.5" />
           </button>
@@ -171,12 +171,12 @@ export function Composer({
 
       {preview && (
         <div className="message-reply-enter relative mb-2 inline-block">
-          <img src={preview} alt="Selected" className="h-20 rounded-lg object-cover" />
+          <img src={preview} alt="Selected" className="h-20 rounded-xl object-cover" />
           <button
             type="button"
             onClick={clearFile}
             aria-label="Remove image"
-            className="absolute -top-2 -right-2 rounded-full bg-rail p-1 text-muted-foreground ring-1 ring-black/30 transition-transform hover:text-foreground active:scale-90"
+            className="absolute -top-2 -right-2 rounded-full bg-surface-2 p-1 text-muted-foreground ring-1 ring-border transition-transform active:scale-90"
           >
             <X className="size-3" />
           </button>
@@ -184,7 +184,7 @@ export function Composer({
       )}
 
       {mention && mentionOptions.length > 0 && (
-        <div className="absolute bottom-full left-3 z-20 mb-2 w-64 overflow-hidden rounded-md border border-black/30 bg-rail shadow-xl">
+        <div className="absolute bottom-full left-3 z-20 mb-2 w-64 overflow-hidden rounded-xl border border-border bg-surface-2 shadow-xl">
           <p className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
             {mentionOptions.some((option) => option.kind === "time") ? "Members & Time" : "Members"}
           </p>
@@ -197,8 +197,8 @@ export function Composer({
               className={cn(
                 "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm",
                 index === mentionIndex
-                  ? "bg-blurple/20 text-foreground"
-                  : "text-muted-foreground hover:bg-elevated",
+                  ? "bg-primary/15 text-foreground"
+                  : "text-muted-foreground hover:bg-surface",
               )}
             >
               {option.kind === "time" ? (
@@ -209,7 +209,7 @@ export function Composer({
                 </>
               ) : (
                 <>
-                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-blurple/20 text-[10px] font-bold text-blurple">
+                  <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/20 text-[10px] font-bold text-primary">
                     {option.name.charAt(0).toUpperCase()}
                   </span>
                   <span className="truncate">{option.name}</span>
@@ -221,7 +221,7 @@ export function Composer({
       )}
 
       <form
-        className="flex items-end gap-2 rounded-lg bg-elevated px-3 py-2 shadow-sm transition-shadow focus-within:ring-2 focus-within:ring-blurple/50"
+        className="flex items-end gap-2"
         onSubmit={(event) => {
           event.preventDefault();
           void submit();
@@ -248,6 +248,16 @@ export function Composer({
             setPreview(previewUrlRef.current);
           }}
         />
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          aria-label="Add image"
+          onClick={() => inputRef.current?.click()}
+        >
+          <ImagePlus className="size-5" />
+        </Button>
 
         <Textarea
           ref={textareaRef}
@@ -295,35 +305,16 @@ export function Composer({
           maxLength={2000}
           placeholder={placeholder ?? "Write a message"}
           style={{ fontSize: 16 }}
-          className="max-h-32 min-h-11 resize-none border-0 bg-transparent px-0 py-2.5 text-foreground shadow-none placeholder:text-muted-foreground focus-visible:ring-0 md:text-base"
+          className="max-h-32 min-h-11 resize-none rounded-2xl border-border bg-surface-2 md:text-base"
         />
 
-        <div className="flex shrink-0 items-center gap-0.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            aria-label="Add image"
-            onClick={() => inputRef.current?.click()}
-            className="text-muted-foreground hover:bg-rail hover:text-foreground"
-          >
-            <ImagePlus className="size-5" />
-          </Button>
-
-          <Button
-            type="submit"
-            size="icon"
-            aria-label="Send message"
-            disabled={sending}
-            className="bg-blurple text-white hover:bg-blurple-hover"
-          >
-            {sending ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <SendHorizontal className="size-4" />
-            )}
-          </Button>
-        </div>
+        <Button type="submit" size="icon" aria-label="Send message" disabled={sending}>
+          {sending ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <SendHorizontal className="size-4" />
+          )}
+        </Button>
       </form>
     </div>
   );

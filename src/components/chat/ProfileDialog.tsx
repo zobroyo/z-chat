@@ -61,7 +61,7 @@ export function ProfileDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="discord-portal max-w-sm">
+      <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle>Profile</DialogTitle>
         </DialogHeader>

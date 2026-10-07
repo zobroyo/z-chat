@@ -7,7 +7,7 @@ type Props = { status: "pending" | "rejected" };
 /** Shown in place of the chat when a new account is waiting for admin review. */
 export function ApplicationGate({ status }: Props) {
   return (
-    <main className="standalone-scroll-page discord-scope relative flex min-h-screen items-center justify-center bg-chat px-5 py-10 text-foreground">
+    <main className="standalone-scroll-page relative flex min-h-screen items-center justify-center px-5 py-10">
       <section className="surface-panel w-full max-w-md rounded-3xl p-7 text-center shadow-lift sm:p-9">
         <div className="mx-auto mb-5 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
           <ShieldCheck className="size-6" />
