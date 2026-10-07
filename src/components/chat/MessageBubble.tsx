@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, CheckCheck, Reply } from "lucide-react";
+import { Check, CheckCheck, Flag, Reply } from "lucide-react";
 
 import { UserAvatar } from "@/components/UserAvatar";
 import { CHAT_BUCKET, useSignedUrl } from "@/lib/media";
@@ -25,6 +25,8 @@ type Props = {
   showSender: boolean;
   replyPreview?: ReplyPreview | undefined;
   onReply?: (() => void) | undefined;
+  onReport?: (() => void) | undefined;
+  onOpenProfile?: ((userId: string) => void) | undefined;
   onJumpToReply?: (() => void) | undefined;
   receipts?: MessageReceipt[] | undefined;
   groupChat?: boolean | undefined;
@@ -39,6 +41,8 @@ export function MessageBubble({
   showSender,
   replyPreview,
   onReply,
+  onReport,
+  onOpenProfile,
   onJumpToReply,
   receipts = [],
   groupChat = false,
@@ -116,7 +120,14 @@ export function MessageBubble({
     >
       <div className="w-10 shrink-0">
         {showSender && (
-          <UserAvatar name={sender?.display_name} path={sender?.avatar_url} className="size-10" />
+          <button
+            type="button"
+            onClick={() => onOpenProfile?.(message.sender_id)}
+            aria-label={`View ${sender?.display_name ?? "member"} profile`}
+            className="rounded-full transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <UserAvatar name={sender?.display_name} path={sender?.avatar_url} className="size-10" />
+          </button>
         )}
       </div>
       {!showSender && (
@@ -128,9 +139,13 @@ export function MessageBubble({
       <div className="min-w-0 flex-1">
         {showSender && (
           <div className="flex items-center gap-2 px-0.5">
-            <span className="text-[15px] font-semibold text-foreground">
+            <button
+              type="button"
+              onClick={() => onOpenProfile?.(message.sender_id)}
+              className="text-[15px] font-semibold text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               {sender?.display_name ?? "Someone"}
-            </span>
+            </button>
             <span className="text-[11px] text-muted-foreground">{time}</span>
             {self && (
               <span
@@ -245,6 +260,16 @@ export function MessageBubble({
               className="mt-1 shrink-0 rounded-full p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100 active:opacity-100"
             >
               <Reply className="size-3.5" />
+            </button>
+          )}
+          {onReport && !self && (
+            <button
+              type="button"
+              onClick={onReport}
+              aria-label="Report message"
+              className="mt-1 shrink-0 rounded-full p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100 active:opacity-100"
+            >
+              <Flag className="size-3.5" />
             </button>
           )}
         </div>

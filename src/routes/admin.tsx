@@ -10,6 +10,7 @@ import {
   Settings,
   ArrowLeft,
   UserPlus,
+  Flag,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/admin")({
 const NAV = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/admin/applications", label: "Applications", icon: UserPlus },
+  { to: "/admin/reports", label: "Reports", icon: Flag },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/appeals", label: "Appeals", icon: Scale },
   { to: "/admin/conversations", label: "Conversations", icon: MessagesSquare },
@@ -36,6 +38,7 @@ function AdminLayout() {
   const location = useLocation();
   const [status, setStatus] = useState<"checking" | "denied" | "allowed">("checking");
   const [pendingCount, setPendingCount] = useState(0);
+  const [reportCount, setReportCount] = useState(0);
 
   useEffect(() => {
     if (authLoading) return;
@@ -63,6 +66,13 @@ function AdminLayout() {
         .eq("application_status", "pending")
         .then(({ count }) => {
           if (!cancelled) setPendingCount(count ?? 0);
+        });
+      void supabase
+        .from("message_reports")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "open")
+        .then(({ count }) => {
+          if (!cancelled) setReportCount(count ?? 0);
         });
     };
     load();
@@ -131,6 +141,11 @@ function AdminLayout() {
                     {pendingCount}
                   </span>
                 )}
+                {item.to === "/admin/reports" && reportCount > 0 && (
+                  <span className="ml-auto rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    {reportCount}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -165,6 +180,11 @@ function AdminLayout() {
               {item.to === "/admin/applications" && pendingCount > 0 && (
                 <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[9px] font-bold text-white">
                   {pendingCount}
+                </span>
+              )}
+              {item.to === "/admin/reports" && reportCount > 0 && (
+                <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[9px] font-bold text-white">
+                  {reportCount}
                 </span>
               )}
             </Link>

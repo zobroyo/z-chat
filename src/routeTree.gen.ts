@@ -14,11 +14,13 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RecoveryRouteImport } from './routes/recovery'
+import { Route as ServicesRouteImport } from './routes/services'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAppealsRouteImport } from './routes/admin.appeals'
 import { Route as AdminApplicationsRouteImport } from './routes/admin.applications'
 import { Route as AdminConversationsRouteImport } from './routes/admin.conversations'
 import { Route as AdminMessagesRouteImport } from './routes/admin.messages'
+import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as OauthConsentRouteImport } from './routes/oauth.consent'
@@ -50,6 +52,11 @@ const RecoveryRoute = RecoveryRouteImport.update({
   path: '/recovery',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ServicesRoute = ServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -73,6 +80,11 @@ const AdminConversationsRoute = AdminConversationsRouteImport.update({
 const AdminMessagesRoute = AdminMessagesRouteImport.update({
   id: '/messages',
   path: '/messages',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminReportsRoute = AdminReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -107,10 +119,12 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
+  '/services': typeof ServicesRoute
   '/admin/appeals': typeof AdminAppealsRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/conversations': typeof AdminConversationsRouteWithChildren
   '/admin/messages': typeof AdminMessagesRoute
+  '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/oauth/consent': typeof OauthConsentRoute
@@ -123,9 +137,11 @@ export interface FileRoutesByTo {
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
+  '/services': typeof ServicesRoute
   '/admin/appeals': typeof AdminAppealsRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/messages': typeof AdminMessagesRoute
+  '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/oauth/consent': typeof OauthConsentRoute
@@ -140,10 +156,12 @@ export interface FileRoutesById {
   '/chat': typeof ChatRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
+  '/services': typeof ServicesRoute
   '/admin/appeals': typeof AdminAppealsRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/conversations': typeof AdminConversationsRouteWithChildren
   '/admin/messages': typeof AdminMessagesRoute
+  '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
   '/oauth/consent': typeof OauthConsentRoute
@@ -159,10 +177,12 @@ export interface FileRouteTypes {
     | '/chat'
     | '/profile'
     | '/recovery'
+    | '/services'
     | '/admin/appeals'
     | '/admin/applications'
     | '/admin/conversations'
     | '/admin/messages'
+    | '/admin/reports'
     | '/admin/settings'
     | '/admin/users'
     | '/oauth/consent'
@@ -175,9 +195,11 @@ export interface FileRouteTypes {
     | '/chat'
     | '/profile'
     | '/recovery'
+    | '/services'
     | '/admin/appeals'
     | '/admin/applications'
     | '/admin/messages'
+    | '/admin/reports'
     | '/admin/settings'
     | '/admin/users'
     | '/oauth/consent'
@@ -191,10 +213,12 @@ export interface FileRouteTypes {
     | '/chat'
     | '/profile'
     | '/recovery'
+    | '/services'
     | '/admin/appeals'
     | '/admin/applications'
     | '/admin/conversations'
     | '/admin/messages'
+    | '/admin/reports'
     | '/admin/settings'
     | '/admin/users'
     | '/oauth/consent'
@@ -209,6 +233,7 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRoute
   ProfileRoute: typeof ProfileRoute
   RecoveryRoute: typeof RecoveryRoute
+  ServicesRoute: typeof ServicesRoute
   OauthConsentRoute: typeof OauthConsentRoute
 }
 
@@ -249,6 +274,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RecoveryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/services': {
+      id: '/services'
+      path: '/services'
+      fullPath: '/services'
+      preLoaderRoute: typeof ServicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/': {
       id: '/admin/'
       path: '/'
@@ -282,6 +314,13 @@ declare module '@tanstack/react-router' {
       path: '/messages'
       fullPath: '/admin/messages'
       preLoaderRoute: typeof AdminMessagesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/reports': {
+      id: '/admin/reports'
+      path: '/reports'
+      fullPath: '/admin/reports'
+      preLoaderRoute: typeof AdminReportsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/settings': {
@@ -340,6 +379,7 @@ interface AdminRouteChildren {
   AdminApplicationsRoute: typeof AdminApplicationsRoute
   AdminConversationsRoute: typeof AdminConversationsRouteWithChildren
   AdminMessagesRoute: typeof AdminMessagesRoute
+  AdminReportsRoute: typeof AdminReportsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -350,6 +390,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminApplicationsRoute: AdminApplicationsRoute,
   AdminConversationsRoute: AdminConversationsRouteWithChildren,
   AdminMessagesRoute: AdminMessagesRoute,
+  AdminReportsRoute: AdminReportsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminUsersRoute: AdminUsersRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -363,6 +404,7 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRoute,
   ProfileRoute: ProfileRoute,
   RecoveryRoute: RecoveryRoute,
+  ServicesRoute: ServicesRoute,
   OauthConsentRoute: OauthConsentRoute,
 }
 export const routeTree = rootRouteImport

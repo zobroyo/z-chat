@@ -23,6 +23,7 @@ import { CallOverlay } from "@/components/call/CallOverlay";
 import { Composer } from "@/components/chat/Composer";
 import { GamesAnnouncementDialog } from "@/components/chat/GamesAnnouncementDialog";
 import { ApplicationGate } from "@/components/chat/ApplicationGate";
+import { ProfileDialog } from "@/components/chat/ProfileDialog";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { NewGroupDialog } from "@/components/chat/NewGroupDialog";
 import { NotificationGate } from "@/components/NotificationGate";
@@ -106,6 +107,7 @@ function ChatPage() {
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [applicationStatus, setApplicationStatus] = useState<"unknown" | "approved" | "pending" | "rejected">("unknown");
+  const [profileCardId, setProfileCardId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -127,6 +129,24 @@ function ChatPage() {
       cancelled = true;
     };
   }, [user]);
+
+  const reportMessage = (message: Message) => {
+    if (!user) return;
+    const reason = window.prompt("Why are you reporting this message? (optional)");
+    if (reason === null) return;
+    void supabase
+      .from("message_reports")
+      .insert({
+        message_id: message.id,
+        conversation_id: message.conversation_id,
+        reporter_id: user.id,
+        reason: reason.trim(),
+      })
+      .then(({ error }) => {
+        if (error) toast.error(error.message);
+        else toast.success("Reported - an admin will review it.");
+      });
+  };
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1180,6 +1200,12 @@ function ChatPage() {
         <Presentation className="size-4" />
         Z PRESENTER
       </a>
+      <Link
+        to="/services"
+        className="mx-3 mb-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        ALL Z SERVICES
+      </Link>
       <a
         href="https://forms.gle/FdvZyi4nLM92i1yaA"
         target="_blank"
@@ -1226,6 +1252,7 @@ function ChatPage() {
   return (
     <div className="chat-app-shell flex overflow-hidden">
       <GamesAnnouncementDialog userId={user?.id ?? ""} />
+      <ProfileDialog userId={profileCardId} onClose={() => setProfileCardId(null)} />
       <BanAppealDialog
         open={banAppealOpen}
         onOpenChange={setBanAppealOpen}
@@ -1384,6 +1411,8 @@ function ChatPage() {
                 groupChat={activeConversation?.kind !== "dm"}
                 mentionNames={mentionNames}
                 onReply={() => setReplyingTo(message)}
+                onReport={() => reportMessage(message)}
+                onOpenProfile={(id) => setProfileCardId(id)}
                 onJumpToReply={
                   message.reply_to_message_id
                     ? () => {

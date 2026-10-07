@@ -207,6 +207,66 @@ export type Database = {
         };
         Relationships: [];
       };
+      message_reports: {
+        Row: {
+          conversation_id: string;
+          created_at: string;
+          id: string;
+          message_id: string;
+          reason: string;
+          reporter_id: string;
+          resolution: string | null;
+          resolved_at: string | null;
+          resolved_by: string | null;
+          status: string;
+        };
+        Insert: {
+          conversation_id: string;
+          created_at?: string;
+          id?: string;
+          message_id: string;
+          reason?: string;
+          reporter_id: string;
+          resolution?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          status?: string;
+        };
+        Update: {
+          conversation_id?: string;
+          created_at?: string;
+          id?: string;
+          message_id?: string;
+          reason?: string;
+          reporter_id?: string;
+          resolution?: string | null;
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          status?: string;
+        };
+        Relationships: [];
+      };
+      upload_log: {
+        Row: {
+          bytes: number;
+          created_at: string;
+          id: string;
+          user_id: string;
+        };
+        Insert: {
+          bytes: number;
+          created_at?: string;
+          id?: string;
+          user_id: string;
+        };
+        Update: {
+          bytes?: number;
+          created_at?: string;
+          id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       chat_settings: {
         Row: {
           id: boolean;

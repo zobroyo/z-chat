@@ -37,6 +37,10 @@ function ProfilePage() {
   const { user, loading } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [initialUsername, setInitialUsername] = useState("");
+  const [bio, setBio] = useState("");
+  const [usernameChangedAt, setUsernameChangedAt] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -54,7 +58,7 @@ function ProfilePage() {
     setLoadError(null);
     supabase
       .from("profiles")
-      .select("id, display_name, avatar_url, last_seen")
+      .select("id, display_name, avatar_url, last_seen, username, bio, username_changed_at")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -64,8 +68,18 @@ function ProfilePage() {
           return;
         }
         if (data) {
-          setProfile(data as Profile);
-          setName((data as Profile).display_name);
+          setProfile(data as unknown as Profile);
+          const row = data as unknown as {
+            display_name: string;
+            username: string | null;
+            bio: string;
+            username_changed_at: string | null;
+          };
+          setName(row.display_name);
+          setUsername(row.username ?? "");
+          setInitialUsername((row.username ?? "").toLowerCase());
+          setBio(row.bio ?? "");
+          setUsernameChangedAt(row.username_changed_at);
         } else {
           setLoadError("We couldn't find your profile details.");
         }
@@ -82,16 +96,32 @@ function ProfilePage() {
       toast.error(parsed.error.issues[0]!.message);
       return;
     }
-    setSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ display_name: parsed.data })
-      .eq("id", user.id);
-    setSaving(false);
-    if (error) {
-      toast.error("Could not save your name");
+    const cleanedUsername = username.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,20}$/.test(cleanedUsername)) {
+      toast.error("Usernames are 3-20 characters: letters, numbers, underscore");
       return;
     }
+    const patch: { display_name: string; bio: string; username?: string } = {
+      display_name: parsed.data,
+      bio: bio.slice(0, 300),
+    };
+    if (cleanedUsername !== initialUsername) patch.username = cleanedUsername;
+    setSaving(true);
+    const { error } = await supabase.from("profiles").update(patch).eq("id", user.id);
+    setSaving(false);
+    if (error) {
+      const message = error.message.toLowerCase();
+      if (message.includes("2 weeks")) {
+        toast.error("You can only change your username once every 2 weeks");
+      } else if (message.includes("duplicate") || message.includes("unique")) {
+        toast.error("That username is already taken");
+      } else {
+        toast.error("Could not save your profile");
+      }
+      return;
+    }
+    setInitialUsername(cleanedUsername);
+    if (patch.username) setUsernameChangedAt(new Date().toISOString());
     toast.success("Profile updated");
   };
 
@@ -249,6 +279,41 @@ function ProfilePage() {
           <p className="text-xs text-muted-foreground">
             This is the name people see on your messages.
           </p>
+        </div>
+
+        <div className="mt-5 space-y-2">
+          <Label htmlFor="profile-username">Username</Label>
+          <Input
+            id="profile-username"
+            value={username}
+            maxLength={20}
+            autoComplete="off"
+            onChange={(event) =>
+              setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+            }
+            placeholder="yourname"
+          />
+          <p className="text-xs text-muted-foreground">
+            Your unique handle — people add you by this.{" "}
+            {usernameChangedAt
+              ? `Last changed ${new Date(usernameChangedAt).toLocaleDateString()}. `
+              : ""}
+            You can change it once every 2 weeks.
+          </p>
+        </div>
+
+        <div className="mt-5 space-y-2">
+          <Label htmlFor="profile-bio">Bio</Label>
+          <textarea
+            id="profile-bio"
+            value={bio}
+            maxLength={300}
+            rows={3}
+            onChange={(event) => setBio(event.target.value)}
+            placeholder="A little about you"
+            className="w-full resize-y rounded-md border border-border bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <p className="text-xs text-muted-foreground">{bio.length}/300</p>
         </div>
 
         <Button className="mt-6 w-full" onClick={save} disabled={saving}>
