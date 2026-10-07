@@ -58,7 +58,7 @@ function ProfilePage() {
     setLoadError(null);
     supabase
       .from("profiles")
-      .select("id, display_name, avatar_url, last_seen, username, bio, username_changed_at")
+      .select("id, display_name, avatar_url, last_seen, username, bio, username_changed_at, r6_profile")
       .eq("id", user.id)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -300,6 +300,16 @@ function ProfilePage() {
               : ""}
             You can change it once every 2 weeks.
           </p>
+          {(profile as unknown as { r6_profile?: string | null } | null)?.r6_profile?.startsWith("https://") && (
+            <a
+              href={(profile as unknown as { r6_profile: string }).r6_profile}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+            >
+              R6 Tracker profile ↗
+            </a>
+          )}
         </div>
 
         <div className="mt-5 space-y-2">

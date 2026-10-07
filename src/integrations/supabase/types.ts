@@ -147,7 +147,7 @@ export type Database = {
           },
         ];
       };
-      profiles: {
+          profiles: {
         Row: {
           application_status: string;
           avatar_url: string | null;
@@ -161,6 +161,7 @@ export type Database = {
           last_seen: string;
           last_strike_at: string | null;
           moderation_strikes: number;
+          r6_profile: string | null;
           timeout_reason: string | null;
           timeout_until: string | null;
           updated_at: string;
@@ -180,6 +181,7 @@ export type Database = {
           last_seen?: string;
           last_strike_at?: string | null;
           moderation_strikes?: number;
+          r6_profile?: string | null;
           timeout_reason?: string | null;
           timeout_until?: string | null;
           updated_at?: string;
@@ -199,6 +201,7 @@ export type Database = {
           last_seen?: string;
           last_strike_at?: string | null;
           moderation_strikes?: number;
+          r6_profile?: string | null;
           timeout_reason?: string | null;
           timeout_until?: string | null;
           updated_at?: string;
@@ -473,6 +476,10 @@ export type Database = {
       upload_quota_left: {
         Args: Record<PropertyKey, never>;
         Returns: number;
+      };
+      admin_set_r6: {
+        Args: { _target: string; _url: string };
+        Returns: undefined;
       };
     };
     Enums: {

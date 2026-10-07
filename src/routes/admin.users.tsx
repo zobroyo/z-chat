@@ -114,6 +114,7 @@ function AdminUsers() {
   const [busy, setBusy] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
+  const [r6Draft, setR6Draft] = useState("");
   const [timeoutOpen, setTimeoutOpen] = useState(false);
   const [timeoutReason, setTimeoutReason] = useState("");
 
@@ -200,6 +201,44 @@ function AdminUsers() {
     } finally {
       setBusy(false);
     }
+  };
+
+  useEffect(() => {
+    if (!selected) {
+      setR6Draft("");
+      return;
+    }
+    let cancelled = false;
+    void supabase
+      .from("profiles")
+      .select("r6_profile")
+      .eq("id", selected.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) {
+          setR6Draft(
+            ((data as unknown as { r6_profile?: string | null } | null)?.r6_profile) ?? "",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selected]);
+
+  const saveR6 = async () => {
+    if (!selected) return;
+    setBusy(true);
+    const { error } = await supabase.rpc("admin_set_r6", {
+      _target: selected.id,
+      _url: r6Draft.trim(),
+    });
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success("R6 tracker link saved");
   };
 
   const applyTimeout = async (seconds: number, label: string) => {
@@ -382,6 +421,21 @@ function AdminUsers() {
                   )}
                   <div className="text-xs text-muted-foreground">
                     Joined {fmtJoined(selected.created_at)}
+                  </div>
+                  <div className="mt-2 flex w-full items-center gap-1.5">
+                    <Input
+                      value={r6Draft}
+                      onChange={(event) => setR6Draft(event.target.value)}
+                      placeholder="R6 tracker profile URL"
+                      className="h-8 flex-1 text-xs"
+                    />
+                    <Button
+                      className="h-8 px-2 text-xs"
+                      onClick={() => void saveR6()}
+                      disabled={busy}
+                    >
+                      Save R6
+                    </Button>
                   </div>
                 </div>
               </div>

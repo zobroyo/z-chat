@@ -17,6 +17,7 @@ type CardProfile = {
   bio: string;
   avatar_url: string | null;
   created_at: string;
+  r6_profile: string | null;
 };
 
 /** Small profile card shown when a name/avatar is clicked in chat. */
@@ -39,7 +40,7 @@ export function ProfileDialog({
     let cancelled = false;
     void supabase
       .from("profiles")
-      .select("id, display_name, username, bio, avatar_url, created_at")
+      .select("id, display_name, username, bio, avatar_url, created_at, r6_profile")
       .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
@@ -87,6 +88,16 @@ export function ProfileDialog({
             <p className="mt-3 text-xs text-muted-foreground">
               Joined {new Date(profile.created_at).toLocaleDateString()}
             </p>
+            {profile.r6_profile && profile.r6_profile.startsWith("https://") && (
+              <a
+                href={profile.r6_profile}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-3 inline-flex items-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-surface"
+              >
+                R6 Tracker profile ↗
+              </a>
+            )}
           </div>
         )}
       </DialogContent>
