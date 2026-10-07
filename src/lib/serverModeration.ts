@@ -231,6 +231,13 @@ function parseVerdict(raw: string): ModerationVerdict {
     if (/"safe"\s*:\s*false|\bunsafe\b|not safe|violat/.test(lower)) {
       return { safe: false, reason: "Message violates the chat rules" };
     }
+    if (
+      /cannot provide|can'?t provide|cannot help|can'?t help|won'?t provide|won'?t help|refuse|not able to (provide|help)|against (my|the) (policy|policies|guidelines)/.test(
+        lower,
+      )
+    ) {
+      return { safe: false, reason: "Dangerous request" };
+    }
     if (/"safe"\s*:\s*true|\bsafe\b|\ballowed\b/.test(lower)) {
       return { safe: true, reason: "OK" };
     }
