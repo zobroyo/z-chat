@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowUpRight, Gamepad2, MessageSquare, Presentation, Server } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Gamepad2, MessageSquare, Presentation, Server, ShieldCheck } from "lucide-react";
 
 export const Route = createFileRoute("/services")({
   head: () => ({ meta: [{ title: "Z services — ZChat" }] }),
@@ -30,6 +30,12 @@ const SERVICES = [
     url: "https://mcp.z-chat.men/healthz",
     description: "Assistant access endpoint for the black box services (token required).",
     icon: Server,
+  },
+  {
+    name: "Z Admin Console",
+    url: "https://access.z-chat.men",
+    description: "Ops dashboard for the black box �?" service health, deploy log, restarts. Admins only.",
+    icon: ShieldCheck,
   },
 ] as const;
 
