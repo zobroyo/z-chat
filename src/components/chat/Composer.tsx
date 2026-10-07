@@ -302,7 +302,7 @@ export function Composer({
           }}
           onBlur={() => setMention(null)}
           rows={1}
-          maxLength={4000}
+          maxLength={2000}
           placeholder={placeholder ?? "Write a message"}
           style={{ fontSize: 16 }}
           className="max-h-32 min-h-11 resize-none rounded-2xl border-border bg-surface-2 md:text-base"

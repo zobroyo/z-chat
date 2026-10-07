@@ -310,3 +310,13 @@ export function initialsOf(name: string | null | undefined) {
   const parts = clean.split(/\s+/).slice(0, 2);
   return parts.map((part) => part.charAt(0).toUpperCase()).join("");
 }
+
+/** Deterministic background colour for avatar initials (same name -> same colour). */
+export function colorForName(name: string | null | undefined): string {
+  const clean = (name ?? "?").trim().toLowerCase();
+  let hash = 0;
+  for (let i = 0; i < clean.length; i += 1) {
+    hash = (hash * 31 + clean.charCodeAt(i)) % 360;
+  }
+  return `hsl(${hash}, 45%, 42%)`;
+}

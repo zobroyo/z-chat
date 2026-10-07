@@ -9,10 +9,12 @@ import {
   Scale,
   Settings,
   ArrowLeft,
+  UserPlus,
 } from "lucide-react";
 
 import { useAuth } from "@/hooks/use-auth";
 import { checkIsAdmin } from "@/lib/admin";
+import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
@@ -21,6 +23,7 @@ export const Route = createFileRoute("/admin")({
 
 const NAV = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
+  { to: "/admin/applications", label: "Applications", icon: UserPlus },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/appeals", label: "Appeals", icon: Scale },
   { to: "/admin/conversations", label: "Conversations", icon: MessagesSquare },
@@ -32,6 +35,7 @@ function AdminLayout() {
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const [status, setStatus] = useState<"checking" | "denied" | "allowed">("checking");
+  const [pendingCount, setPendingCount] = useState(0);
 
   useEffect(() => {
     if (authLoading) return;
@@ -47,6 +51,27 @@ function AdminLayout() {
       cancelled = true;
     };
   }, [user, authLoading]);
+
+  /* Keep a live pending-applications badge so admins always know. */
+  useEffect(() => {
+    if (status !== "allowed") return;
+    let cancelled = false;
+    const load = () => {
+      void supabase
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .eq("application_status", "pending")
+        .then(({ count }) => {
+          if (!cancelled) setPendingCount(count ?? 0);
+        });
+    };
+    load();
+    const timer = window.setInterval(load, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [status]);
 
   if (authLoading || status === "checking") {
     return (
@@ -101,6 +126,11 @@ function AdminLayout() {
               >
                 <item.icon className="size-4" />
                 {item.label}
+                {item.to === "/admin/applications" && pendingCount > 0 && (
+                  <span className="ml-auto rounded-full bg-destructive px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    {pendingCount}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -132,6 +162,11 @@ function AdminLayout() {
             >
               <item.icon className="size-3.5" />
               {item.label}
+              {item.to === "/admin/applications" && pendingCount > 0 && (
+                <span className="rounded-full bg-destructive px-1.5 py-0.5 text-[9px] font-bold text-white">
+                  {pendingCount}
+                </span>
+              )}
             </Link>
           );
         })}

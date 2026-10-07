@@ -1,5 +1,5 @@
 import { AVATAR_BUCKET, useSignedUrl } from "@/lib/media";
-import { initialsOf } from "@/lib/chat";
+import { colorForName, initialsOf } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -19,7 +19,12 @@ export function UserAvatar({ name, path, online, className, fallback }: Props) {
         {url ? (
           <img src={url} alt={name ?? "Profile picture"} className="size-full object-cover" />
         ) : (
-          (fallback ?? initialsOf(name))
+          <span
+            className="flex size-full items-center justify-center font-semibold text-white"
+            style={{ backgroundColor: colorForName(name) }}
+          >
+            {fallback ?? initialsOf(name)}
+          </span>
         )}
       </span>
       {online !== undefined && (

@@ -21,6 +21,7 @@ import { CallButton } from "@/components/call/CallButton";
 import { CallOverlay } from "@/components/call/CallOverlay";
 import { Composer } from "@/components/chat/Composer";
 import { GamesAnnouncementDialog } from "@/components/chat/GamesAnnouncementDialog";
+import { ApplicationGate } from "@/components/chat/ApplicationGate";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { NewGroupDialog } from "@/components/chat/NewGroupDialog";
 import { NotificationGate } from "@/components/NotificationGate";
@@ -103,6 +104,28 @@ function ChatPage() {
   }, [user]);
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [applicationStatus, setApplicationStatus] = useState<"unknown" | "approved" | "pending" | "rejected">("unknown");
+
+  useEffect(() => {
+    if (!user) {
+      setApplicationStatus("unknown");
+      return;
+    }
+    let cancelled = false;
+    void supabase
+      .from("profiles")
+      .select("application_status")
+      .eq("id", user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const status = (data?.application_status as string | undefined) ?? "approved";
+        setApplicationStatus(status === "pending" ? "pending" : status === "rejected" ? "rejected" : "approved");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -1187,6 +1210,10 @@ function ChatPage() {
       </Link>
     </div>
   );
+
+  if (applicationStatus === "pending" || applicationStatus === "rejected") {
+    return <ApplicationGate status={applicationStatus} />;
+  }
 
   return (
     <div className="chat-app-shell flex overflow-hidden">

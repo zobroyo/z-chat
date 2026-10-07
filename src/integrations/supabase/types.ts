@@ -149,8 +149,10 @@ export type Database = {
       };
       profiles: {
         Row: {
+          application_status: string;
           avatar_url: string | null;
           banned: boolean;
+          bio: string;
           created_at: string;
           device_fingerprint: string | null;
           display_name: string;
@@ -162,10 +164,14 @@ export type Database = {
           timeout_reason: string | null;
           timeout_until: string | null;
           updated_at: string;
+          username: string | null;
+          username_changed_at: string | null;
         };
         Insert: {
+          application_status?: string;
           avatar_url?: string | null;
           banned?: boolean;
+          bio?: string;
           created_at?: string;
           device_fingerprint?: string | null;
           display_name?: string;
@@ -177,10 +183,14 @@ export type Database = {
           timeout_reason?: string | null;
           timeout_until?: string | null;
           updated_at?: string;
+          username?: string | null;
+          username_changed_at?: string | null;
         };
         Update: {
+          application_status?: string;
           avatar_url?: string | null;
           banned?: boolean;
+          bio?: string;
           created_at?: string;
           device_fingerprint?: string | null;
           display_name?: string;
@@ -192,6 +202,8 @@ export type Database = {
           timeout_reason?: string | null;
           timeout_until?: string | null;
           updated_at?: string;
+          username?: string | null;
+          username_changed_at?: string | null;
         };
         Relationships: [];
       };
@@ -338,6 +350,14 @@ export type Database = {
       record_moderation_block: {
         Args: { p_body: string; p_conversation_id: string; p_reason: string };
         Returns: Json;
+      };
+      review_application: {
+        Args: { _approve: boolean; _user_id: string };
+        Returns: undefined;
+      };
+      username_available: {
+        Args: { _username: string };
+        Returns: boolean;
       };
     };
     Enums: {

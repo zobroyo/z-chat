@@ -16,6 +16,7 @@ import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RecoveryRouteImport } from './routes/recovery'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAppealsRouteImport } from './routes/admin.appeals'
+import { Route as AdminApplicationsRouteImport } from './routes/admin.applications'
 import { Route as AdminConversationsRouteImport } from './routes/admin.conversations'
 import { Route as AdminMessagesRouteImport } from './routes/admin.messages'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
@@ -57,6 +58,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
 const AdminAppealsRoute = AdminAppealsRouteImport.update({
   id: '/appeals',
   path: '/appeals',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminApplicationsRoute = AdminApplicationsRouteImport.update({
+  id: '/applications',
+  path: '/applications',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminConversationsRoute = AdminConversationsRouteImport.update({
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
   '/admin/appeals': typeof AdminAppealsRoute
+  '/admin/applications': typeof AdminApplicationsRoute
   '/admin/conversations': typeof AdminConversationsRouteWithChildren
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
   '/admin/appeals': typeof AdminAppealsRoute
+  '/admin/applications': typeof AdminApplicationsRoute
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/users': typeof AdminUsersRoute
@@ -133,6 +141,7 @@ export interface FileRoutesById {
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
   '/admin/appeals': typeof AdminAppealsRoute
+  '/admin/applications': typeof AdminApplicationsRoute
   '/admin/conversations': typeof AdminConversationsRouteWithChildren
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -151,6 +160,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/recovery'
     | '/admin/appeals'
+    | '/admin/applications'
     | '/admin/conversations'
     | '/admin/messages'
     | '/admin/settings'
@@ -166,6 +176,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/recovery'
     | '/admin/appeals'
+    | '/admin/applications'
     | '/admin/messages'
     | '/admin/settings'
     | '/admin/users'
@@ -181,6 +192,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/recovery'
     | '/admin/appeals'
+    | '/admin/applications'
     | '/admin/conversations'
     | '/admin/messages'
     | '/admin/settings'
@@ -251,6 +263,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAppealsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/applications': {
+      id: '/admin/applications'
+      path: '/applications'
+      fullPath: '/admin/applications'
+      preLoaderRoute: typeof AdminApplicationsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/conversations': {
       id: '/admin/conversations'
       path: '/conversations'
@@ -318,6 +337,7 @@ const AdminConversationsRouteWithChildren =
 
 interface AdminRouteChildren {
   AdminAppealsRoute: typeof AdminAppealsRoute
+  AdminApplicationsRoute: typeof AdminApplicationsRoute
   AdminConversationsRoute: typeof AdminConversationsRouteWithChildren
   AdminMessagesRoute: typeof AdminMessagesRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -327,6 +347,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAppealsRoute: AdminAppealsRoute,
+  AdminApplicationsRoute: AdminApplicationsRoute,
   AdminConversationsRoute: AdminConversationsRouteWithChildren,
   AdminMessagesRoute: AdminMessagesRoute,
   AdminSettingsRoute: AdminSettingsRoute,

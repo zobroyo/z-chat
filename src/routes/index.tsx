@@ -13,6 +13,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 import { displayNameSchema } from "@/lib/chat";
 import { getDeviceFingerprint } from "@/lib/fingerprint";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,6 +36,11 @@ export const Route = createFileRoute("/")({
 
 const emailSchema = z.string().trim().email("That email address doesn't look right").max(255);
 const passwordSchema = z.string().min(8, "Password needs at least 8 characters").max(72);
+const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9_]{3,20}$/, "Usernames are 3-20 characters: letters, numbers, underscore");
 
 function friendlyAuthError(message: string) {
   const lower = message.toLowerCase();
@@ -51,6 +57,8 @@ function AuthPage() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [name, setName] = useState("");
+  const [username, setUsername] = useState("");
+  const [usernameState, setUsernameState] = useState<"idle" | "checking" | "ok" | "taken" | "invalid">("idle");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
 
@@ -66,6 +74,28 @@ function AuthPage() {
 
     void navigate({ to: "/chat" });
   }, [loading, session, navigate]);
+
+  useEffect(() => {
+    const parsed = usernameSchema.safeParse(username);
+    if (!parsed.success) {
+      setUsernameState(username.length ? "invalid" : "idle");
+      return;
+    }
+    setUsernameState("checking");
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void supabase
+        .rpc("username_available", { _username: parsed.data })
+        .then(({ data, error }) => {
+          if (cancelled) return;
+          setUsernameState(error ? "idle" : data ? "ok" : "taken");
+        });
+    }, 350);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [username]);
 
   const logIn = async () => {
     const email = emailSchema.safeParse(loginEmail);
@@ -93,6 +123,12 @@ function AuthPage() {
       return;
     }
 
+    const parsedUsername = usernameSchema.safeParse(username);
+    if (!parsedUsername.success) {
+      toast.error(parsedUsername.error.issues[0]!.message);
+      return;
+    }
+
     const email = emailSchema.safeParse(signupEmail);
     if (!email.success) {
       toast.error(email.error.issues[0]!.message);
@@ -102,6 +138,14 @@ function AuthPage() {
     const password = passwordSchema.safeParse(signupPassword);
     if (!password.success) {
       toast.error(password.error.issues[0]!.message);
+      return;
+    }
+
+    const { data: available } = await supabase.rpc("username_available", {
+      _username: parsedUsername.data,
+    });
+    if (available === false) {
+      toast.error("That username was just taken — pick another.");
       return;
     }
 
@@ -117,6 +161,7 @@ function AuthPage() {
       options: {
         data: {
           display_name: parsedName.data,
+          username: parsedUsername.data,
           ...(fingerprint ? { device_fingerprint: fingerprint } : {}),
         },
         emailRedirectTo: `${window.location.origin}/chat`,
@@ -131,11 +176,11 @@ function AuthPage() {
     }
 
     if (data.session) {
-      toast.success("Account created. You're in!");
+      toast.success("Account created — an admin reviews new accounts next (usually 3:30–7pm weekdays).");
       return;
     }
 
-    toast.success("Check your email to confirm your account, then log in.");
+    toast.success("Check your email to confirm your account. After that, an admin reviews it — usually 3:30–7pm weekdays.");
 
   };
 
@@ -237,6 +282,36 @@ function AuthPage() {
               </div>
 
               <div className="space-y-1.5">
+                <Label htmlFor="signup-username">Username</Label>
+                <Input
+                  id="signup-username"
+                  value={username}
+                  maxLength={20}
+                  autoComplete="off"
+                  onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  placeholder="yourname"
+                />
+                <p
+                  className={cn(
+                    "text-xs",
+                    usernameState === "taken" || usernameState === "invalid"
+                      ? "text-destructive"
+                      : "text-muted-foreground",
+                  )}
+                >
+                  {usernameState === "checking"
+                    ? "Checking availability…"
+                    : usernameState === "ok"
+                      ? "Username is available"
+                      : usernameState === "taken"
+                        ? "That username is taken"
+                        : usernameState === "invalid"
+                          ? "3–20 characters: letters, numbers, underscore"
+                          : "Your unique handle — friends add you by this."}
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
                 <Label htmlFor="signup-email">Email</Label>
                 <Input
                   id="signup-email"
@@ -264,6 +339,11 @@ function AuthPage() {
                 {busy && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Create account
               </Button>
+
+              <p className="text-xs leading-5 text-muted-foreground">
+                New accounts are reviewed by an admin first — usually accepted{" "}
+                <strong className="text-foreground">3:30pm–7pm on weekdays</strong>.
+              </p>
             </TabsContent>
           </Tabs>
 
