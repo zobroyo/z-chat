@@ -192,13 +192,21 @@ export function MessageBubble({
               </button>
             )}
 
-            {message.image_url && (
-              <img
-                src={imageUrl ?? undefined}
-                alt="Shared image"
-                loading="lazy"
-                className="mt-1 max-h-72 w-full rounded-xl bg-surface object-cover"
-              />
+            {message.image_url && imageUrl && (
+              <a
+                href={imageUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 inline-block max-w-full"
+                aria-label="Open image full size"
+              >
+                <img
+                  src={imageUrl}
+                  alt="Shared image"
+                  loading="lazy"
+                  className="max-h-80 max-w-[20rem] cursor-zoom-in rounded-xl border border-border/60 bg-surface object-contain"
+                />
+              </a>
             )}
             {message.body && (
               <>

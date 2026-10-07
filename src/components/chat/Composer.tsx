@@ -171,7 +171,7 @@ export function Composer({
 
       {preview && (
         <div className="message-reply-enter relative mb-2 inline-block">
-          <img src={preview} alt="Selected" className="h-20 rounded-xl object-cover" />
+          <img src={preview} alt="Selected" className="h-20 rounded-xl object-contain" />
           <button
             type="button"
             onClick={clearFile}
