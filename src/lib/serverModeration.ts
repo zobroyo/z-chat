@@ -295,7 +295,7 @@ export async function askOllama(input: AskOllamaInput): Promise<ModerationVerdic
       stream: false,
       think: false,
       keep_alive: -1,
-      options: { temperature: 0.1, num_predict: 32, num_ctx: 2048 },
+      options: { temperature: 0.1, num_predict: 24, num_ctx: 2048 },
     }),
     signal: AbortSignal.timeout(30_000),
   });
@@ -404,7 +404,7 @@ function parseHistoryInput(value: unknown): ModerationHistoryItem[] {
     if (!content.trim()) continue;
     const username = typeof record["username"] === "string" ? record["username"] : "user";
     items.push({ username, content });
-    if (items.length >= 50) break;
+    if (items.length >= 10) break;
   }
   return items;
 }
