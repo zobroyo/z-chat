@@ -74,3 +74,7 @@ npm run lint
 Environment for builds: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`
 (publishable key only - never the service role key), `NITRO_PRESET=node-server`
 on the host.
+
+## Auto-deploy authentication
+
+The black box pulls this (private) repository every 30 seconds as the `zchat` user using a read credential embedded in the deploy clone's git remote. If repository visibility or access tokens change, update the credential in `/srv/zchat/src/.git/config` on the box.
