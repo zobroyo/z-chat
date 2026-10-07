@@ -246,6 +246,33 @@ export type Database = {
         };
         Relationships: [];
       };
+      friendships: {
+        Row: {
+          addressee_id: string;
+          created_at: string;
+          id: string;
+          requester_id: string;
+          responded_at: string | null;
+          status: string;
+        };
+        Insert: {
+          addressee_id: string;
+          created_at?: string;
+          id?: string;
+          requester_id: string;
+          responded_at?: string | null;
+          status?: string;
+        };
+        Update: {
+          addressee_id?: string;
+          created_at?: string;
+          id?: string;
+          requester_id?: string;
+          responded_at?: string | null;
+          status?: string;
+        };
+        Relationships: [];
+      };
       upload_log: {
         Row: {
           bytes: number;
@@ -418,6 +445,34 @@ export type Database = {
       username_available: {
         Args: { _username: string };
         Returns: boolean;
+      };
+      friends_list: {
+        Args: Record<PropertyKey, never>;
+        Returns: {
+          avatar_url: string | null;
+          created_at: string;
+          direction: string;
+          display_name: string;
+          friend_id: string;
+          status: string;
+          username: string | null;
+        }[];
+      };
+      remove_friend: {
+        Args: { p_user: string };
+        Returns: undefined;
+      };
+      respond_friend_request: {
+        Args: { p_accept: boolean; p_user: string };
+        Returns: undefined;
+      };
+      send_friend_request: {
+        Args: { p_username: string };
+        Returns: string;
+      };
+      upload_quota_left: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
       };
     };
     Enums: {

@@ -16,9 +16,16 @@ export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 
 const signedCache = new Map<string, { url: string; expires: number }>();
 
+/** New media lives on the black box ("bb:" paths); old media stays on Supabase. */
+function boxUrlFor(path: string): string | null {
+  return path.startsWith("bb:") ? `/media/${path.slice(3)}` : null;
+}
+
 /** Files live in private storage, so every render needs a short-lived signed URL. */
 export async function getSignedUrl(bucket: string, path: string | null | undefined) {
   if (!path) return null;
+  const boxUrl = boxUrlFor(path);
+  if (boxUrl) return boxUrl;
   const key = `${bucket}/${path}`;
   const cached = signedCache.get(key);
   if (cached && cached.expires > Date.now()) return cached.url;
@@ -70,23 +77,37 @@ export function validateImage(file: File, maxBytes: number) {
 
 const validate = validateImage;
 
+/** Upload to the black box (replaces Supabase Storage, which is on the free plan). */
+async function uploadToBox(bucket: string, relPath: string, file: File): Promise<string> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) throw new Error("Please sign in again to upload");
+  const response = await fetch(`/media/api/upload?bucket=${encodeURIComponent(bucket)}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": file.type || "application/octet-stream",
+      "X-File-Path": relPath,
+    },
+    body: file,
+  });
+  if (!response.ok) {
+    const detail = (await response.json().catch(() => null)) as { message?: string } | null;
+    throw new Error(detail?.message || "Upload failed. Please try again.");
+  }
+  const result = (await response.json()) as { path?: string };
+  if (!result.path) throw new Error("Upload failed. Please try again.");
+  return result.path;
+}
 
 export async function uploadAvatar(userId: string, file: File) {
   validate(file, MAX_AVATAR_BYTES);
   const path = `${userId}/avatar-${Date.now()}.${extensionFor(file)}`;
-  const { error } = await supabase.storage
-    .from(AVATAR_BUCKET)
-    .upload(path, file, { upsert: true, contentType: file.type });
-  if (error) throw error;
-  return path;
+  return uploadToBox(AVATAR_BUCKET, path, file);
 }
 
 export async function uploadChatImage(conversationId: string, file: File) {
   validate(file, MAX_IMAGE_BYTES);
   const path = `${conversationId}/${crypto.randomUUID()}.${extensionFor(file)}`;
-  const { error } = await supabase.storage
-    .from(CHAT_BUCKET)
-    .upload(path, file, { contentType: file.type });
-  if (error) throw error;
-  return path;
+  return uploadToBox(CHAT_BUCKET, path, file);
 }
