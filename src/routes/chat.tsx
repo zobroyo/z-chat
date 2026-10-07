@@ -1198,35 +1198,69 @@ function ChatPage() {
   }, [call.error]);
 
   const sidebar = (
-    <div className="ios-safe-top ios-safe-bottom flex h-full flex-col bg-sidebar">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-        <span className="flex size-9 items-center justify-center rounded-xl bg-primary font-display text-sm font-extrabold text-primary-foreground">
+    <div className="ios-safe-top ios-safe-bottom flex h-full min-h-0 flex-col bg-sidebar text-foreground">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-black/20 px-3">
+        <span className="flex size-8 items-center justify-center rounded-xl bg-blurple font-display text-sm font-extrabold text-white shadow-sm">
           Z
         </span>
 
-        <span className="font-display text-base font-bold">ZChat</span>
+        <span className="font-display text-[15px] font-bold">ZChat</span>
 
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto flex items-center gap-0.5">
           <NewGroupDialog people={friendProfiles} onCreate={makeGroup} />
 
           <NotificationGate userId={user?.id ?? ""} />
         </div>
       </div>
 
-      <div className="px-3 py-3">
-        <div className="relative">
-          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+      <div className="mx-2 mt-2 grid shrink-0 grid-cols-2 gap-1 rounded-lg bg-rail p-1">
+        <button
+          type="button"
+          onClick={() => setRailView("chats")}
+          aria-pressed={railView === "chats"}
+          className={cn(
+            "rounded-md px-2 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            railView === "chats"
+              ? "bg-elevated text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Chats
+        </button>
 
-          <Input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search people"
-            className="rounded-xl bg-surface-2 pl-9"
-          />
-        </div>
+        <button
+          type="button"
+          onClick={() => setRailView("friends")}
+          aria-pressed={railView === "friends"}
+          className={cn(
+            "rounded-md px-2 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            railView === "friends"
+              ? "bg-elevated text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          Friends
+        </button>
       </div>
 
-      <div className="scroll-slim flex-1 space-y-5 overflow-y-auto px-3 pb-4">
+      {railView === "chats" && (
+        <div className="shrink-0 px-2 py-3">
+          <div className="relative">
+            <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search people"
+              className="h-8 rounded-md border-black/20 bg-rail pl-8 text-sm focus-visible:ring-blurple/60"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="scroll-slim min-h-0 flex-1 space-y-4 overflow-y-auto px-2 pb-4">
+        {railView === "chats" && (
+          <>
         <Section title="Room">
           <Row
             active={activeId === generalRoom?.id}
@@ -1288,9 +1322,13 @@ function ChatPage() {
             })}
           </Section>
         )}
+          </>
+        )}
 
+        {railView === "friends" && (
+          <>
         <Section title="Friends">
-          <div className="flex gap-1.5 px-2 py-1">
+          <div className="flex gap-1.5 px-1 py-1">
             <input
               value={friendUsername}
               onChange={(event) => setFriendUsername(event.target.value)}
@@ -1298,13 +1336,14 @@ function ChatPage() {
                 if (event.key === "Enter") void addFriend();
               }}
               placeholder="Add friend by username"
-              className="min-w-0 flex-1 rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label="Add friend by username"
+              className="min-w-0 flex-1 rounded-md border border-black/20 bg-rail px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blurple/60"
             />
             <button
               type="button"
               onClick={() => void addFriend()}
               disabled={friendBusy}
-              className="rounded-md bg-primary px-2.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
+              className="rounded-md bg-blurple px-3 text-xs font-semibold text-white transition-colors hover:bg-blurple-hover disabled:opacity-60"
             >
               Add
             </button>
@@ -1324,14 +1363,14 @@ function ChatPage() {
               <button
                 type="button"
                 onClick={() => void respondFriend(request.friend_id, true)}
-                className="rounded bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground"
+                className="rounded bg-blurple px-2 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-blurple-hover"
               >
                 Accept
               </button>
               <button
                 type="button"
                 onClick={() => void respondFriend(request.friend_id, false)}
-                className="rounded bg-surface-2 px-2 py-0.5 text-[11px] text-foreground"
+                className="rounded bg-elevated px-2 py-0.5 text-[11px] text-foreground transition-colors hover:bg-elevated/70"
               >
                 Decline
               </button>
@@ -1364,7 +1403,11 @@ function ChatPage() {
               </p>
             )}
         </Section>
+          </>
+        )}
 
+        {railView === "chats" && (
+          <>
         {!friendsOnlyMode && (
           <Section title="People">
             {filteredOthers.length === 0 && (
@@ -1391,65 +1434,72 @@ function ChatPage() {
         )}
 
         {friendsOnlyMode && (
-          <p className="px-3 py-2 text-xs leading-5 text-muted-foreground">
-            50+ members — the open people list is hidden. Add friends by username above to
-            start DMs.
+          <p className="px-2 py-2 text-xs leading-5 text-muted-foreground">
+            50+ members — the open people list is hidden. Add friends by username in the Friends
+            tab to start DMs.
           </p>
+        )}
+          </>
         )}
       </div>
 
-      <a
-        href="https://game.z-chat.men"
-        className="mx-3 mt-3 mb-2 flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-3 text-sm font-semibold tracking-wide text-primary-foreground shadow-sm transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Gamepad2 className="size-4" />
-        Z GAMES
-      </a>
-      <a
-        href="https://present.z-chat.men"
-        className="mx-3 mb-2 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Presentation className="size-4" />
-        Z PRESENTER
-      </a>
-      <Link
-        to="/services"
-        className="mx-3 mb-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        ALL Z SERVICES
-      </Link>
-      <a
-        href="https://forms.gle/FdvZyi4nLM92i1yaA"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mx-3 mb-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Bug className="size-4" />
-        Bugs &amp; Suggestions
-      </a>
-
-      {isAdmin && (
-        <Link
-          to="/admin"
-          className="flex items-center gap-3 border-t border-border px-4 py-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+      <div className="shrink-0 space-y-0.5 border-t border-black/20 px-2 py-2">
+        <a
+          href="https://game.z-chat.men"
+          className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-elevated/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <Shield className="size-4" />
-          Admin panel
+          <Gamepad2 className="size-4" />
+          Z GAMES
+        </a>
+        <a
+          href="https://present.z-chat.men"
+          className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-elevated/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Presentation className="size-4" />
+          Z PRESENTER
+        </a>
+        <Link
+          to="/services"
+          className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-elevated/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <LayoutGrid className="size-4" />
+          ALL Z SERVICES
         </Link>
-      )}
+        <a
+          href="https://forms.gle/FdvZyi4nLM92i1yaA"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-elevated/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Bug className="size-4" />
+          Bugs &amp; Suggestions
+        </a>
+
+        {isAdmin && (
+          <Link
+            to="/admin"
+            className="flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-elevated/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Shield className="size-4" />
+            Admin panel
+          </Link>
+        )}
+      </div>
 
       <Link
         to="/profile"
-        className="flex items-center gap-3 border-t border-border px-4 py-3 transition-colors hover:bg-surface-2"
+        className="flex shrink-0 items-center gap-2.5 border-t border-black/20 px-3 py-2.5 transition-colors hover:bg-elevated/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <UserAvatar name={me?.display_name} path={me?.avatar_url} className="size-9" />
+        <UserAvatar name={me?.display_name} path={me?.avatar_url} className="size-8" />
 
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">
+          <span className="block truncate text-[13px] font-semibold">
             {me?.display_name || "Set your name"}
           </span>
 
-          <span className="block truncate text-xs text-muted-foreground">Profile & settings</span>
+          <span className="block truncate text-[11px] text-muted-foreground">
+            Profile &amp; settings
+          </span>
         </span>
 
         <Settings className="size-4 text-muted-foreground" />
@@ -1462,7 +1512,7 @@ function ChatPage() {
   }
 
   return (
-    <div className="chat-app-shell flex overflow-hidden">
+    <div className="chat-app-shell flex overflow-hidden bg-chat text-foreground">
       <GamesAnnouncementDialog userId={user?.id ?? ""} />
       <ProfileDialog userId={profileCardId} onClose={() => setProfileCardId(null)} />
       <BanAppealDialog
@@ -1471,18 +1521,87 @@ function ChatPage() {
         userId={user?.id ?? ""}
       />
 
-      <aside className="hidden w-80 shrink-0 border-r border-border md:block">{sidebar}</aside>
+      <nav
+        aria-label="Primary"
+        className="hidden w-[72px] shrink-0 flex-col items-center gap-2 bg-rail py-3 md:flex"
+      >
+        <button
+          type="button"
+          onClick={() => setRailView("chats")}
+          title="ZChat chats"
+          aria-label="ZChat chats"
+          className={cn(
+            "flex size-12 items-center justify-center rounded-2xl bg-blurple font-display text-lg font-extrabold text-white shadow-sm transition-all hover:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            railView !== "chats" && "bg-elevated text-foreground hover:bg-blurple hover:text-white",
+          )}
+        >
+          Z
+        </button>
 
-      <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="ios-safe-top flex shrink-0 items-center gap-3 border-b border-border bg-surface/70 px-3 py-3 backdrop-blur">
+        <span aria-hidden className="my-0.5 h-px w-8 bg-white/10" />
+
+        <button
+          type="button"
+          onClick={() => setRailView("friends")}
+          title="Friends"
+          aria-label="Friends"
+          aria-pressed={railView === "friends"}
+          className={cn(
+            "flex size-12 items-center justify-center rounded-2xl bg-elevated text-muted-foreground transition-all hover:rounded-xl hover:bg-blurple hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            railView === "friends" && "rounded-xl bg-blurple text-white",
+          )}
+        >
+          <Users className="size-5" />
+        </button>
+
+        <Link
+          to="/services"
+          title="Z Services"
+          aria-label="Z Services"
+          className="flex size-12 items-center justify-center rounded-2xl bg-elevated text-muted-foreground transition-all hover:rounded-xl hover:bg-blurple hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <LayoutGrid className="size-5" />
+        </Link>
+
+        <div className="mt-auto flex flex-col items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setProfileCardId(user?.id ?? null)}
+            title="Your profile"
+            aria-label="Your profile"
+            className="flex size-12 items-center justify-center rounded-2xl bg-elevated transition-all hover:rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <UserAvatar name={me?.display_name} path={me?.avatar_url} className="size-8" />
+          </button>
+
+          <Link
+            to="/profile"
+            title="Settings"
+            aria-label="Profile and settings"
+            className="flex size-12 items-center justify-center rounded-2xl bg-elevated text-muted-foreground transition-all hover:rounded-xl hover:bg-blurple hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Settings className="size-5" />
+          </Link>
+        </div>
+      </nav>
+
+      <aside className="hidden w-60 shrink-0 flex-col bg-sidebar md:flex">{sidebar}</aside>
+
+      <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-chat">
+        <header className="ios-safe-top flex min-h-[52px] shrink-0 items-center gap-3 border-b border-black/20 bg-chat px-4 py-2 shadow-sm">
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open chats">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground md:hidden"
+                aria-label="Open chats"
+              >
                 <Menu className="size-5" />
               </Button>
             </SheetTrigger>
 
-            <SheetContent side="left" className="ios-mobile-sheet w-[19rem] p-0">
+            <SheetContent side="left" className="ios-mobile-sheet discord-portal w-[19rem] p-0">
               <SheetTitle className="sr-only">Chats</SheetTitle>
 
               {sidebar}
@@ -1494,10 +1613,10 @@ function ChatPage() {
               name={activePartner?.display_name}
               path={activePartner?.avatar_url}
               online={isOnline(activePartner)}
-              className="size-9"
+              className="size-7"
             />
           ) : (
-            <span className="flex size-9 items-center justify-center rounded-full bg-surface-2 text-sm text-muted-foreground">
+            <span className="flex size-7 items-center justify-center rounded-full bg-elevated text-xs text-muted-foreground">
               {activeConversation?.kind === "public" ? (
                 <Hash className="size-4" />
               ) : (
@@ -1507,9 +1626,11 @@ function ChatPage() {
           )}
 
           <div className="min-w-0">
-            <p className="truncate font-display text-sm font-semibold">{activeTitle}</p>
+            <p className="truncate font-display text-[15px] font-semibold text-foreground">
+              {activeTitle}
+            </p>
 
-            <p className="truncate text-xs text-muted-foreground">{activeSubtitle}</p>
+            <p className="truncate text-[11px] text-muted-foreground">{activeSubtitle}</p>
           </div>
 
           <input
@@ -1517,7 +1638,7 @@ function ChatPage() {
             onChange={(event) => setMsgQuery(event.target.value)}
             placeholder="Search messages"
             aria-label="Search messages"
-            className="ml-3 hidden w-40 shrink rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:block"
+            className="ml-3 hidden w-44 shrink rounded-md border border-black/20 bg-rail px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blurple/60 sm:block"
           />
 
           <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -1556,11 +1677,28 @@ function ChatPage() {
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-muted-foreground"
+                className="text-muted-foreground hover:bg-elevated hover:text-foreground"
                 onClick={() => void leaveGroup()}
               >
                 <LogOut className="mr-1.5 size-4" />
                 Leave group
+              </Button>
+            )}
+
+            {showMemberList && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label={memberListOpen ? "Hide member list" : "Show member list"}
+                aria-expanded={memberListOpen}
+                title={memberListOpen ? "Hide member list" : "Show member list"}
+                onClick={() => setMemberListOpen((open) => !open)}
+                className={cn(
+                  "hidden text-muted-foreground hover:bg-elevated hover:text-foreground lg:inline-flex",
+                  memberListOpen && "text-foreground",
+                )}
+              >
+                <Users className="size-5" />
               </Button>
             )}
           </div>
@@ -1587,20 +1725,34 @@ function ChatPage() {
           ref={messageListRef}
           onScroll={updateNearBottom}
           className={cn(
-            "chat-message-list scroll-slim min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-4",
+            "chat-message-list scroll-slim min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-4 pt-4 pb-2",
             switchingConversation && "conversation-enter",
           )}
         >
           {messages.length === 0 && (
-            <div className="flex h-full items-center justify-center">
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+              <span
+                aria-hidden
+                className="empty-state-enter flex size-14 items-center justify-center rounded-full bg-elevated text-2xl"
+              >
+                👋
+              </span>
+              <p className="empty-state-enter text-base font-semibold text-foreground">
+                No messages yet
+              </p>
               <p className="empty-state-enter text-sm text-muted-foreground">
-                No messages yet. Say hi.
+                Say hi to start the conversation.
               </p>
             </div>
           )}
 
           {visibleMessages.map((message, index) => {
             const previous = visibleMessages[index - 1];
+            const previousAt = previous ? new Date(previous.created_at).getTime() : 0;
+            const groupedWithPrevious =
+              previous !== undefined &&
+              previous.sender_id === message.sender_id &&
+              new Date(message.created_at).getTime() - previousAt < 5 * 60_000;
 
             const replyTarget = message.reply_to_message_id
               ? messages.find((item) => item.id === message.reply_to_message_id)
@@ -1625,7 +1777,7 @@ function ChatPage() {
                 animateIn={enteringMessageIds.has(message.id)}
                 self={message.sender_id === user?.id}
                 sender={profileMap.get(message.sender_id)}
-                showSender={previous?.sender_id !== message.sender_id}
+                showSender={!groupedWithPrevious}
                 replyPreview={replyPreview}
                 receipts={receiptsByMessage.get(message.id) ?? []}
                 groupChat={activeConversation?.kind !== "dm"}
@@ -1662,7 +1814,7 @@ function ChatPage() {
 
         {typingLabel && (
           <p
-            className="typing-enter shrink-0 px-5 pb-1 text-xs text-muted-foreground"
+            className="typing-enter shrink-0 px-4 pb-1 text-xs text-muted-foreground"
             aria-live="polite"
           >
             <span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-muted-foreground align-middle" />
@@ -1688,6 +1840,54 @@ function ChatPage() {
           onCancelReply={() => setReplyingTo(null)}
         />
       </main>
+
+      {showMemberList && (
+        <aside
+          aria-label="Members"
+          className={cn(
+            "hidden w-60 shrink-0 flex-col bg-sidebar",
+            memberListOpen ? "lg:flex" : "lg:hidden",
+          )}
+        >
+          <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-black/20 px-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-foreground">Members</h2>
+
+            <span className="rounded-full bg-rail px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+              {activeMemberProfiles.length}
+            </span>
+          </div>
+
+          <div className="scroll-slim min-h-0 flex-1 overflow-y-auto px-2 py-3">
+            {onlineMemberProfiles.length > 0 && (
+              <p className="px-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                Online — {onlineMemberProfiles.length}
+              </p>
+            )}
+
+            {onlineMemberProfiles.map((profile) => (
+              <MemberRow
+                key={profile.id}
+                profile={profile}
+                onOpen={() => setProfileCardId(profile.id)}
+              />
+            ))}
+
+            {offlineMemberProfiles.length > 0 && (
+              <p className="mt-3 px-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                Offline — {offlineMemberProfiles.length}
+              </p>
+            )}
+
+            {offlineMemberProfiles.map((profile) => (
+              <MemberRow
+                key={profile.id}
+                profile={profile}
+                onOpen={() => setProfileCardId(profile.id)}
+              />
+            ))}
+          </div>
+        </aside>
+      )}
 
       <CallOverlay call={call} conversationTitle={activeTitle} />
     </div>
