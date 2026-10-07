@@ -12,6 +12,13 @@ import { supabase } from "@/integrations/supabase/client";
 
 const APPROVE_URL_FALLBACK = "https://game.z-chat.men/api/oauth/approve";
 
+/* Display names for the apps that use this consent page. */
+const APP_NAMES: Record<string, string> = {
+  "z-games": "Z Games",
+  "z-slides": "Z Slides",
+  "z-console": "Z Admin Console",
+};
+
 /* Only Z Chat family apps may receive the approval token. */
 function resolveApproveUrl(raw: string): string {
   try {
@@ -44,12 +51,13 @@ export const Route = createFileRoute("/oauth/consent")({
       typeof search["code_challenge_method"] === "string" ? search["code_challenge_method"] : "",
     approve_url: typeof search["approve_url"] === "string" ? search["approve_url"] : "",
   }),
-  head: () => ({ meta: [{ title: "Connect Z Games with ZChat" }] }),
+  head: () => ({ meta: [{ title: "Sign in with ZChat" }] }),
   component: OAuthConsent,
 });
 
 function OAuthConsent() {
   const params = Route.useSearch();
+  const appName = APP_NAMES[params.client_id] ?? "This app";
   const { session, loading } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -97,10 +105,12 @@ function OAuthConsent() {
           reason === "invalid_token"
             ? "Your ZChat session is no longer valid. Log in again, then retry."
             : reason === "banned"
-              ? "This ZChat account is banned, so it can't use Z Games."
+              ? `This ZChat account is banned, so it can't use ${appName}.`
               : reason === "timed_out"
                 ? "This ZChat account is timed out. Try again once the timeout ends."
-                : "Could not connect to Z Games. Please try again.",
+                : reason === "not_admin"
+                  ? `This ZChat account doesn't have access to ${appName}.`
+                  : `Could not connect to ${appName}. Please try again.`,
         );
         setBusy(false);
         return;
@@ -122,7 +132,7 @@ function OAuthConsent() {
 
         {!valid ? (
           <p role="alert" className="text-sm text-destructive">
-            This sign-in request is incomplete. Return to Z Games and try again.
+            This sign-in request is incomplete. Return to {appName} and try again.
           </p>
         ) : loading ? (
           <p className="text-sm text-muted-foreground">Checking your ZChat account…</p>
@@ -130,15 +140,15 @@ function OAuthConsent() {
           <>
             <h2 className="text-2xl font-bold">Continue with ZChat</h2>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              Sign in to ZChat first, then approve the Z Games connection.
+              Sign in to ZChat first, then approve the {appName} connection.
             </p>
             <Button className="mt-6 w-full" onClick={goLogin}>Continue to ZChat login</Button>
           </>
         ) : (
           <>
-            <h2 className="text-2xl font-bold">Connect Z Games?</h2>
+            <h2 className="text-2xl font-bold">Connect {appName}?</h2>
             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-              <strong className="text-foreground">Z Games</strong> is requesting access to your ZChat account.
+              <strong className="text-foreground">{appName}</strong> is requesting access to your ZChat account.
             </p>
             <div className="mt-5 rounded-xl bg-surface-2 p-4">
               <p className="text-sm font-semibold">Information requested</p>
@@ -148,7 +158,7 @@ function OAuthConsent() {
               </ul>
             </div>
             <p className="mt-4 text-xs leading-5 text-muted-foreground">
-              Z Games uses this to sign you in and show your name on the portal.
+              {appName} uses this to sign you in.
             </p>
             {error && <p role="alert" className="mt-4 text-sm text-destructive">{error}</p>}
             <div className="mt-6 grid grid-cols-2 gap-3">
