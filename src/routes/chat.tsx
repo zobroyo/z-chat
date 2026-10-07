@@ -7,6 +7,7 @@ import {
   Hash,
   LogOut,
   Menu,
+  Presentation,
   Search,
   Settings,
   Shield,
@@ -1167,10 +1168,17 @@ function ChatPage() {
 
       <a
         href="https://game.z-chat.men"
-        className="mx-3 my-3 flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-3 text-sm font-semibold tracking-wide text-primary-foreground shadow-sm transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="mx-3 mt-3 mb-2 flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-3 text-sm font-semibold tracking-wide text-primary-foreground shadow-sm transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <Gamepad2 className="size-4" />
-        UNBLOCKED GAMES
+        Z GAMES
+      </a>
+      <a
+        href="https://present.z-chat.men"
+        className="mx-3 mb-2 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <Presentation className="size-4" />
+        Z PRESENTER
       </a>
       <a
         href="https://forms.gle/FdvZyi4nLM92i1yaA"

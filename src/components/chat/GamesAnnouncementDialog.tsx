@@ -98,7 +98,7 @@ export function GamesAnnouncementDialog({ userId }: Props) {
           </div>
           <div className="flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-3 text-sm font-semibold tracking-wide text-primary-foreground">
             <Gamepad2 className="size-4" />
-            UNBLOCKED GAMES
+            Z GAMES
           </div>
         </div>
 
