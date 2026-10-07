@@ -1896,8 +1896,8 @@ function ChatPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-1">
-      <h2 className="px-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+    <section className="space-y-0.5">
+      <h2 className="px-2 pt-1 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
         {title}
       </h2>
 
@@ -1926,8 +1926,10 @@ function Row({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-[background-color,transform] duration-150 ease-out active:scale-[0.99]",
-        active ? "bg-surface-2" : "hover:bg-surface-2/60",
+        "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors duration-100",
+        active
+          ? "bg-elevated text-foreground"
+          : "text-muted-foreground hover:bg-elevated/50 hover:text-foreground",
       )}
     >
       {leading}
@@ -1935,14 +1937,44 @@ function Row({
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{title}</span>
 
-        <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>
+        <span className="block truncate text-[11px] text-muted-foreground">{subtitle}</span>
       </span>
 
       {badge > 0 && (
-        <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+        <span className="rounded-full bg-destructive px-2 py-0.5 text-[11px] font-semibold text-destructive-foreground">
           {badge}
         </span>
       )}
+    </button>
+  );
+}
+
+function MemberRow({ profile, onOpen }: { profile: Profile; onOpen: () => void }) {
+  const online = isOnline(profile);
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left transition-colors duration-100 hover:bg-elevated/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <UserAvatar
+        name={profile.display_name}
+        path={profile.avatar_url}
+        online={online}
+        className="size-8"
+      />
+
+      <span className="min-w-0 flex-1">
+        <span
+          className={cn(
+            "block truncate text-sm font-medium",
+            online ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {profile.display_name}
+        </span>
+      </span>
     </button>
   );
 }

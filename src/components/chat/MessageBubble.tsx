@@ -113,8 +113,8 @@ export function MessageBubble({
     <div
       id={`message-${message.id}`}
       className={cn(
-        "group relative -mx-3 flex items-start gap-3 rounded px-3 py-0.5 transition-colors hover:bg-surface-2/40",
-        showSender ? "mt-3" : "mt-0.5",
+        "group relative -mx-4 flex items-start gap-4 px-4 py-0.5 transition-colors hover:bg-elevated/40",
+        showSender ? "mt-4" : "mt-px",
         animateIn && "message-enter",
       )}
     >
@@ -131,14 +131,14 @@ export function MessageBubble({
         )}
       </div>
       {!showSender && (
-        <span className="pointer-events-none absolute top-0.5 left-3 w-10 pr-1 text-right text-[9px] leading-4 whitespace-nowrap text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+        <span className="pointer-events-none absolute top-0.5 left-4 w-10 pr-1 text-right text-[10px] leading-5 whitespace-nowrap text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
           {time}
         </span>
       )}
 
       <div className="min-w-0 flex-1">
         {showSender && (
-          <div className="flex items-center gap-2 px-0.5">
+          <div className="flex items-baseline gap-2 px-0.5">
             <button
               type="button"
               onClick={() => onOpenProfile?.(message.sender_id)}
@@ -174,14 +174,14 @@ export function MessageBubble({
           <div
             ref={bubbleRef}
             className={cn(
-              "message-bubble min-w-0 flex-1 text-[15px] leading-relaxed text-foreground",
+              "message-bubble min-w-0 flex-1 text-[15px] leading-[1.375rem] text-foreground/90",
             )}
           >
             {replyPreview !== undefined && (
               <button
                 type="button"
                 onClick={onJumpToReply}
-                className="mb-0.5 block w-full border-l-2 border-foreground/30 pl-2 text-left text-xs text-muted-foreground hover:text-foreground"
+                className="mb-1 block w-full border-l-4 border-muted-foreground/40 pl-3 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
                 <span className="block font-medium">
                   {replyPreview?.senderName ?? "Original message"}
@@ -197,7 +197,7 @@ export function MessageBubble({
                 src={imageUrl ?? undefined}
                 alt="Shared image"
                 loading="lazy"
-                className="mt-1 max-h-72 w-full rounded-xl bg-surface object-cover"
+                className="mt-1 max-h-72 w-full rounded-lg border border-black/20 bg-rail object-cover"
               />
             )}
             {message.body && (
@@ -218,9 +218,9 @@ export function MessageBubble({
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="mt-1 flex max-w-[22rem] items-center gap-3 overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-primary/15 via-primary/10 to-primary/5 px-3 py-2.5 text-left text-foreground shadow-sm transition-colors hover:border-primary/35 hover:from-primary/20"
+                      className="mt-1 flex max-w-[26rem] items-center gap-3 overflow-hidden rounded-md border-l-4 border-blurple bg-rail px-3 py-2.5 text-left text-foreground transition-colors hover:bg-elevated/60"
                     >
-                      <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-primary/15 bg-background/70 text-primary shadow-sm">
+                      <span className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-md bg-elevated text-blurple">
                         {preview?.icon && !previewIconErrors[url] ? (
                           <img
                             src={preview.icon}
@@ -257,7 +257,7 @@ export function MessageBubble({
               type="button"
               onClick={onReply}
               aria-label="Reply"
-              className="mt-1 shrink-0 rounded-full p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100 active:opacity-100"
+              className="mt-1 shrink-0 rounded-full p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-elevated hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 active:opacity-100"
             >
               <Reply className="size-3.5" />
             </button>
@@ -267,7 +267,7 @@ export function MessageBubble({
               type="button"
               onClick={onReport}
               aria-label="Report message"
-              className="mt-1 shrink-0 rounded-full p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100 active:opacity-100"
+              className="mt-1 shrink-0 rounded-full p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-elevated hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 active:opacity-100"
             >
               <Flag className="size-3.5" />
             </button>
