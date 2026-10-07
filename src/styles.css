@@ -56,6 +56,14 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
+  /* Discord-style chat tokens (scoped to the chat shell below). */
+  --color-rail: var(--rail);
+  --color-chat: var(--chat);
+  --color-elevated: var(--elevated);
+  --color-blurple: var(--blurple);
+  --color-blurple-hover: var(--blurple-hover);
+  --color-warn: var(--warn);
+
   --shadow-lift: var(--theme-shadow-lift);
   --shadow-glow: var(--theme-shadow-glow);
 }
@@ -65,6 +73,14 @@
 
   --accent-hue: 262;
   --accent-chroma: 0.18;
+
+  /* Discord-style defaults for the chat-scoped tokens. */
+  --rail: #1e1f22;
+  --chat: #313338;
+  --elevated: #383a40;
+  --blurple: #5865f2;
+  --blurple-hover: #4752c4;
+  --warn: #f0b232;
 
   --primary: oklch(0.66 var(--accent-chroma) var(--accent-hue));
   --primary-foreground: oklch(0.145 0.008 275);
@@ -156,6 +172,68 @@
   --sidebar-accent-foreground: oklch(0.205 0.012 270);
   --sidebar-border: oklch(0.28 0.015 270 / 13%);
   --theme-shadow-lift: 0 1px 0 0 oklch(1 0 0 / 90%) inset, 0 18px 40px -24px oklch(0.24 0.02 270 / 24%);
+}
+
+/*
+ * Discord-style chat skin. Scoped to the chat shell and to chat-owned portals
+ * (mobile sidebar sheet + chat dialogs) so admin/profile/services pages keep
+ * the app's own theme system. These override the semantic variables that the
+ * Tailwind utilities are inlined from (@theme inline).
+ */
+.chat-app-shell,
+.discord-scope,
+.discord-portal {
+  --background: #1e1f22;
+  --foreground: #f2f3f5;
+  --surface: #2b2d31;
+  --surface-2: #383a40;
+
+  --card: #2b2d31;
+  --card-foreground: #f2f3f5;
+  --popover: #2b2d31;
+  --popover-foreground: #f2f3f5;
+
+  --secondary: #383a40;
+  --secondary-foreground: #f2f3f5;
+
+  --muted: #383a40;
+  --muted-foreground: #949ba4;
+
+  --accent: #404249;
+  --accent-foreground: #ffffff;
+
+  --primary: #5865f2;
+  --primary-foreground: #ffffff;
+  --ring: rgb(88 101 242 / 70%);
+
+  --bubble: #5865f2;
+  --bubble-foreground: #ffffff;
+
+  --destructive: #da373c;
+  --destructive-foreground: #ffffff;
+
+  --border: rgb(255 255 255 / 6%);
+  --input: rgb(0 0 0 / 32%);
+  --online: #23a55a;
+
+  --sidebar: #2b2d31;
+  --sidebar-foreground: #f2f3f5;
+  --sidebar-accent: #404249;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(0 0 0 / 24%);
+
+  --rail: #1e1f22;
+  --chat: #313338;
+  --elevated: #383a40;
+  --blurple: #5865f2;
+  --blurple-hover: #4752c4;
+  --warn: #f0b232;
+
+  --theme-shadow-lift: 0 8px 24px -12px rgb(0 0 0 / 70%);
+  --theme-shadow-glow:
+    0 0 0 1px rgb(88 101 242 / 35%), 0 12px 40px -16px rgb(88 101 242 / 45%);
+
+  color-scheme: dark;
 }
 
 @layer base {

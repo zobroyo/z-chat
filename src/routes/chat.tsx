@@ -5,6 +5,7 @@ import {
   Bug,
   Gamepad2,
   Hash,
+  LayoutGrid,
   LogOut,
   Menu,
   Presentation,
@@ -248,6 +249,8 @@ function ChatPage() {
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [banAppealOpen, setBanAppealOpen] = useState(false);
+  const [railView, setRailView] = useState<"chats" | "friends">("chats");
+  const [memberListOpen, setMemberListOpen] = useState(true);
   const isNearBottomRef = useRef(true);
   const messageEntryTimersRef = useRef(new Map<string, number>());
   const conversationSwitchTimerRef = useRef<number | null>(null);
@@ -950,6 +953,30 @@ function ChatPage() {
   const activePartner = activeConversation ? partnerOf(activeConversation) : undefined;
 
   const memberCount = members.filter((member) => member.conversation_id === activeId).length;
+
+  const activeMemberIds = useMemo(
+    () =>
+      new Set(
+        members.filter((member) => member.conversation_id === activeId).map((m) => m.user_id),
+      ),
+    [members, activeId],
+  );
+  const activeMemberProfiles = useMemo(
+    () =>
+      profiles
+        .filter((profile) => activeMemberIds.has(profile.id))
+        .sort(
+          (a, b) =>
+            Number(isOnline(b)) - Number(isOnline(a)) ||
+            a.display_name.localeCompare(b.display_name),
+        ),
+    [profiles, activeMemberIds],
+  );
+  const onlineMemberProfiles = activeMemberProfiles.filter((profile) => isOnline(profile));
+  const offlineMemberProfiles = activeMemberProfiles.filter((profile) => !isOnline(profile));
+  const showMemberList =
+    activeConversation?.kind === "group" ||
+    (activeConversation?.kind === "public" && !friendsOnlyMode);
 
   const activeTitle =
     activeConversation?.kind === "public"
