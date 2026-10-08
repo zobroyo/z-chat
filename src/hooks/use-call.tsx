@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { callAudioRunning, getCallAudioContext, resumeCallAudio } from "@/lib/call-audio";
+import { buildGuestCallLink } from "@/lib/call-guest";
 import { CALL_SOUNDS, playCallSound } from "@/lib/call-sounds";
 import { startRingtone, type RingtoneHandle } from "@/lib/ringtone";
 
@@ -45,6 +46,20 @@ import { startRingtone, type RingtoneHandle } from "@/lib/ringtone";
  * guest presents `options.guestKey` in its join event; participants accept it
  * only when it matches the key the host shared. Guests are never elected host.
  *
+ * Global ringing: every signed-in client also subscribes to its own
+ * `call-ring:{userId}` channel. Starting (or joining) a call rings every member
+ * of the conversation there, so the recipient rings no matter which
+ * conversation is open. Ring payloads carry the conversation id, the caller and
+ * the guest key, so accepting joins the right conversation. Callees reply with
+ * `ring-accept` / `ring-decline` on the caller's ring channel; a `ring-cancel`
+ * stops the ring when the caller leaves with nobody else in the call.
+ *
+ * Join reliability: the call channel uses broadcast + presence, the join
+ * announcement is repeated, every participant re-broadcasts `state` as a
+ * heartbeat and both sides re-offer any peer that has no healthy connection
+ * (perfect negotiation settles the glare). A watchdog aborts a join that hangs
+ * with a clear error instead of an endless "Joining…".
+ *
  * Everything Web Audio related (ringtone, per-user volume, soundboard) fails
  * soft: a blocked AudioContext falls back to an <audio> element or a visual
  * prompt and never throws.
@@ -53,6 +68,19 @@ import { startRingtone, type RingtoneHandle } from "@/lib/ringtone";
 const ICE_SERVERS: RTCIceServer[] = [{ urls: ["stun:stun.l.google.com:19302"] }];
 
 const CHANNEL_TIMEOUT_MS = 15_000;
+/** Hard cap on a join attempt; surfaces an error instead of an endless "Joining…". */
+const JOIN_WATCHDOG_MS = 30_000;
+/** Announcements of my own join; retried in case a `join` raced the subscription. */
+const JOIN_ANNOUNCE_DELAYS_MS = [0, 1_500, 4_000];
+/** Periodic state broadcast: presence for late joiners, mute/camera sync, re-offers. */
+const HEARTBEAT_MS = 5_000;
+/** Don't retry the same peer connection more often than this. */
+const CONNECT_THROTTLE_MS = 2_500;
+/** Glare guard: the higher id waits this long before also offering. */
+const POLITE_WAIT_MS = 1_200;
+/** Wait after ICE disconnects before rebuilding the peer connection. */
+const ICE_DISCONNECT_GRACE_MS = 6_000;
+const RING_CHANNEL_PREFIX = "call-ring:";
 
 /** Minimum gap between soundboard triggers, to keep spam manageable. */
 const SOUND_COOLDOWN_MS = 400;
