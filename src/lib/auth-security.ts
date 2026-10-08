@@ -119,7 +119,7 @@ export function clearAuthRedirectError(): void {
   if (window.location.hash.includes("access_token")) return;
   try {
     const url = new URL(window.location.href);
-    for (const key of ["error", "error_code", "error_description", "error_description"]) {
+    for (const key of ["error", "error_code", "error_description"]) {
       url.searchParams.delete(key);
     }
     window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);

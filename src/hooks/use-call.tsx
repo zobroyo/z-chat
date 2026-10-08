@@ -1235,7 +1235,7 @@ export function useCall(
     setMyRoomId(null);
     setBreakoutRooms([]);
     setActiveConversationId(null);
-  }, [closePeer]);
+  }, [closePeer, stopHeartbeat]);
 
   const joinCall = useCallback(
     async (targetConversationOverride?: string | null) => {
@@ -1889,7 +1889,8 @@ export function useCall(
     const self = meRef.current;
     if (!listenForIncoming || !self.id) return;
 
-    const channel = clientRef.current.channel(`${RING_CHANNEL_PREFIX}${self.id}`, {
+    const client = clientRef.current;
+    const channel = client.channel(`${RING_CHANNEL_PREFIX}${self.id}`, {
       config: { broadcast: { self: false } },
     });
     ringInRef.current = channel;
@@ -1911,7 +1912,7 @@ export function useCall(
 
     return () => {
       ringInRef.current = null;
-      void clientRef.current.removeChannel(channel);
+      void client.removeChannel(channel);
     };
   }, [listenForIncoming, me.id, handleRing, handleRingCancel, handleRingDecline, handleRingAccept]);
 
