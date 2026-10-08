@@ -1,0 +1,87 @@
+name: Daily change digest
+
+# Opens (or updates) one Issue per day summarising the last 24h of commits on
+# main — because the autopush commits are all just "auto: save <time>", this
+# turns them into something readable. Watch this repo's Issues to get it.
+
+on:
+  schedule:
+    - cron: "0 15 * * *" # 19:00 (UTC+4)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+            const { data: commits } = await github.rest.repos.listCommits({
+              owner, repo, sha: "main", since, per_page: 100,
+            });
+            if (commits.length === 0) {
+              core.info("No commits in the last 24h.");
+              return;
+            }
+
+            const head = commits[0].sha;
+            const oldest = commits[commits.length - 1];
+            const base = (oldest.parents && oldest.parents[0] && oldest.parents[0].sha) || oldest.sha;
+
+            let files = [];
+            try {
+              const cmp = await github.rest.repos.compareCommits({ owner, repo, base, head });
+              files = cmp.data.files || [];
+            } catch (e) {
+              core.warning("compare failed: " + e.message);
+            }
+
+            const areas = {};
+            for (const f of files) {
+              const parts = f.filename.split("/");
+              const depth = parts.length > 1 ? Math.min(2, parts.length - 1) : 1;
+              const area = parts.slice(0, depth).join("/");
+              areas[area] = (areas[area] || 0) + 1;
+            }
+            const areaLines = Object.entries(areas)
+              .sort((a, b) => b[1] - a[1])
+              .map(([a, n]) => `- \`${a}\` — ${n} file${n === 1 ? "" : "s"}`)
+              .join("\n");
+
+            const commitLines = commits.slice(0, 60).map((c) => {
+              const msg = (c.commit.message || "").split("\n")[0];
+              const who = (c.commit.author && c.commit.author.name) || "unknown";
+              return `- [\`${c.sha.slice(0, 7)}\`](${c.html_url}) ${msg} — ${who}`;
+            }).join("\n");
+
+            const title = `Change digest — ${new Date().toISOString().slice(0, 10)}`;
+            const body = [
+              `**${commits.length} commit(s)** on \`main\` in the last 24h, touching **${files.length} file(s)** across ${Object.keys(areas).length} area(s).`,
+              "",
+              "### Areas touched",
+              areaLines || "_(none detected)_",
+              "",
+              "### Commits",
+              commitLines,
+              "",
+              "> Autopush messages are generic (`auto: save`); the real content is in each commit's **Files changed** diff.",
+            ].join("\n");
+
+            const { data: open } = await github.rest.issues.listForRepo({
+              owner, repo, state: "open", per_page: 100,
+            });
+            const existing = open.find((i) => i.title === title);
+            if (existing) {
+              await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
+              core.info("Updated issue #" + existing.number);
+            } else {
+              const created = await github.rest.issues.create({ owner, repo, title, body });
+              core.info("Created issue #" + created.data.number);
+            }
