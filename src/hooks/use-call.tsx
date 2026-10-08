@@ -349,58 +349,64 @@ export function useCall(
    * cached per target and sends are retried briefly while the channel joins, so
    * a ring is not lost just because the target's socket was still connecting.
    */
-  const sendRing = useCallback((userId: string, event: string, payload: Record<string, unknown>) => {
-    if (!userId || userId === meRef.current.id) return;
+  const sendRing = useCallback(
+    (userId: string, event: string, payload: Record<string, unknown>) => {
+      if (!userId || userId === meRef.current.id) return;
 
-    let entry = ringOutRef.current.get(userId);
-    if (!entry) {
-      const channel = clientRef.current.channel(`${RING_CHANNEL_PREFIX}${userId}`, {
-        config: { broadcast: { self: false } },
-      });
-      const created = { channel, ready: false };
-      ringOutRef.current.set(userId, created);
-      entry = created;
-      channel.subscribe((status) => {
-        if (ringOutRef.current.get(userId) !== created) return;
-        if (status === "SUBSCRIBED") {
-          created.ready = true;
-          return;
-        }
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-          ringOutRef.current.delete(userId);
-          void clientRef.current.removeChannel(channel);
-        }
-      });
-    }
+      let entry = ringOutRef.current.get(userId);
+      if (!entry) {
+        const channel = clientRef.current.channel(`${RING_CHANNEL_PREFIX}${userId}`, {
+          config: { broadcast: { self: false } },
+        });
+        const created = { channel, ready: false };
+        ringOutRef.current.set(userId, created);
+        entry = created;
+        channel.subscribe((status) => {
+          if (ringOutRef.current.get(userId) !== created) return;
+          if (status === "SUBSCRIBED") {
+            created.ready = true;
+            return;
+          }
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            ringOutRef.current.delete(userId);
+            void clientRef.current.removeChannel(channel);
+          }
+        });
+      }
 
-    const active = entry;
-    const push = (attempt: number) => {
-      if (ringOutRef.current.get(userId) !== active) return;
+      const active = entry;
+      const push = (attempt: number) => {
+        if (ringOutRef.current.get(userId) !== active) return;
+        try {
+          void active.channel.send({ type: "broadcast", event, payload }).catch(() => undefined);
+        } catch {
+          // Channel still joining; retried below.
+        }
+        if (!active.ready && attempt < 3) {
+          window.setTimeout(() => push(attempt + 1), 700);
+        }
+      };
+      push(0);
+    },
+    [],
+  );
+
+  const resolveCallTitle = useCallback(
+    async (targetConversation: string): Promise<string | null> => {
       try {
-        void active.channel.send({ type: "broadcast", event, payload }).catch(() => undefined);
+        const { data } = await clientRef.current
+          .from("conversations")
+          .select("name")
+          .eq("id", targetConversation)
+          .maybeSingle();
+        const row = data as { name?: string | null } | null;
+        return row?.name ?? null;
       } catch {
-        // Channel still joining; retried below.
+        return null;
       }
-      if (!active.ready && attempt < 3) {
-        window.setTimeout(() => push(attempt + 1), 700);
-      }
-    };
-    push(0);
-  }, []);
-
-  const resolveCallTitle = useCallback(async (targetConversation: string): Promise<string | null> => {
-    try {
-      const { data } = await clientRef.current
-        .from("conversations")
-        .select("name")
-        .eq("id", targetConversation)
-        .maybeSingle();
-      const row = data as { name?: string | null } | null;
-      return row?.name ?? null;
-    } catch {
-      return null;
-    }
-  }, []);
+    },
+    [],
+  );
 
   /**
    * Rings every other member of the conversation on their personal ring

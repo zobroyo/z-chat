@@ -26,8 +26,7 @@ export function CallGuestInvitePanel({ isHost, guestKey, conversationId, onEnsur
     if (!guestKey && isHost) onEnsureKey();
   }, [guestKey, isHost, onEnsureKey]);
 
-  const link =
-    guestKey && conversationId ? buildGuestCallLink(conversationId, guestKey) : null;
+  const link = guestKey && conversationId ? buildGuestCallLink(conversationId, guestKey) : null;
 
   const copy = async () => {
     if (!link) return;
@@ -50,8 +49,8 @@ export function CallGuestInvitePanel({ isHost, guestKey, conversationId, onEnsur
       {link ? (
         <>
           <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-            Anyone with this link can join this call as a guest — no Z Chat account needed. They
-            can only join this one call.
+            Anyone with this link can join this call as a guest — no Z Chat account needed. They can
+            only join this one call.
           </p>
           <div className="mt-3 flex items-center gap-2">
             <Input ref={inputRef} readOnly value={link} className="h-9 text-xs" />
@@ -72,9 +71,7 @@ export function CallGuestInvitePanel({ isHost, guestKey, conversationId, onEnsur
         </>
       ) : (
         <p className="mt-2 text-xs text-muted-foreground">
-          {isHost
-            ? "Preparing your link…"
-            : "Waiting for the call host to enable guest invites."}
+          {isHost ? "Preparing your link…" : "Waiting for the call host to enable guest invites."}
         </p>
       )}
     </PopoverContent>

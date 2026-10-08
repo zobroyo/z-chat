@@ -19,10 +19,8 @@ import { authenticate, corsPreflight, json } from "./serverModeration";
 
 const execFileAsync = promisify(execFile);
 
-const STATE_FILE =
-  process.env["ZCHAT_QUICKTUNNEL_STATE"] || "/srv/zchat/state/quicktunnels.json";
-const STATE_TOOL =
-  process.env["ZCHAT_QUICKTUNNEL_TOOL"] || "/srv/zchat/quicktunnels/state_tool.py";
+const STATE_FILE = process.env["ZCHAT_QUICKTUNNEL_STATE"] || "/srv/zchat/state/quicktunnels.json";
+const STATE_TOOL = process.env["ZCHAT_QUICKTUNNEL_TOOL"] || "/srv/zchat/quicktunnels/state_tool.py";
 
 export const QUICK_TUNNEL_SITES = ["zchat", "games", "slides"] as const;
 export type QuickTunnelSite = (typeof QUICK_TUNNEL_SITES)[number];
