@@ -47,6 +47,7 @@ self.addEventListener("push", (event) => {
   let url = "/chat";
   let conversationId = null;
   let conversationName = null;
+  let tag = null;
 
   if (event.data) {
     try {
@@ -55,6 +56,7 @@ self.addEventListener("push", (event) => {
       body = data.body || body;
       conversationId = data.conversation_id || data.conversationId || null;
       conversationName = data.conversation_name || data.conversationName || null;
+      if (typeof data.tag === "string" && data.tag) tag = data.tag;
       if (data.url) {
         url = data.url;
       }
@@ -78,7 +80,7 @@ self.addEventListener("push", (event) => {
       body: conversationName ? `${conversationName}: ${body}` : body,
       icon: "/icons/z-512.png",
       badge: "/icons/z-512.png",
-      tag: `z-chat-${url}-${Date.now()}`,
+      tag: tag || `z-chat-${url}-${Date.now()}`,
       renotify: true,
       data: { url, conversationId, conversationName },
       requireInteraction: false,

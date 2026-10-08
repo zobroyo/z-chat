@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -13,6 +14,17 @@ import { supabase } from "@/integrations/supabase/client";
 
 import { displayNameSchema } from "@/lib/chat";
 import { getDeviceFingerprint } from "@/lib/fingerprint";
+import {
+  checkHardwareBan,
+  clearAuthRedirectError,
+  consumeAuthNotice,
+  extractAuthRedirectError,
+  friendlyAuthError,
+  friendlyRedirectError,
+  markNotifyOptinPending,
+  needsEmailConfirmation,
+  requestNotificationPermission,
+} from "@/lib/auth-security";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
@@ -42,13 +54,8 @@ const usernameSchema = z
   .toLowerCase()
   .regex(/^[a-z0-9_]{3,20}$/, "Usernames are 3-20 characters: letters, numbers, underscore");
 
-function friendlyAuthError(message: string) {
-  const lower = message.toLowerCase();
-  if (lower.includes("invalid login")) return "Email or password is incorrect.";
-  if (lower.includes("already registered")) return "Unable to create account. Please check your details and try again.";
-  if (lower.includes("rate")) return "Too many attempts. Wait a moment and try again.";
-  return message;
-}
+const BANNED_DEVICE_MESSAGE =
+  "This device has been banned from ZChat, so sign-in isn't possible here. If you think this is a mistake, contact support.";
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -61,6 +68,7 @@ function AuthPage() {
   const [usernameState, setUsernameState] = useState<"idle" | "checking" | "ok" | "taken" | "invalid">("idle");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
+  const [notifyConsent, setNotifyConsent] = useState(false);
 
   useEffect(() => {
     if (loading || !session) return;
@@ -74,6 +82,20 @@ function AuthPage() {
 
     void navigate({ to: "/chat" });
   }, [loading, session, navigate]);
+
+  // Surface failures that came back through a redirect (Google error, expired
+  // email link) and notices set before a forced sign-out.
+  useEffect(() => {
+    const redirectError = extractAuthRedirectError();
+    if (redirectError) {
+      toast.error(friendlyRedirectError(redirectError.code, redirectError.description), {
+        duration: 10000,
+      });
+      clearAuthRedirectError();
+    }
+    const notice = consumeAuthNotice();
+    if (notice) toast.error(notice, { duration: 10000 });
+  }, []);
 
   useEffect(() => {
     const parsed = usernameSchema.safeParse(username);
@@ -97,26 +119,81 @@ function AuthPage() {
     };
   }, [username]);
 
+  const resendConfirmation = async (email: string) => {
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/chat` },
+      });
+      if (error) toast.error(friendlyAuthError(error));
+      else toast.success("Confirmation email sent. Check your inbox and spam folder.");
+    } catch {
+      toast.error("Couldn't send the email right now. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const logIn = async () => {
+    if (busy) return;
+
     const email = emailSchema.safeParse(loginEmail);
     if (!email.success) {
       toast.error(email.error.issues[0]!.message);
       return;
     }
+    if (!loginPassword) {
+      toast.error("Enter your password.");
+      return;
+    }
 
     setBusy(true);
+    try {
+      // Reject known-banned devices before touching the auth server.
+      const fingerprint = await getDeviceFingerprint();
+      if (fingerprint) {
+        const ban = await checkHardwareBan(fingerprint);
+        if (ban.banned) {
+          toast.error(
+            BANNED_DEVICE_MESSAGE + (ban.reason ? ` (${ban.reason})` : ""),
+            { duration: 12000 },
+          );
+          return;
+        }
+      }
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email.data,
-      password: loginPassword,
-    });
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.data,
+        password: loginPassword,
+      });
 
-    setBusy(false);
-
-    if (error) toast.error(friendlyAuthError(error.message));
+      if (error) {
+        if (needsEmailConfirmation(error)) {
+          toast.error(friendlyAuthError(error), {
+            duration: 12000,
+            action: {
+              label: "Resend email",
+              onClick: () => void resendConfirmation(email.data),
+            },
+          });
+        } else {
+          toast.error(friendlyAuthError(error), { duration: 8000 });
+        }
+        return;
+      }
+      // Success: useAuth redirects to /chat (the approval gate lives there).
+    } catch {
+      toast.error("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const signUp = async () => {
+    if (busy) return;
+
     const parsedName = displayNameSchema.safeParse(name);
     if (!parsedName.success) {
       toast.error(parsedName.error.issues[0]!.message);
@@ -141,68 +218,165 @@ function AuthPage() {
       return;
     }
 
-    const { data: available } = await supabase.rpc("username_available", {
-      _username: parsedUsername.data,
-    });
-    if (available === false) {
-      toast.error("That username was just taken — pick another.");
+    if (!notifyConsent) {
+      toast.error("Tick the notifications box first — new accounts must enable notifications.");
       return;
     }
 
     setBusy(true);
+    try {
+      // Ask while we still have the user's click gesture; browsers may ignore
+      // the prompt once an await has broken the gesture chain.
+      const permission = await requestNotificationPermission();
+      if (permission === "denied") {
+        toast.info(
+          "Notifications are blocked in this browser. You can allow them later in your browser's site settings.",
+          { duration: 10000 },
+        );
+      } else if (permission === "unsupported") {
+        toast.info(
+          "This browser doesn't support notifications, so they stay off for now.",
+          { duration: 8000 },
+        );
+      }
 
-    // Device fingerprint lets handle_new_user() auto-ban new accounts created
-    // from the browser of an already-banned account (no IP addresses used).
-    const fingerprint = await getDeviceFingerprint();
+      const { data: available, error: usernameError } = await supabase.rpc("username_available", {
+        _username: parsedUsername.data,
+      });
+      if (!usernameError && available === false) {
+        toast.error("That username was just taken — pick another.");
+        return;
+      }
 
-    const { data, error } = await supabase.auth.signUp({
-      email: email.data,
-      password: password.data,
-      options: {
-        data: {
-          display_name: parsedName.data,
-          username: parsedUsername.data,
-          ...(fingerprint ? { device_fingerprint: fingerprint } : {}),
+      const fingerprint = await getDeviceFingerprint();
+      if (fingerprint) {
+        const ban = await checkHardwareBan(fingerprint);
+        if (ban.banned) {
+          toast.error(
+            BANNED_DEVICE_MESSAGE + (ban.reason ? ` (${ban.reason})` : ""),
+            { duration: 12000 },
+          );
+          return;
+        }
+      }
+
+      const { data, error } = await supabase.auth.signUp({
+        email: email.data,
+        password: password.data,
+        options: {
+          data: {
+            display_name: parsedName.data,
+            username: parsedUsername.data,
+            notify_optin: permission === "granted",
+            ...(fingerprint ? { device_fingerprint: fingerprint } : {}),
+          },
+          emailRedirectTo: `${window.location.origin}/chat`,
         },
-        emailRedirectTo: `${window.location.origin}/chat`,
-      },
-    });
+      });
 
-    setBusy(false);
+      if (error) {
+        toast.error(friendlyAuthError(error), { duration: 10000 });
+        return;
+      }
 
-    if (error) {
-      toast.error(friendlyAuthError(error.message));
-      return;
+      // With email confirmation on, Supabase returns an obfuscated "user" with
+      // an empty identities array when the email is already registered.
+      const identities = data.user?.identities;
+      if (data.user && Array.isArray(identities) && identities.length === 0) {
+        toast.error("An account with that email already exists. Try logging in instead.", {
+          duration: 12000,
+        });
+        return;
+      }
+
+      if (data.session) {
+        toast.success(
+          "Account created — an admin reviews new accounts next (usually 3:30–7pm weekdays).",
+          { duration: 10000 },
+        );
+      } else {
+        toast.success(
+          "Account created. Check your email to confirm it — then an admin reviews it (usually 3:30–7pm weekdays).",
+          { duration: 12000 },
+        );
+      }
+    } catch {
+      toast.error("Couldn't reach the server. Check your connection and try again.");
+    } finally {
+      setBusy(false);
     }
-
-    if (data.session) {
-      toast.success("Account created — an admin reviews new accounts next (usually 3:30–7pm weekdays).");
-      return;
-    }
-
-    toast.success("Check your email to confirm your account. After that, an admin reviews it — usually 3:30–7pm weekdays.");
-
   };
 
   const withGoogle = async () => {
+    if (busy) return;
+
+    if (!notifyConsent) {
+      toast.error("Tick the notifications box first — new accounts must enable notifications.");
+      return;
+    }
+
     setBusy(true);
+    try {
+      const permission = await requestNotificationPermission();
+      if (permission === "denied") {
+        toast.info(
+          "Notifications are blocked in this browser. You can allow them later in your browser's site settings.",
+          { duration: 10000 },
+        );
+      }
 
-    const zoauthNext = new URLSearchParams(window.location.search).get("zoauth_next");
-    const redirectTo =
-      zoauthNext && zoauthNext.startsWith("/") && !zoauthNext.startsWith("//")
-        ? `${window.location.origin}/?zoauth_next=${encodeURIComponent(zoauthNext)}`
-        : `${window.location.origin}/chat`;
+      const fingerprint = await getDeviceFingerprint();
+      if (fingerprint) {
+        const ban = await checkHardwareBan(fingerprint);
+        if (ban.banned) {
+          toast.error(
+            BANNED_DEVICE_MESSAGE + (ban.reason ? ` (${ban.reason})` : ""),
+            { duration: 12000 },
+          );
+          return;
+        }
+      }
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo },
-    });
+      // Remember consent across the Google redirect; the auth provider mirrors
+      // it onto the profile as soon as the session exists.
+      if (permission === "granted") markNotifyOptinPending();
 
-    if (error) {
+      const zoauthNext = new URLSearchParams(window.location.search).get("zoauth_next");
+      const redirectTo =
+        zoauthNext && zoauthNext.startsWith("/") && !zoauthNext.startsWith("//")
+          ? `${window.location.origin}/?zoauth_next=${encodeURIComponent(zoauthNext)}`
+          : `${window.location.origin}/chat`;
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo },
+      });
+
+      if (error) {
+        toast.error("Google sign-in didn't work. Try email instead.");
+        setBusy(false);
+      }
+      // On success the browser leaves the page; keep the button disabled.
+    } catch {
       setBusy(false);
       toast.error("Google sign-in didn't work. Try email instead.");
     }
   };
+
+  const consentBox = (id: string, label: string) => (
+    <label
+      htmlFor={id}
+      className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-border bg-surface-2 p-3 text-xs leading-5 text-muted-foreground"
+    >
+      <Checkbox
+        id={id}
+        checked={notifyConsent}
+        onCheckedChange={(value) => setNotifyConsent(value === true)}
+        className="mt-0.5"
+      />
+      <span>{label}</span>
+    </label>
+  );
 
   return (
     <main className="standalone-scroll-page ios-safe-top ios-safe-bottom relative flex min-h-screen items-center justify-center overflow-x-hidden px-5 py-10">
@@ -252,10 +426,13 @@ function AuthPage() {
                   value={loginPassword}
                   onChange={(event) => setLoginPassword(event.target.value)}
                   placeholder="••••••••"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void logIn();
+                  }}
                 />
               </div>
 
-              <Button className="w-full" disabled={busy} onClick={logIn}>
+              <Button className="w-full" disabled={busy} onClick={() => void logIn()}>
                 {busy && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Log in
               </Button>
@@ -335,7 +512,12 @@ function AuthPage() {
                 />
               </div>
 
-              <Button className="w-full" disabled={busy} onClick={signUp}>
+              {consentBox(
+                "notify-consent-signup",
+                "Allow ZChat notifications so you don't miss messages (required). Your browser will ask you to confirm.",
+              )}
+
+              <Button className="w-full" disabled={busy} onClick={() => void signUp()}>
                 {busy && <Loader2 className="mr-2 size-4 animate-spin" />}
                 Create account
               </Button>
@@ -353,9 +535,16 @@ function AuthPage() {
             <span className="h-px flex-1 bg-border" />
           </div>
 
-          <Button variant="secondary" className="w-full" disabled={busy} onClick={withGoogle}>
-            Continue with Google
-          </Button>
+          <div className="space-y-3">
+            {consentBox(
+              "notify-consent-google",
+              "Allow ZChat notifications so you don't miss messages (required for new accounts).",
+            )}
+
+            <Button variant="secondary" className="w-full" disabled={busy} onClick={() => void withGoogle()}>
+              Continue with Google
+            </Button>
+          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
@@ -365,4 +554,3 @@ function AuthPage() {
     </main>
   );
 }
-

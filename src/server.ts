@@ -5,6 +5,11 @@ import { renderErrorPage } from "./lib/error-page";
 import { handleDeployHookRoute } from "./lib/serverDeployHook";
 import { handleLinkPreviewRoute } from "./lib/serverLinkPreview";
 import { handleModerateRoute, handleSendMessageRoute } from "./lib/serverModeration";
+import {
+  handleApprovalPushRoute,
+  handlePushPublicKeyRoute,
+  handleTestPushRoute,
+} from "./lib/serverPush";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -79,6 +84,30 @@ export default {
         return url.pathname === "/api/moderate"
           ? await handleModerateRoute(request)
           : await handleSendMessageRoute(request);
+      } catch (error) {
+        console.error(error);
+        return new Response(JSON.stringify({ error: "Internal server error" }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+
+    if (url.pathname.startsWith("/api/push")) {
+      try {
+        if (url.pathname === "/api/push-public-key") {
+          return await handlePushPublicKeyRoute(request);
+        }
+        if (url.pathname === "/api/push/approval") {
+          return await handleApprovalPushRoute(request);
+        }
+        if (url.pathname === "/api/push/test") {
+          return await handleTestPushRoute(request);
+        }
+        return new Response(JSON.stringify({ error: "Not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
       } catch (error) {
         console.error(error);
         return new Response(JSON.stringify({ error: "Internal server error" }), {

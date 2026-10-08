@@ -559,11 +559,18 @@ export function useCall(
 
       peersRef.current.delete(peerId);
       pendingIceRef.current.delete(peerId);
+      connectAttemptsRef.current.delete(peerId);
+
+      if (peer.disconnectTimer !== null) {
+        window.clearTimeout(peer.disconnectTimer);
+        peer.disconnectTimer = null;
+      }
 
       try {
         peer.pc.onicecandidate = null;
         peer.pc.ontrack = null;
         peer.pc.onconnectionstatechange = null;
+        peer.pc.oniceconnectionstatechange = null;
         peer.pc.close();
       } catch {
         // Already closed.
@@ -651,6 +658,7 @@ export function useCall(
         source: null,
         name: name ?? "Someone",
         makingOffer: false,
+        disconnectTimer: null,
       };
 
       const local = localStreamRef.current;
@@ -713,6 +721,31 @@ export function useCall(
         if (pc.connectionState === "failed") closePeer(peerId);
       };
 
+      // An ICE "disconnected" often recovers on its own; if it does not, the
+      // connection is torn down so the heartbeat/presence sync can rebuild it.
+      pc.oniceconnectionstatechange = () => {
+        const state = pc.iceConnectionState;
+        if (state === "connected" || state === "completed") {
+          if (peer.disconnectTimer !== null) {
+            window.clearTimeout(peer.disconnectTimer);
+            peer.disconnectTimer = null;
+          }
+          return;
+        }
+        if (state === "failed") {
+          closePeer(peerId);
+          return;
+        }
+        if (state === "disconnected" && peer.disconnectTimer === null) {
+          peer.disconnectTimer = window.setTimeout(() => {
+            peer.disconnectTimer = null;
+            if (peersRef.current.get(peerId) !== peer) return;
+            const current = peer.pc.iceConnectionState;
+            if (current === "disconnected" || current === "failed") closePeer(peerId);
+          }, ICE_DISCONNECT_GRACE_MS);
+        }
+      };
+
       peersRef.current.set(peerId, peer);
       patchParticipant(peerId, { name: peer.name });
       return peer;
@@ -726,6 +759,9 @@ export function useCall(
       const self = meRef.current;
       if (!inCallRef.current) return;
       const peer = createPeer(peerId, name);
+      // A duplicate/parallel attempt while we are already negotiating must not
+      // tear the connection down.
+      if (peer.makingOffer || peer.pc.signalingState !== "stable") return;
       peer.makingOffer = true;
       try {
         const offer = await peer.pc.createOffer();
@@ -741,6 +777,44 @@ export function useCall(
       }
     },
     [closePeer, createPeer, send],
+  );
+
+  /**
+   * Connects to a peer if there is no healthy connection yet. Called on join,
+   * on every heartbeat `state` and on presence sync, so a missed `join`
+   * broadcast or a refreshed peer still converges. The higher user id waits a
+   * beat before also offering; perfect negotiation resolves any overlap.
+   */
+  const maybeConnectPeer = useCallback(
+    async (peerId: string, name?: string, options?: { force?: boolean }) => {
+      const self = meRef.current;
+      if (!inCallRef.current || !peerId || peerId === self.id) return;
+      if ((assignmentsRef.current[peerId] ?? null) !== myRoomIdRef.current) return;
+
+      const hasHealthyPeer = () => {
+        const current = peersRef.current.get(peerId);
+        if (!current) return false;
+        const state = current.pc.connectionState;
+        return (
+          current.pc.signalingState !== "stable" || state === "connected" || state === "connecting"
+        );
+      };
+      if (hasHealthyPeer()) return;
+
+      const lastAttempt = connectAttemptsRef.current.get(peerId) ?? 0;
+      if (!options?.force && Date.now() - lastAttempt < CONNECT_THROTTLE_MS) return;
+
+      if (!options?.force && self.id > peerId) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, POLITE_WAIT_MS));
+        if (!inCallRef.current) return;
+        if (hasHealthyPeer()) return;
+      }
+
+      connectAttemptsRef.current.set(peerId, Date.now());
+      if (peersRef.current.get(peerId)) closePeer(peerId);
+      await offerPeer(peerId, name);
+    },
+    [closePeer, offerPeer],
   );
 
   // ---- Local audio state -----------------------------------------------------
@@ -770,6 +844,30 @@ export function useCall(
       ...(isHostRef.current && guestKeyRef.current ? { guestKey: guestKeyRef.current } : {}),
     });
   }, [send]);
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatRef.current !== null) {
+      window.clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+  }, []);
+
+  /**
+   * Periodic `state` broadcast plus a reconnect sweep. This keeps presence,
+   * mute/camera flags and connections in sync when the other side joins late,
+   * refreshes, or a single broadcast was lost.
+   */
+  const startHeartbeat = useCallback(() => {
+    stopHeartbeat();
+    heartbeatRef.current = window.setInterval(() => {
+      if (!inCallRef.current) return;
+      broadcastState();
+      for (const participant of [...knownRef.current.values()]) {
+        if (participant.id === meRef.current.id) continue;
+        void maybeConnectPeer(participant.id, participant.name);
+      }
+    }, HEARTBEAT_MS);
+  }, [broadcastState, maybeConnectPeer, stopHeartbeat]);
 
   const broadcastRooms = useCallback(
     (rooms: BreakoutRoom[], assignments: Record<string, string | null>) => {
