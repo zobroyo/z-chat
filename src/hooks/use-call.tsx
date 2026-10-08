@@ -118,6 +118,25 @@ export type UseCallOptions = {
   guestKey?: string | null;
   /** Set false on the guest page so joins are never treated as incoming calls. */
   listenForIncoming?: boolean;
+  /**
+   * Called when an incoming call is accepted and belongs to another
+   * conversation; lets the host app switch the UI to that conversation.
+   * Optional: calls still connect without it.
+   */
+  onSwitchConversation?: (conversationId: string) => void;
+};
+
+/** An incoming call announced over the global `call-ring:{userId}` channel. */
+export type IncomingCall = {
+  /** Caller user id (reply target for accept/decline). */
+  userId: string;
+  name: string;
+  /** Conversation the call belongs to. */
+  conversationId: string;
+  /** Conversation label when the caller could resolve one (groups mostly). */
+  conversationTitle: string | null;
+  /** Guest key the caller shared, if any. */
+  guestKey: string | null;
 };
 
 type JoinPayload = {
@@ -155,6 +174,24 @@ type RoomsPayload = {
   guestKey?: string | null;
 };
 
+type RingPayload = {
+  conversationId?: string;
+  callerId?: string;
+  callerName?: string;
+  title?: string | null;
+  key?: string | null;
+  joinedAt?: number;
+};
+type RingCancelPayload = { conversationId?: string; callerId?: string };
+type RingDeclinePayload = {
+  conversationId?: string;
+  userId?: string;
+  name?: string;
+  reason?: "busy" | "declined";
+};
+type RingAcceptPayload = { conversationId?: string; userId?: string; name?: string };
+type PresenceMeta = { userId?: string; name?: string; joinedAt?: number };
+
 type Peer = {
   pc: RTCPeerConnection;
   /** Hidden <audio> fallback that plays this peer's remote stream. */
@@ -169,6 +206,8 @@ type Peer = {
   name: string;
   /** True while an offer is being created/sent (perfect-negotiation glare flag). */
   makingOffer: boolean;
+  /** Pending rebuild timer after an ICE disconnect. */
+  disconnectTimer: number | null;
 };
 
 function asPayload<T>(value: unknown): T | null {
