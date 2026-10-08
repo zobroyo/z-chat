@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "@/hooks/use-auth";
+import { QuickTunnelHandoff } from "@/hooks/use-quick-tunnel-handoff";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider, themeBootScript } from "@/components/theme/ThemeProvider";
 
@@ -145,6 +146,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
+          <QuickTunnelHandoff />
           {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
           <Outlet />
           <Toaster position="top-center" />

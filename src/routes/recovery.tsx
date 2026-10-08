@@ -265,7 +265,10 @@ function RecoveryPage() {
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <button
               type="button"
-              onClick={() => void navigate({ to: "/recovery" })}
+              onClick={() => {
+                setCode("");
+                setStage("request");
+              }}
               className="underline-offset-4 hover:underline"
             >
               Use a different email

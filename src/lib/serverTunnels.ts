@@ -62,6 +62,29 @@ function isQuickTunnelSite(value: unknown): value is QuickTunnelSite {
   return typeof value === "string" && (QUICK_TUNNEL_SITES as readonly string[]).includes(value);
 }
 
+/*
+ * Public, unauthenticated quick-tunnel lookup.
+ *
+ * The client-side handoff hook calls this from the main domain to find out
+ * whether the zchat quick tunnel is enabled and where to send the browser.
+ * Deliberately exposes only the zchat entry: games/slides are unrelated and
+ * their URLs must not leak from an open endpoint.
+ */
+export async function handleQuickTunnelPublicRoute(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") return corsPreflight(request);
+  if (request.method !== "GET") {
+    return new Response(null, { status: 405, headers: { Allow: "GET, OPTIONS" } });
+  }
+
+  const state = await readQuickTunnelState();
+  const entry = state.zchat;
+  const url = entry.enabled && entry.url.startsWith("https://") ? entry.url : "";
+  return new Response(JSON.stringify({ zchat: { enabled: entry.enabled, url } }), {
+    status: 200,
+    headers: { "content-type": "application/json", "cache-control": "no-store" },
+  });
+}
+
 async function writeQuickTunnelEnabled(site: QuickTunnelSite, enabled: boolean): Promise<void> {
   await execFileAsync(
     "/usr/bin/python3",

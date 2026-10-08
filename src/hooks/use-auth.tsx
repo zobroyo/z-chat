@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { Session, User } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
-import { getDeviceFingerprint } from "@/lib/fingerprint";
+import { getDeviceFingerprint, recordDeviceFingerprint } from "@/lib/fingerprint";
 import {
   checkHardwareBan,
   registerBannedDeviceLogin,
@@ -49,6 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     void (async () => {
+      // Mirror signup consent on every sign-in path, even when fingerprinting
+      // is unavailable.
+      await syncNotifyOptin(user);
+      if (cancelled) return;
+
       const fingerprint = await getDeviceFingerprint();
       if (cancelled || !fingerprint) return;
 
@@ -65,7 +70,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // No-op unless the signed-in profile is banned; if it is, this device
       // joins the hardware-ban list immediately.
       await registerBannedDeviceLogin(fingerprint);
-      if (!cancelled) await syncNotifyOptin(user);
+      if (cancelled) return;
+
+      // Persist the fingerprint on the profile for every sign-in path
+      // (password or Google), so a future account ban can target this device.
+      await recordDeviceFingerprint();
     })();
 
     return () => {

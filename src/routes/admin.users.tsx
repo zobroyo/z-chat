@@ -223,6 +223,10 @@ function AdminUsers() {
       await setUserBanned(selected.id, next);
       setSelected({ ...selected, banned: next });
       reload();
+      // Banning a user also bans their recorded device, so refresh the list.
+      void fetchHardwareBans()
+        .then(setHardwareBans)
+        .catch(() => {});
     } catch (e) {
       toast.error(e instanceof Error ? e.message : `Failed to ${verb} user`);
     } finally {

@@ -34,17 +34,23 @@ export function friendlyAuthError(error: AuthError): string {
         "That password is too weak. Use at least 8 characters, with letters and numbers."
       );
     case "over_email_send_rate_limit":
-      return "We've sent too many emails just now. Please wait a few minutes and try again.";
+      return "Too many signup emails were sent just now, so the email can't go out yet. Wait a few minutes and try again — or create the account with Google instead.";
     case "over_request_rate_limit":
       return "Too many attempts. Please wait a minute and try again.";
     case "signup_disabled":
       return "Sign-ups are temporarily closed. Please try again later.";
     case "email_provider_disabled":
       return "Email sign-in is temporarily unavailable. Try Google instead.";
+    case "email_address_not_authorized":
+      return "Our email service can't send to that address yet. Please use Google sign-in, or try again a little later.";
     case "captcha_failed":
       return "The verification check failed. Refresh the page and try again.";
     case "otp_expired":
+    case "token_expired":
       return "That code has expired. Request a new one and try again.";
+    case "session_not_found":
+    case "session_expired":
+      return "Your reset session has expired. Request a new code and try again.";
     case "same_password":
       return "Your new password must be different from your current password.";
     case "email_address_invalid":
@@ -69,6 +75,9 @@ export function friendlyAuthError(error: AuthError): string {
     return "Too many attempts. Please wait a moment and try again.";
   }
   if (lower.includes("password should")) return message;
+  if (lower.includes("auth session missing")) {
+    return "Your reset session is missing or has expired. Request a new code and try again.";
+  }
   return message || "Something went wrong. Please try again.";
 }
 

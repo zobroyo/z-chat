@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, LogOut, ShieldCheck } from "lucide-react";
+import { Bell, Loader2, LogOut, ShieldCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { requestNotificationPermission, type NotificationState } from "@/lib/notifications";
+import { registerPushSubscription } from "@/lib/push";
 
 type Props = { status: "pending" | "rejected" };
 
@@ -81,6 +83,10 @@ export function ApplicationGate({ status }: Props) {
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [accountId, setAccountId] = useState<string | null>(null);
+  const [notifyState, setNotifyState] = useState<NotificationState | null>(null);
+  const [alertsBusy, setAlertsBusy] = useState(false);
+  const [alertsFailed, setAlertsFailed] = useState(false);
 
   useEffect(() => {
     if (status !== "pending") {
@@ -107,6 +113,7 @@ export function ApplicationGate({ status }: Props) {
             : Promise.resolve({ data: null, error: null }),
         ]);
         if (cancelled) return;
+        setAccountId(userId);
         const loadedQuestions = asQuestions(questionsResult.data);
         const savedAnswers = asAnswers(
           profileResult.data && typeof profileResult.data === "object"
@@ -128,6 +135,41 @@ export function ApplicationGate({ status }: Props) {
       cancelled = true;
     };
   }, [status]);
+
+  // Approval happens while this screen is still showing, so NotificationGate
+  // will not have run yet. Subscribe this device here so a pending user who
+  // never opened chat can still receive the "approved" push.
+  useEffect(() => {
+    if (status !== "pending" || !accountId) return;
+    if (typeof Notification === "undefined") {
+      setNotifyState("unsupported");
+      return;
+    }
+    const current = Notification.permission as NotificationState;
+    setNotifyState(current);
+    if (current === "granted") {
+      // Idempotent: reuses the existing subscription or replaces a stale key.
+      void registerPushSubscription(accountId).catch(() => undefined);
+    }
+  }, [status, accountId]);
+
+  const enableAlerts = async () => {
+    if (alertsBusy) return;
+    setAlertsBusy(true);
+    setAlertsFailed(false);
+    try {
+      const next = await requestNotificationPermission();
+      setNotifyState(next);
+      if (next === "granted" && accountId) {
+        await registerPushSubscription(accountId);
+      }
+    } catch {
+      // Alerts are a bonus here: never block the application form on failure.
+      setAlertsFailed(true);
+    } finally {
+      setAlertsBusy(false);
+    }
+  };
 
   const updateAnswer = useCallback((id: string, value: string) => {
     setAnswers((current) => ({ ...current, [id]: value }));
@@ -158,6 +200,45 @@ export function ApplicationGate({ status }: Props) {
     setAnswers(cleaned);
     setSubmitted(true);
   };
+
+  // Permission is granted → registration runs automatically above, so only the
+  // "default" (ask nicely) and "denied" (quiet hint) cases need on-screen UI.
+  const alertsPrompt =
+    status !== "pending" || !accountId || notifyState === null || notifyState === "unsupported"
+      ? null
+      : notifyState === "granted"
+        ? null
+        : notifyState === "denied" ? (
+            <p className="mt-4 text-xs leading-5 text-muted-foreground">
+              Alerts are off for this site, so we can&rsquo;t ping you when you&rsquo;re
+              approved. Allow notifications for ZChat in your browser settings to get the
+              heads-up.
+            </p>
+          ) : (
+            <div className="mt-6">
+              <Button
+                type="button"
+                className="w-full"
+                disabled={alertsBusy}
+                onClick={() => void enableAlerts()}
+              >
+                {alertsBusy ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <Bell className="mr-2 size-4" />
+                )}
+                Enable alerts — get told when you&rsquo;re approved
+              </Button>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                We&rsquo;ll ping this device the moment an admin approves you.
+              </p>
+              {alertsFailed && (
+                <p role="alert" className="mt-2 text-xs text-destructive">
+                  Couldn&rsquo;t turn on alerts on this device. You can still check back here.
+                </p>
+              )}
+            </div>
+          );
 
   const signOutButton = (
     <Button
@@ -202,6 +283,7 @@ export function ApplicationGate({ status }: Props) {
               You&rsquo;ll get straight into chat as soon as you&rsquo;re approved — just check
               back or refresh.
             </p>
+            {alertsPrompt}
             {signOutButton}
           </>
         ) : (
@@ -250,6 +332,7 @@ export function ApplicationGate({ status }: Props) {
               Submit application
             </Button>
 
+            {alertsPrompt}
             {signOutButton}
           </>
         )}

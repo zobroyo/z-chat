@@ -21,6 +21,11 @@ type Props = {
   replyingTo?: ReplyingTo;
   onCancelReply?: () => void;
   mentionCandidates?: Array<{ id: string; name: string }>;
+  /**
+   * Handles the `/call` slash command: starts/joins the call for the open
+   * conversation and shares the guest invite link.
+   */
+  onCallCommand?: () => void | Promise<void>;
 };
 
 export function Composer({
@@ -30,6 +35,7 @@ export function Composer({
   replyingTo,
   onCancelReply,
   mentionCandidates = [],
+  onCallCommand,
 }: Props) {
   const [value, setValue] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -119,6 +125,23 @@ export function Composer({
 
   const submit = async () => {
     if (sending) return;
+
+    // Slash command: `/call` starts (or joins) the call for this conversation
+    // and copies a shareable guest link instead of sending a message.
+    if (value.trim().toLowerCase() === "/call" && onCallCommand) {
+      setMention(null);
+      setValue("");
+      clearFile();
+      onTypingChange?.(false);
+      onCancelReply?.();
+      try {
+        await onCallCommand();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not start the call");
+      }
+      return;
+    }
+
     if (!value.trim() && !file) return;
     setMention(null);
 

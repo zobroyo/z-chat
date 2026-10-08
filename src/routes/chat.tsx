@@ -4,8 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
   Hash,
+  Loader2,
   LogOut,
   Menu,
+  RefreshCw,
   Search,
   Settings,
   Shield,
@@ -105,33 +107,53 @@ function ChatPage() {
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [applicationStatus, setApplicationStatus] = useState<"unknown" | "approved" | "pending" | "rejected">("unknown");
+  const [applicationCheckError, setApplicationCheckError] = useState(false);
+  const [applicationCheckNonce, setApplicationCheckNonce] = useState(0);
   const [profileCardId, setProfileCardId] = useState<string | null>(null);
   const [msgQuery, setMsgQuery] = useState("");
 
   useEffect(() => {
     if (!user) {
       setApplicationStatus("unknown");
+      setApplicationCheckError(false);
       return;
     }
     let cancelled = false;
-    const check = () =>
-      supabase
-        .from("profiles")
-        .select("application_status")
-        .eq("id", user.id)
-        .maybeSingle()
-        .then(({ data }) => {
-          if (cancelled) return;
-          const status = (data?.application_status as string | undefined) ?? "approved";
-          setApplicationStatus(status === "pending" ? "pending" : status === "rejected" ? "rejected" : "approved");
-        });
+    const lockToPending = () => {
+      setApplicationStatus("pending");
+      setApplicationCheckError(true);
+    };
+    const check = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("application_status")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (cancelled) return;
+        if (error) {
+          // A failed check must never unlock the app: lock to pending and
+          // surface a retry instead of falling back to "approved".
+          lockToPending();
+          return;
+        }
+        setApplicationCheckError(false);
+        const status = data?.application_status as string | undefined;
+        setApplicationStatus(
+          status === "approved" ? "approved" : status === "rejected" ? "rejected" : "pending",
+        );
+      } catch {
+        // Transport failure: same rule — lock to pending and show the retry.
+        if (!cancelled) lockToPending();
+      }
+    };
     void check();
-    const timer = window.setInterval(check, 15000);
+    const timer = window.setInterval(() => void check(), 15000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [user]);
+  }, [user, applicationCheckNonce]);
 
   const reportMessage = (message: Message) => {
     if (!user) return;
@@ -160,12 +182,12 @@ function ChatPage() {
   const [switchingConversation, setSwitchingConversation] = useState(false);
 
   // Start empty so we NEVER fetch messages using the fake placeholder ID.
-  // A valid ?c= link is resolved after conversations have loaded.
-  const [activeId, setActiveId] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-
-    return new URLSearchParams(window.location.search).get("c") ?? "";
-  });
+  // A valid ?c= link is resolved after conversations have loaded (see the
+  // resolution effect below). The initial value must be identical on the
+  // server and on the client: reading ?c= only on the client produced an SSR
+  // hydration mismatch that left React-managed attributes — notably the call
+  // button's `disabled` — stuck at the server-rendered value.
+  const [activeId, setActiveId] = useState<string>("");
 
   const [unread, setUnread] = useState<Record<string, number>>({});
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
@@ -1071,10 +1093,21 @@ function ChatPage() {
 
   const me = user ? profileMap.get(user.id) : undefined;
 
-  const call = useCall(activeId || null, {
-    id: user?.id ?? "",
-    name: me?.display_name || "You",
-  });
+  const call = useCall(
+    activeId || null,
+    {
+      id: user?.id ?? "",
+      name: me?.display_name || "You",
+    },
+    {
+      // Accepting a call that belongs to another conversation switches the
+      // chat UI to it (the call overlay itself shows either way).
+      onSwitchConversation: (conversationId) => {
+        conversationInitializedRef.current = true;
+        openConversation(conversationId);
+      },
+    },
+  );
 
   useEffect(() => {
     if (call.error) toast.error(call.error);
@@ -1253,6 +1286,44 @@ function ChatPage() {
       </Link>
     </div>
   );
+
+  // Never render chat until the profile status is known. A brand-new account
+  // (especially a Google signup) has no profile row for a moment; showing chat
+  // then would leak the app past the approval gate.
+  if (applicationStatus === "unknown") {
+    return (
+      <main className="standalone-scroll-page flex min-h-screen items-center justify-center px-5 py-10">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin" />
+          <span className="text-sm">Checking your account…</span>
+        </div>
+      </main>
+    );
+  }
+
+  // The status check itself failed: stay locked (pending) and offer a retry.
+  // This path deliberately never falls back to "approved".
+  if (applicationCheckError) {
+    return (
+      <main className="standalone-scroll-page relative flex min-h-screen items-center justify-center px-5 py-10">
+        <section className="surface-panel w-full max-w-md rounded-3xl p-7 text-center shadow-lift sm:p-9">
+          <h1 className="text-2xl font-bold">Couldn&rsquo;t check your account</h1>
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
+            Something went wrong while confirming your application status, so chat stays locked
+            for now.
+          </p>
+          <Button
+            variant="outline"
+            className="mt-6 w-full"
+            onClick={() => setApplicationCheckNonce((value) => value + 1)}
+          >
+            <RefreshCw className="mr-2 size-4" />
+            Try again
+          </Button>
+        </section>
+      </main>
+    );
+  }
 
   if (applicationStatus === "pending" || applicationStatus === "rejected") {
     return <ApplicationGate status={applicationStatus} />;
@@ -1477,7 +1548,8 @@ function ChatPage() {
         <Composer
           onSend={handleSend}
           onTypingChange={(isTyping) => (isTyping ? startTyping() : stopTyping())}
-          placeholder={`Message ${activeTitle}`}
+          onCallCommand={() => void call.startCallWithLink()}
+          placeholder={`Message ${activeTitle} · /call to start a call`}
           mentionCandidates={mentionCandidates}
           replyingTo={
             replyingTo

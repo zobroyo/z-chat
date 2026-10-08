@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import {
   getNotificationState,
   isInstalled,
@@ -19,19 +18,15 @@ import {
   needsHomeScreenFirst,
   registerNotificationWorker,
   requestNotificationPermission,
-  subscribeToPush,
   type NotificationState,
 } from "@/lib/notifications";
+import { registerPushSubscription } from "@/lib/push";
 
 /**
  * Shows the alerts prompt every time the app opens until alerts are on.
  * Declining never hides the bell — it stays available for accidental taps.
  */
 const PROMPTED_KEY = "zchat-alerts-prompted";
-
-// The generated client is strictly typed to known tables; the push helper only
-// needs a minimal upsert shape.
-const pushClient = supabase as unknown as Parameters<typeof subscribeToPush>[1];
 
 
 function NotificationGate({ userId }: { userId?: string }) {
@@ -57,7 +52,7 @@ function NotificationGate({ userId }: { userId?: string }) {
     void registerNotificationWorker();
 
     if (current === "granted" && userId) {
-      void subscribeToPush(userId, pushClient)
+      void registerPushSubscription(userId)
         .then(() => setPushError(null))
         .catch((error) => {
           console.error("[NotificationGate] Failed to subscribe:", error);
@@ -94,7 +89,7 @@ function NotificationGate({ userId }: { userId?: string }) {
     if (next === "granted") {
       if (userId) {
         try {
-          await subscribeToPush(userId, pushClient);
+          await registerPushSubscription(userId);
           console.log("[NotificationGate] Push subscription saved");
           setPushError(null);
           setOpen(false);

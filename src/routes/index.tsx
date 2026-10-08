@@ -265,7 +265,11 @@ function AuthPage() {
           data: {
             display_name: parsedName.data,
             username: parsedUsername.data,
-            notify_optin: permission === "granted",
+            // The consent box is required to submit, so this records the
+            // user's acceptance even when the browser then blocks the prompt.
+            // Browsers won't let us grant permission without the user, but the
+            // push system can retry once permission is available.
+            notify_optin: true,
             ...(fingerprint ? { device_fingerprint: fingerprint } : {}),
           },
           emailRedirectTo: `${window.location.origin}/chat`,
@@ -335,8 +339,10 @@ function AuthPage() {
       }
 
       // Remember consent across the Google redirect; the auth provider mirrors
-      // it onto the profile as soon as the session exists.
-      if (permission === "granted") markNotifyOptinPending();
+      // it onto the profile as soon as the session exists. The required
+      // checkbox means consent was given whether or not the browser prompt was
+      // granted.
+      markNotifyOptinPending();
 
       const zoauthNext = new URLSearchParams(window.location.search).get("zoauth_next");
       const redirectTo =
