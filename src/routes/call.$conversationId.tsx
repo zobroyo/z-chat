@@ -30,10 +30,7 @@ export const Route = createFileRoute("/call/$conversationId")({
     return typeof value === "string" && value.length > 0 ? { k: value } : {};
   },
   head: () => ({
-    meta: [
-      { title: "Join call — ZChat" },
-      { name: "robots", content: "noindex" },
-    ],
+    meta: [{ title: "Join call — ZChat" }, { name: "robots", content: "noindex" }],
   }),
   component: GuestCallPage,
 });
@@ -113,7 +110,9 @@ function GuestCallPage() {
       <GuestShell>
         <div className="rounded-3xl border border-border bg-surface p-6 text-center">
           <AlertTriangle className="mx-auto size-8 text-destructive" />
-          <p className="mt-3 text-sm text-foreground">{error ?? "This call link can't be opened."}</p>
+          <p className="mt-3 text-sm text-foreground">
+            {error ?? "This call link can't be opened."}
+          </p>
         </div>
       </GuestShell>
     );
