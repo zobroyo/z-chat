@@ -443,6 +443,99 @@ function AdminUsers() {
         </div>
       )}
 
+      <section className="mt-8 space-y-3 border-t border-border pt-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Fingerprint className="size-4 text-muted-foreground" />
+            <h2 className="font-display text-base font-bold text-foreground">Banned devices</h2>
+            <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+              {activeBanCount}
+            </span>
+          </div>
+          <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={showLifted}
+              onChange={(e) => setShowLifted(e.target.checked)}
+              className="accent-primary"
+            />
+            Show lifted
+          </label>
+        </div>
+        <p className="text-xs leading-5 text-muted-foreground">
+          Device fingerprints are browser-derived hashes (never IP addresses). A banned device
+          can&apos;t sign in or create new accounts. Unbanning a user above also lifts the bans
+          recorded for their account.
+        </p>
+
+        {hwError && <p className="text-sm text-destructive">{hwError}</p>}
+
+        {!hardwareBans ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : visibleBans.length === 0 ? (
+          <p className="py-4 text-sm text-muted-foreground">
+            No {showLifted ? "" : "active "}device bans.
+          </p>
+        ) : (
+          <ul className="space-y-2">
+            {visibleBans.map((ban) => (
+              <li
+                key={ban.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-border bg-surface p-3"
+              >
+                <span
+                  className="inline-flex items-center gap-1.5 font-mono text-xs text-foreground"
+                  title={ban.fingerprint}
+                >
+                  <Fingerprint className="size-3.5 text-muted-foreground" />
+                  {ban.fingerprint.slice(0, 16)}…
+                </span>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                    ban.active
+                      ? "bg-destructive/10 text-destructive"
+                      : "bg-surface-2 text-muted-foreground",
+                  )}
+                >
+                  {ban.active ? "Banned" : "Lifted"}
+                </span>
+                <span className="rounded-full bg-surface-2 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  {ban.source}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {ban.user_id ? (hwNames[ban.user_id] ?? "Unknown user") : "—"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {new Date(ban.created_at).toLocaleDateString()}
+                </span>
+                {ban.reason && (
+                  <span className="w-full text-xs text-muted-foreground">{ban.reason}</span>
+                )}
+                {ban.active && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={hwBusyId === ban.id}
+                    onClick={() => void unbanDevice(ban)}
+                    className="ml-auto h-7 gap-1.5 text-xs"
+                  >
+                    {hwBusyId === ban.id ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <CircleCheck className="size-3.5" />
+                    )}
+                    Unban device
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       {selected && (
         <div
           className="fixed inset-0 z-20 flex items-end justify-center bg-black/50 sm:items-center"

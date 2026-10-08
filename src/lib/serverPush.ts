@@ -69,6 +69,13 @@ function bufferToBase64Url(buffer: Buffer): string {
   return buffer.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+/** Copies a Node Buffer into a plain Uint8Array (WebCrypto/fetch typings). */
+function toBytes(value: Buffer) {
+  const bytes = new Uint8Array(value.byteLength);
+  bytes.set(value);
+  return bytes;
+}
+
 const vapidJwtCache = new Map<string, { value: string; expiresAt: number }>();
 
 /** Builds (and caches) the ES256 VAPID authorization header for an endpoint. */
@@ -133,18 +140,22 @@ async function encryptPushPayload(target: SubscriptionRow, payload: string): Pro
   const ephemeralPublic = ecdh.generateKeys();
   const sharedSecret = ecdh.computeSecret(clientPublicKey);
 
-  const sharedKey = await subtle.importKey("raw", sharedSecret, "HKDF", false, ["deriveBits"]);
+  const sharedKey = await subtle.importKey("raw", toBytes(sharedSecret), "HKDF", false, [
+    "deriveBits",
+  ]);
   const ikm = Buffer.from(
     await subtle.deriveBits(
       {
         name: "HKDF",
         hash: "SHA-256",
-        salt: authSecret,
-        info: Buffer.concat([
-          Buffer.from("WebPush: info\0", "utf8"),
-          clientPublicKey,
-          ephemeralPublic,
-        ]),
+        salt: toBytes(authSecret),
+        info: toBytes(
+          Buffer.concat([
+            Buffer.from("WebPush: info\0", "utf8"),
+            clientPublicKey,
+            ephemeralPublic,
+          ]),
+        ),
       },
       sharedKey,
       256,
@@ -152,14 +163,14 @@ async function encryptPushPayload(target: SubscriptionRow, payload: string): Pro
   );
 
   const salt = randomBytes(16);
-  const ikmKey = await subtle.importKey("raw", ikm, "HKDF", false, ["deriveBits"]);
+  const ikmKey = await subtle.importKey("raw", toBytes(ikm), "HKDF", false, ["deriveBits"]);
   const contentKey = Buffer.from(
     await subtle.deriveBits(
       {
         name: "HKDF",
         hash: "SHA-256",
-        salt,
-        info: Buffer.from("Content-Encoding: aes128gcm\0", "utf8"),
+        salt: toBytes(salt),
+        info: toBytes(Buffer.from("Content-Encoding: aes128gcm\0", "utf8")),
       },
       ikmKey,
       128,
@@ -170,8 +181,8 @@ async function encryptPushPayload(target: SubscriptionRow, payload: string): Pro
       {
         name: "HKDF",
         hash: "SHA-256",
-        salt,
-        info: Buffer.from("Content-Encoding: nonce\0", "utf8"),
+        salt: toBytes(salt),
+        info: toBytes(Buffer.from("Content-Encoding: nonce\0", "utf8")),
       },
       ikmKey,
       96,
@@ -179,9 +190,15 @@ async function encryptPushPayload(target: SubscriptionRow, payload: string): Pro
   );
 
   const plaintext = Buffer.concat([Buffer.from(payload, "utf8"), Buffer.from([2])]);
-  const aesKey = await subtle.importKey("raw", contentKey, "AES-GCM", false, ["encrypt"]);
+  const aesKey = await subtle.importKey("raw", toBytes(contentKey), "AES-GCM", false, [
+    "encrypt",
+  ]);
   const ciphertext = Buffer.from(
-    await subtle.encrypt({ name: "AES-GCM", iv: nonce, tagLength: 128 }, aesKey, plaintext),
+    await subtle.encrypt(
+      { name: "AES-GCM", iv: toBytes(nonce), tagLength: 128 },
+      aesKey,
+      toBytes(plaintext),
+    ),
   );
 
   const recordSize = Buffer.alloc(4);
@@ -223,7 +240,7 @@ export async function sendWebPush(
         TTL: "86400",
         Urgency: "high",
       },
-      body,
+      body: toBytes(body),
       signal: AbortSignal.timeout(10_000),
     });
     const dead = response.status === 404 || response.status === 410;

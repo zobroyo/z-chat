@@ -16,11 +16,15 @@ const PUBLIC_KEY_ENDPOINT = "/api/push-public-key";
 
 let cachedPublicKey: string | null = null;
 
-export function urlBase64ToUint8Array(base64String: string): Uint8Array {
+export function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
-  return Uint8Array.from([...raw].map((character) => character.charCodeAt(0)));
+  const bytes = new Uint8Array(raw.length);
+  for (let index = 0; index < raw.length; index += 1) {
+    bytes[index] = raw.charCodeAt(index);
+  }
+  return bytes;
 }
 
 function toBase64Url(bytes: Uint8Array): string {

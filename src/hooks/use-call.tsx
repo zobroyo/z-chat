@@ -1044,8 +1044,12 @@ export function useCall(
         setHostId(data.userId);
       }
       recomputeHost();
+
+      // A heartbeat from a late-joining or refreshed participant: make sure we
+      // have a live connection to them.
+      if (inCallRef.current) void maybeConnectPeer(data.userId, data.name);
     },
-    [patchParticipant, recomputeHost],
+    [maybeConnectPeer, patchParticipant, recomputeHost],
   );
 
   const handleLeave = useCallback(
