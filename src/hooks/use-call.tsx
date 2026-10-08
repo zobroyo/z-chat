@@ -4,7 +4,6 @@ import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import { callAudioRunning, getCallAudioContext, resumeCallAudio } from "@/lib/call-audio";
-import { buildGuestCallLink } from "@/lib/call-guest";
 import { CALL_SOUNDS, playCallSound } from "@/lib/call-sounds";
 import { startRingtone, type RingtoneHandle } from "@/lib/ringtone";
 

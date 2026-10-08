@@ -3,11 +3,9 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bug,
-  Gamepad2,
   Hash,
   LogOut,
   Menu,
-  Presentation,
   Search,
   Settings,
   Shield,
@@ -108,19 +106,6 @@ function ChatPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [applicationStatus, setApplicationStatus] = useState<"unknown" | "approved" | "pending" | "rejected">("unknown");
   const [profileCardId, setProfileCardId] = useState<string | null>(null);
-  const [friends, setFriends] = useState<
-    {
-      friend_id: string;
-      display_name: string;
-      username: string | null;
-      avatar_url: string | null;
-      direction: string;
-      status: string;
-    }[]
-  >([]);
-  const [friendUsername, setFriendUsername] = useState("");
-  const [friendBusy, setFriendBusy] = useState(false);
-  const [totalMembers, setTotalMembers] = useState<number | null>(null);
   const [msgQuery, setMsgQuery] = useState("");
 
   useEffect(() => {
@@ -162,71 +147,6 @@ function ChatPage() {
       });
   };
 
-  useEffect(() => {
-    if (!user) return;
-    let cancelled = false;
-    const loadFriends = () => {
-      void supabase.rpc("friends_list").then(({ data, error }) => {
-        if (!cancelled && !error && Array.isArray(data)) setFriends(data as typeof friends);
-      });
-    };
-    loadFriends();
-    const timer = window.setInterval(loadFriends, 30000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [user]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void supabase
-      .from("profiles")
-      .select("id", { count: "exact", head: true })
-      .then(({ count }) => {
-        if (!cancelled) setTotalMembers(count ?? 0);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const addFriend = async () => {
-    const name = friendUsername.trim();
-    if (!name || friendBusy) return;
-    setFriendBusy(true);
-    const { data, error } = await supabase.rpc("send_friend_request", { p_username: name });
-    setFriendBusy(false);
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    const notes: Record<string, string> = {
-      requested: "Friend request sent!",
-      accepted: "You are now friends!",
-      already_friends: "You are already friends",
-      pending_out: "Request already sent - waiting for them",
-      no_user: "No account with that username",
-      self: "That's you!",
-    };
-    toast.success(notes[String(data)] ?? "Done");
-    if (String(data) === "requested" || String(data) === "accepted") setFriendUsername("");
-    const { data: fresh } = await supabase.rpc("friends_list");
-    if (Array.isArray(fresh)) setFriends(fresh as typeof friends);
-  };
-
-  const respondFriend = async (userId: string, accept: boolean) => {
-    const { error } = await supabase.rpc("respond_friend_request", {
-      p_user: userId,
-      p_accept: accept,
-    });
-    if (error) {
-      toast.error(error.message);
-      return;
-    }
-    const { data } = await supabase.rpc("friends_list");
-    if (Array.isArray(data)) setFriends(data as typeof friends);
-  };
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -925,20 +845,6 @@ function ChatPage() {
     return others.filter((profile) => profile.display_name.toLowerCase().includes(needle));
   }, [others, query]);
 
-  const acceptedFriends = friends.filter((friend) => friend.status === "accepted");
-  const incomingRequests = friends.filter(
-    (friend) => friend.status === "pending" && friend.direction === "in",
-  );
-  const outgoingRequests = friends.filter(
-    (friend) => friend.status === "pending" && friend.direction === "out",
-  );
-  const friendsOnlyMode = totalMembers !== null && totalMembers >= 50;
-  const friendProfiles = acceptedFriends.map((friend) => ({
-    id: friend.friend_id,
-    display_name: friend.display_name,
-    username: friend.username,
-    avatar_url: friend.avatar_url,
-  })) as unknown as Profile[];
   const visibleMessages = msgQuery.trim()
     ? messages.filter((message) =>
         (message.body ?? "").toLowerCase().includes(msgQuery.trim().toLowerCase()),
@@ -1180,7 +1086,7 @@ function ChatPage() {
         <span className="font-display text-base font-bold">ZChat</span>
 
         <div className="ml-auto flex items-center">
-          <NewGroupDialog people={friendProfiles} onCreate={makeGroup} />
+          <NewGroupDialog people={others} onCreate={makeGroup} />
 
           <NotificationGate userId={user?.id ?? ""} />
         </div>
@@ -1262,84 +1168,7 @@ function ChatPage() {
           </Section>
         )}
 
-        <Section title="Friends">
-          <div className="flex gap-1.5 px-2 py-1">
-            <input
-              value={friendUsername}
-              onChange={(event) => setFriendUsername(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") void addFriend();
-              }}
-              placeholder="Add friend by username"
-              className="min-w-0 flex-1 rounded-md border border-border bg-transparent px-2 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-            <button
-              type="button"
-              onClick={() => void addFriend()}
-              disabled={friendBusy}
-              className="rounded-md bg-primary px-2.5 text-xs font-semibold text-primary-foreground disabled:opacity-60"
-            >
-              Add
-            </button>
-          </div>
-
-          {incomingRequests.map((request) => (
-            <div key={request.friend_id} className="flex items-center gap-2 px-2 py-1">
-              <UserAvatar name={request.display_name} path={request.avatar_url} className="size-8" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-foreground">
-                  {request.display_name || "Someone"}
-                </span>
-                <span className="block truncate text-[11px] text-muted-foreground">
-                  @{request.username ?? "?"} wants to be friends
-                </span>
-              </span>
-              <button
-                type="button"
-                onClick={() => void respondFriend(request.friend_id, true)}
-                className="rounded bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground"
-              >
-                Accept
-              </button>
-              <button
-                type="button"
-                onClick={() => void respondFriend(request.friend_id, false)}
-                className="rounded bg-surface-2 px-2 py-0.5 text-[11px] text-foreground"
-              >
-                Decline
-              </button>
-            </div>
-          ))}
-
-          {acceptedFriends.map((friend) => (
-            <Row
-              key={friend.friend_id}
-              onClick={() => void startDirect(friend.friend_id)}
-              leading={
-                <UserAvatar name={friend.display_name} path={friend.avatar_url} className="size-9" />
-              }
-              title={friend.display_name || "Someone"}
-              subtitle={`@${friend.username ?? "unknown"}`}
-            />
-          ))}
-
-          {outgoingRequests.map((request) => (
-            <p key={request.friend_id} className="px-2 py-0.5 text-xs text-muted-foreground">
-              Requested @{request.username ?? "?"} — pending
-            </p>
-          ))}
-
-          {acceptedFriends.length === 0 &&
-            incomingRequests.length === 0 &&
-            outgoingRequests.length === 0 && (
-              <p className="px-2 py-1 text-sm text-muted-foreground">
-                Add friends by username — DMs and groups are friends-only.
-              </p>
-            )}
-        </Section>
-
-        {!friendsOnlyMode && (
-          <Section title="People">
+        <Section title="People">
             {filteredOthers.length === 0 && (
               <p className="px-2 py-1 text-sm text-muted-foreground">No one else here yet.</p>
             )}
@@ -1361,33 +1190,11 @@ function ChatPage() {
               />
             ))}
           </Section>
-        )}
-
-        {friendsOnlyMode && (
-          <p className="px-3 py-2 text-xs leading-5 text-muted-foreground">
-            50+ members — the open people list is hidden. Add friends by username above to
-            start DMs.
-          </p>
-        )}
       </div>
 
-      <a
-        href="https://game.z-chat.men"
-        className="mx-3 mt-3 mb-2 flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-3 text-sm font-semibold tracking-wide text-primary-foreground shadow-sm transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Gamepad2 className="size-4" />
-        Z GAMES
-      </a>
-      <a
-        href="https://present.z-chat.men"
-        className="mx-3 mb-2 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Presentation className="size-4" />
-        Z PRESENTER
-      </a>
       <Link
         to="/services"
-        className="mx-3 mb-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="mx-3 mt-3 mb-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         ALL Z SERVICES
       </Link>
