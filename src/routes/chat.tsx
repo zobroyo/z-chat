@@ -1309,15 +1309,18 @@ function ChatPage() {
             <p className="truncate text-xs text-muted-foreground">{activeSubtitle}</p>
           </div>
 
-          <input
-            value={msgQuery}
-            onChange={(event) => setMsgQuery(event.target.value)}
-            placeholder="Search messages"
-            aria-label="Search messages"
-            className="ml-3 hidden w-40 shrink rounded-md border border-border bg-transparent px-2 py-1 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:block"
-          />
+          <div className="relative ml-3 hidden sm:block">
+            <Search className="absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={msgQuery}
+              onChange={(event) => setMsgQuery(event.target.value)}
+              placeholder="Search messages"
+              aria-label="Search messages"
+              className="h-8 w-40 shrink rounded-full border border-border/60 bg-surface-2/60 pr-3 pl-8 text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
 
-          <div className="ml-auto flex shrink-0 items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-0.5">
             <CallButton
               onJoin={() => void call.joinCall()}
               joining={call.joining}
@@ -1328,11 +1331,16 @@ function ChatPage() {
             {activeConversation?.kind === "group" && activeConversation.created_by === user?.id && (
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
                 className={cn(
-                  "text-muted-foreground",
+                  "size-8 text-muted-foreground",
                   !activeConversation.ai_moderation_enabled && "text-destructive",
                 )}
+                aria-label={
+                  activeConversation.ai_moderation_enabled
+                    ? "Turn off AI moderation"
+                    : "Turn on AI moderation"
+                }
                 title={
                   activeConversation.ai_moderation_enabled
                     ? "AI moderation is ON for this group (click to turn off)"
@@ -1341,23 +1349,23 @@ function ChatPage() {
                 onClick={() => void toggleGroupModeration()}
               >
                 {activeConversation.ai_moderation_enabled ? (
-                  <ShieldCheck className="mr-1.5 size-4" />
+                  <ShieldCheck className="size-4" />
                 ) : (
-                  <ShieldOff className="mr-1.5 size-4" />
+                  <ShieldOff className="size-4" />
                 )}
-                AI moderation
               </Button>
             )}
 
             {activeConversation?.kind === "group" && (
               <Button
                 variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                aria-label="Leave group"
+                title="Leave group"
                 onClick={() => void leaveGroup()}
               >
-                <LogOut className="mr-1.5 size-4" />
-                Leave group
+                <LogOut className="size-4" />
               </Button>
             )}
           </div>

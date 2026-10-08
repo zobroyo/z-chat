@@ -26,6 +26,7 @@ type Props = {
 export function NewGroupDialog({ people, onCreate }: Props) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
+  const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -33,6 +34,11 @@ export function NewGroupDialog({ people, onCreate }: Props) {
     setSelected((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
+
+  const needle = filter.trim().toLowerCase();
+  const visiblePeople = needle
+    ? people.filter((person) => person.display_name.toLowerCase().includes(needle))
+    : people;
 
   const submit = async () => {
     const parsed = groupNameSchema.safeParse(name);

@@ -77,7 +77,7 @@ export function GamesAnnouncementDialog({ userId }: Props) {
             THERE IS NOW GAMES IN Z CHAT
           </DialogTitle>
           <DialogDescription>
-            Your games shortcut is ready. Here’s where to find it:
+            Your games shortcut is ready — here’s where to find it:
           </DialogDescription>
         </DialogHeader>
 
@@ -86,14 +86,18 @@ export function GamesAnnouncementDialog({ userId }: Props) {
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Desktop
             </p>
-            <p className="mt-1 text-sm">Look at the bottom of the left sidebar.</p>
+            <p className="mt-1 text-sm">
+              Open <span className="font-medium">All Z services</span> at the bottom of the left
+              sidebar, then pick Z Games.
+            </p>
           </div>
           <div className="rounded-xl bg-surface-2 p-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Mobile / PWA
             </p>
             <p className="mt-1 text-sm">
-              Tap the menu button in the top-left, then look at the bottom of the menu.
+              Tap the menu button in the top-left, then{" "}
+              <span className="font-medium">All Z services</span> at the bottom of the menu.
             </p>
           </div>
           <div className="flex items-center justify-center gap-2 rounded-xl bg-primary px-3 py-3 text-sm font-semibold tracking-wide text-primary-foreground">

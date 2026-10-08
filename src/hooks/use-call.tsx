@@ -304,7 +304,6 @@ export function useCall(
   const ringTargetsRef = useRef<string[]>([]);
   const ringSessionRef = useRef(0);
   const ringDeclinedAtRef = useRef(0);
-  const ringAcceptedAtRef = useRef(0);
 
   // Join / connection health.
   const joinAttemptRef = useRef(0);
@@ -1776,72 +1775,232 @@ export function useCall(
     };
   }, [leaveCall]);
 
-  // Switching conversations or accounts hangs up the current call.
+  // Switching conversations or accounts hangs up the current call — unless the
+  // call was accepted from an incoming ring while another conversation was
+  // open, in which case it keeps running in the background.
   useEffect(() => {
     if (!inCallRef.current) return;
-    if (callConversationRef.current === conversationId && joinedAsRef.current === me.id) return;
+    if (callConversationRef.current === conversationId) {
+      // The UI caught up with a remotely accepted call; switching away again
+      // should hang up as usual.
+      remoteAcceptedRef.current = false;
+      if (joinedAsRef.current === me.id) return;
+    }
+    if (remoteAcceptedRef.current) return;
     void leaveCall();
   }, [me.id, conversationId, leaveCall]);
 
-  // While the conversation is open and we are not in a call, listen for other
-  // people starting one and ring for the recipient. (Never on guest pages.)
+  // ---- Global ring channel (`call-ring:{userId}`) -----------------------------
+
+  const handleRing = useCallback(
+    (data: RingPayload | null) => {
+      const self = meRef.current;
+      if (!data?.conversationId || !data.callerId || data.callerId === self.id) return;
+
+      // Already in this very call: nothing to ring.
+      if (inCallRef.current && callConversationRef.current === data.conversationId) return;
+
+      if (inCallRef.current || joiningRef.current) {
+        sendRing(data.callerId, "ring-decline", {
+          conversationId: data.conversationId,
+          userId: self.id,
+          name: self.name,
+          reason: "busy",
+        });
+        return;
+      }
+
+      const current = incomingCallRef.current;
+      if (current) {
+        // A repeated ring for the same call (announce retries) is ignored; a
+        // different caller is told we are busy.
+        if (current.userId === data.callerId && current.conversationId === data.conversationId) {
+          return;
+        }
+        sendRing(data.callerId, "ring-decline", {
+          conversationId: data.conversationId,
+          userId: self.id,
+          name: self.name,
+          reason: "busy",
+        });
+        return;
+      }
+
+      const next: IncomingCall = {
+        userId: data.callerId,
+        name: data.callerName ?? "Someone",
+        conversationId: data.conversationId,
+        conversationTitle: data.title ?? null,
+        guestKey: data.key ?? null,
+      };
+      incomingCallRef.current = next;
+      setIncomingCall(next);
+      startRinging();
+    },
+    [sendRing, startRinging],
+  );
+
+  const handleRingCancel = useCallback(
+    (data: RingCancelPayload | null) => {
+      if (!data?.conversationId) return;
+      const current = incomingCallRef.current;
+      if (!current || current.conversationId !== data.conversationId) return;
+      if (data.callerId && current.userId !== data.callerId) return;
+      clearIncoming();
+    },
+    [clearIncoming],
+  );
+
+  const handleRingDecline = useCallback((data: RingDeclinePayload | null) => {
+    if (!data?.conversationId || !data.userId) return;
+    if (!inCallRef.current || callConversationRef.current !== data.conversationId) return;
+    if (Date.now() - ringDeclinedAtRef.current < 2_500) return;
+    ringDeclinedAtRef.current = Date.now();
+    if (data.reason === "busy") {
+      toast(`${data.name ?? "Someone"} is already in another call`);
+    } else {
+      toast(`${data.name ?? "Someone"} declined the call`);
+    }
+  }, []);
+
+  const handleRingAccept = useCallback(
+    (data: RingAcceptPayload | null) => {
+      if (!data?.conversationId || !data.userId || data.userId === meRef.current.id) return;
+      if (!inCallRef.current || callConversationRef.current !== data.conversationId) return;
+      // The accepter is joining: make sure we have a connection to them even if
+      // their `join` broadcast never arrived.
+      patchParticipant(data.userId, { name: data.name ?? "Someone" });
+      void maybeConnectPeer(data.userId, data.name, { force: true });
+    },
+    [maybeConnectPeer, patchParticipant],
+  );
+
+  // Every signed-in client subscribes to its personal ring channel for the
+  // whole chat session, so an incoming call rings no matter which conversation
+  // is open. (Guests never subscribe: they are always the callee of one link.)
   useEffect(() => {
     const self = meRef.current;
-    if (!listenForIncoming || !conversationId || !self.id || inCall) return;
+    if (!listenForIncoming || !self.id) return;
 
-    const channel = clientRef.current.channel(`call:${conversationId}`, {
+    const channel = clientRef.current.channel(`${RING_CHANNEL_PREFIX}${self.id}`, {
       config: { broadcast: { self: false } },
     });
-    listenChannelRef.current = channel;
+    ringInRef.current = channel;
 
     channel
-      .on("broadcast", { event: "join" }, (message) => {
-        const payload = asPayload<JoinPayload>(message["payload"]);
-        const userId = payload?.userId;
-        if (!userId || userId === meRef.current.id || inCallRef.current) return;
-        const next = { userId, name: payload?.name ?? "Someone" };
-        incomingCallRef.current = next;
-        setIncomingCall(next);
-        startRinging();
+      .on("broadcast", { event: "ring" }, (message) => {
+        handleRing(asPayload<RingPayload>(message["payload"]));
       })
-      .on("broadcast", { event: "leave" }, (message) => {
-        const payload = asPayload<LeavePayload>(message["payload"]);
-        if (payload?.userId && payload.userId === incomingCallRef.current?.userId) {
-          clearIncoming();
-        }
+      .on("broadcast", { event: "ring-cancel" }, (message) => {
+        handleRingCancel(asPayload<RingCancelPayload>(message["payload"]));
+      })
+      .on("broadcast", { event: "ring-decline" }, (message) => {
+        handleRingDecline(asPayload<RingDeclinePayload>(message["payload"]));
+      })
+      .on("broadcast", { event: "ring-accept" }, (message) => {
+        handleRingAccept(asPayload<RingAcceptPayload>(message["payload"]));
       })
       .subscribe();
 
     return () => {
-      listenChannelRef.current = null;
+      ringInRef.current = null;
       void clientRef.current.removeChannel(channel);
-      clearIncoming();
     };
-  }, [conversationId, inCall, listenForIncoming, startRinging, clearIncoming]);
+  }, [listenForIncoming, me.id, handleRing, handleRingCancel, handleRingDecline, handleRingAccept]);
 
   const acceptIncomingCall = useCallback(async () => {
+    const incoming = incomingCallRef.current;
     clearIncoming();
-    await joinCall();
-  }, [clearIncoming, joinCall]);
+    if (!incoming) return;
+
+    // Accepting a call that belongs to another conversation keeps the call
+    // alive even while a different conversation is displayed.
+    remoteAcceptedRef.current = true;
+    onSwitchConversationRef.current?.(incoming.conversationId);
+
+    await joinCall(incoming.conversationId);
+    if (!inCallRef.current) {
+      remoteAcceptedRef.current = false;
+      return;
+    }
+
+    // Proactive confirmation to the caller: lets them offer us a connection
+    // even if they missed our `join` broadcast.
+    sendRing(incoming.userId, "ring-accept", {
+      conversationId: incoming.conversationId,
+      userId: meRef.current.id,
+      name: meRef.current.name,
+    });
+  }, [clearIncoming, joinCall, sendRing]);
 
   const declineIncomingCall = useCallback(() => {
     const incoming = incomingCallRef.current;
     clearIncoming();
-    const channel = listenChannelRef.current;
-    if (incoming && channel) {
-      try {
-        void channel
-          .send({
-            type: "broadcast",
-            event: "decline",
-            payload: { userId: meRef.current.id, name: meRef.current.name },
-          })
-          .catch(() => undefined);
-      } catch {
-        // Channel not ready; the caller will just see nobody joined.
-      }
+    if (!incoming) return;
+    sendRing(incoming.userId, "ring-decline", {
+      conversationId: incoming.conversationId,
+      userId: meRef.current.id,
+      name: meRef.current.name,
+      reason: "declined",
+    });
+  }, [clearIncoming, sendRing]);
+
+  // ---- Shareable invite link --------------------------------------------------
+
+  const waitForGuestKey = useCallback(async (timeoutMs: number): Promise<string | null> => {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      if (guestKeyRef.current) return guestKeyRef.current;
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 200));
     }
-  }, [clearIncoming]);
+    return guestKeyRef.current;
+  }, []);
+
+  /**
+   * Joins the current call if needed, makes sure the host's guest key is
+   * available and copies the shareable `/call/<id>?k=<key>` link. This is what
+   * the `/call` slash command calls.
+   */
+  const copyCallInviteLink = useCallback(async (): Promise<boolean> => {
+    const target = callConversationRef.current ?? conversationIdRef.current;
+    if (!target) {
+      toast.error("Open a conversation before starting a call");
+      return false;
+    }
+
+    if (!inCallRef.current) {
+      await joinCall(target);
+      if (!inCallRef.current) return false;
+    }
+
+    const key = await waitForGuestKey(6_000);
+    if (!key) {
+      toast.error("The call host hasn't enabled invite links yet — try again in a moment.");
+      return false;
+    }
+
+    const link = buildGuestCallLink(target, key);
+    if (!link) return false;
+
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
+      await navigator.clipboard.writeText(link);
+      toast.success("Call link copied — anyone with it can join as a guest");
+      return true;
+    } catch {
+      toast.message("Share this call link", { description: link, duration: 20_000 });
+      return false;
+    }
+  }, [joinCall, waitForGuestKey]);
+
+  /** Same as {@link copyCallInviteLink} but also returns the link. */
+  const startCallWithLink = useCallback(async (): Promise<string | null> => {
+    await copyCallInviteLink();
+    const target = callConversationRef.current;
+    const key = guestKeyRef.current;
+    if (!target || !key) return null;
+    return buildGuestCallLink(target, key);
+  }, [copyCallInviteLink]);
 
   return {
     inCall,
@@ -1881,6 +2040,8 @@ export function useCall(
     closeBreakoutRooms,
     ensureGuestKey,
     retryRingtone,
+    copyCallInviteLink,
+    startCallWithLink,
   };
 }
 
