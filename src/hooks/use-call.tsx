@@ -910,7 +910,6 @@ export function useCall(
         if (expected && data.key !== expected) return;
       }
 
-      const existing = peersRef.current.get(userId);
       const theirRoom = assignmentsRef.current[userId] ?? null;
       patchParticipant(userId, {
         ...(data.name ? { name: data.name } : {}),
@@ -938,20 +937,11 @@ export function useCall(
       if (theirRoom !== myRoomIdRef.current) return;
 
       // A peer re-announcing after a reload: the old connection is dead but may
-      // not have flipped to "failed" yet, so rebuild it explicitly. Anything
-      // still negotiating (or healthy) is left alone.
-      if (existing) {
-        const busy =
-          existing.pc.signalingState !== "stable" ||
-          existing.pc.connectionState === "connected" ||
-          existing.pc.connectionState === "connecting";
-        if (busy) return;
-        closePeer(userId);
-      }
-
-      await offerPeer(userId, data.name);
+      // not have flipped to "failed" yet, so rebuild it explicitly (the healthy
+      // / still-negotiating checks live in maybeConnectPeer).
+      await maybeConnectPeer(userId, data.name, { force: true });
     },
-    [broadcastRooms, broadcastState, closePeer, offerPeer, patchParticipant, recomputeHost],
+    [broadcastRooms, broadcastState, maybeConnectPeer, patchParticipant, recomputeHost],
   );
 
   const handleOffer = useCallback(

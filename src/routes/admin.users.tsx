@@ -10,6 +10,7 @@ import {
   CircleCheck,
   Pencil,
   Clock,
+  Fingerprint,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,6 +22,11 @@ import {
   PAGE_SIZE,
   type AdminProfile,
 } from "@/lib/admin";
+import {
+  adminUnbanHardware,
+  fetchHardwareBans,
+  type HardwareBanRow,
+} from "@/lib/auth-security";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -117,6 +123,69 @@ function AdminUsers() {
   const [r6Draft, setR6Draft] = useState("");
   const [timeoutOpen, setTimeoutOpen] = useState(false);
   const [timeoutReason, setTimeoutReason] = useState("");
+  const [hardwareBans, setHardwareBans] = useState<HardwareBanRow[] | null>(null);
+  const [hwError, setHwError] = useState<string | null>(null);
+  const [hwBusyId, setHwBusyId] = useState<string | null>(null);
+  const [showLifted, setShowLifted] = useState(false);
+  const [hwNames, setHwNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchHardwareBans()
+      .then(async (rows) => {
+        if (cancelled) return;
+        setHardwareBans(rows);
+        const ids = [...new Set(rows.map((row) => row.user_id).filter((id): id is string => !!id))];
+        if (ids.length) {
+          const { data } = await supabase
+            .from("profiles")
+            .select("id, display_name")
+            .in("id", ids);
+          if (!cancelled && data) {
+            setHwNames(
+              Object.fromEntries(
+                (data as { id: string; display_name: string }[]).map((p) => [
+                  p.id,
+                  p.display_name || "Unnamed",
+                ]),
+              ),
+            );
+          }
+        }
+      })
+      .catch((e) => {
+        if (!cancelled) setHwError(e instanceof Error ? e.message : "Failed to load banned devices");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const unbanDevice = async (ban: HardwareBanRow) => {
+    if (
+      !window.confirm(
+        `Unban this device? Fingerprint ${ban.fingerprint.slice(0, 16)}… will be allowed to sign in and sign up again.`,
+      )
+    )
+      return;
+    setHwBusyId(ban.id);
+    try {
+      await adminUnbanHardware(ban.id);
+      setHardwareBans(
+        (rows) =>
+          rows?.map((row) =>
+            row.id === ban.id
+              ? { ...row, active: false, unbanned_at: new Date().toISOString() }
+              : row,
+          ) ?? null,
+      );
+      toast.success("Device unbanned");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to unban device");
+    } finally {
+      setHwBusyId(null);
+    }
+  };
 
   const reload = () => {
     setRows(null);
@@ -288,6 +357,9 @@ function AdminUsers() {
       setBusy(false);
     }
   };
+
+  const visibleBans = (hardwareBans ?? []).filter((ban) => showLifted || ban.active);
+  const activeBanCount = (hardwareBans ?? []).filter((ban) => ban.active).length;
 
   return (
     <div className="space-y-4">
