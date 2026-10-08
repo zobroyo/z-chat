@@ -1144,6 +1144,25 @@ export function useCall(
   // ---- Lifecycle -------------------------------------------------------------
 
   const teardown = useCallback(() => {
+    // Cancel any in-flight join and periodic work first, so nothing resurrects
+    // the call after this teardown.
+    joinAttemptRef.current += 1;
+    stopHeartbeat();
+    for (const timer of joinAnnounceTimersRef.current) window.clearTimeout(timer);
+    joinAnnounceTimersRef.current = [];
+    if (joinWatchdogRef.current !== null) {
+      window.clearTimeout(joinWatchdogRef.current);
+      joinWatchdogRef.current = null;
+    }
+
+    for (const entry of ringOutRef.current.values()) {
+      void clientRef.current.removeChannel(entry.channel);
+    }
+    ringOutRef.current.clear();
+    ringTargetsRef.current = [];
+    ringSessionRef.current += 1;
+    connectAttemptsRef.current.clear();
+
     if (pageHideRef.current) {
       window.removeEventListener("pagehide", pageHideRef.current);
       pageHideRef.current = null;

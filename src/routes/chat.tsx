@@ -1078,35 +1078,35 @@ function ChatPage() {
 
   const sidebar = (
     <div className="ios-safe-top ios-safe-bottom flex h-full flex-col bg-sidebar">
-      <div className="flex items-center gap-2 border-b border-border px-4 py-4">
-        <span className="flex size-9 items-center justify-center rounded-xl bg-primary font-display text-sm font-extrabold text-primary-foreground">
+      <div className="flex items-center gap-2.5 border-b border-border/60 px-4 py-3.5">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-primary font-display text-sm font-extrabold text-primary-foreground">
           Z
         </span>
 
-        <span className="font-display text-base font-bold">ZChat</span>
+        <span className="font-display text-[15px] font-bold tracking-tight">ZChat</span>
 
-        <div className="ml-auto flex items-center">
+        <div className="ml-auto flex items-center gap-0.5">
           <NewGroupDialog people={others} onCreate={makeGroup} />
 
           <NotificationGate userId={user?.id ?? ""} />
         </div>
       </div>
 
-      <div className="px-3 py-3">
+      <div className="px-3 pt-3 pb-1">
         <div className="relative">
-          <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
 
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search people"
-            className="rounded-xl bg-surface-2 pl-9"
+            className="h-9 rounded-lg border-transparent bg-surface-2 pl-9 text-sm"
           />
         </div>
       </div>
 
-      <div className="scroll-slim flex-1 space-y-5 overflow-y-auto px-3 pb-4">
-        <Section title="Room">
+      <div className="scroll-slim flex-1 space-y-4 overflow-y-auto px-3 pt-2 pb-3">
+        <Section title="Rooms">
           <Row
             active={activeId === generalRoom?.id}
             onClick={() => generalRoom && openConversation(generalRoom.id)}
@@ -1169,44 +1169,57 @@ function ChatPage() {
         )}
 
         <Section title="People">
-            {filteredOthers.length === 0 && (
-              <p className="px-2 py-1 text-sm text-muted-foreground">No one else here yet.</p>
-            )}
+          {filteredOthers.length === 0 && (
+            <p className="px-2 py-1 text-sm text-muted-foreground">
+              {query.trim() ? "No one matches that search." : "No one else here yet."}
+            </p>
+          )}
 
-            {filteredOthers.map((person) => (
-              <Row
-                key={person.id}
-                onClick={() => void startDirect(person.id)}
-                leading={
-                  <UserAvatar
-                    name={person.display_name}
-                    path={person.avatar_url}
-                    online={isOnline(person)}
-                    className="size-9"
-                  />
-                }
-                title={person.display_name || "Someone"}
-                subtitle={isOnline(person) ? "Online" : "Offline"}
-              />
-            ))}
-          </Section>
+          {filteredOthers.map((person) => (
+            <Row
+              key={person.id}
+              onClick={() => void startDirect(person.id)}
+              leading={
+                <UserAvatar
+                  name={person.display_name}
+                  path={person.avatar_url}
+                  online={isOnline(person)}
+                  className="size-9"
+                />
+              }
+              title={person.display_name || "Someone"}
+              subtitle={isOnline(person) ? "Online" : "Offline"}
+            />
+          ))}
+        </Section>
       </div>
 
-      <Link
-        to="/services"
-        className="mx-3 mt-3 mb-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        ALL Z SERVICES
-      </Link>
-      <a
-        href="https://forms.gle/FdvZyi4nLM92i1yaA"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mx-3 mb-3 flex items-center justify-center gap-2 rounded-xl border border-border bg-surface-2 px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      >
-        <Bug className="size-4" />
-        Bugs &amp; Suggestions
-      </a>
+      <div className="mx-3 mb-2 space-y-2">
+        <a
+          href="https://z-chat.men/media/downloads/ZChat.exe"
+          className="flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Download className="size-4" />
+          Download for Windows
+        </a>
+
+        <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
+          <Link to="/services" className="transition-colors hover:text-foreground">
+            All Z services
+          </Link>
+          <span aria-hidden="true" className="text-border">
+            ·
+          </span>
+          <a
+            href="https://forms.gle/FdvZyi4nLM92i1yaA"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-foreground"
+          >
+            Report a bug
+          </a>
+        </div>
+      </div>
 
       {isAdmin && (
         <Link
