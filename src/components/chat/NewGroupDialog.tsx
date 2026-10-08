@@ -55,6 +55,7 @@ export function NewGroupDialog({ people, onCreate }: Props) {
       await onCreate(parsed.data, selected);
       setOpen(false);
       setName("");
+      setFilter("");
       setSelected([]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create the group");
@@ -89,12 +90,21 @@ export function NewGroupDialog({ people, onCreate }: Props) {
           </div>
 
           <div className="space-y-2">
-            <Label>People</Label>
+            <Label htmlFor="group-people">Members</Label>
+            <Input
+              id="group-people"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder="Search people"
+              className="h-9"
+            />
             <div className="scroll-slim max-h-56 space-y-1 overflow-y-auto rounded-xl bg-surface-2 p-2">
-              {people.length === 0 && (
-                <p className="p-2 text-sm text-muted-foreground">No one else has signed up yet.</p>
+              {visiblePeople.length === 0 && (
+                <p className="p-2 text-sm text-muted-foreground">
+                  {people.length === 0 ? "No one else has signed up yet." : "No one matches that search."}
+                </p>
               )}
-              {people.map((person) => (
+              {visiblePeople.map((person) => (
                 <label
                   key={person.id}
                   className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface"

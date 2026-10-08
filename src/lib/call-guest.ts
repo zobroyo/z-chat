@@ -72,3 +72,12 @@ export function randomLocalGuestId(): string {
       : `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
   return `guest-${random}`;
 }
+
+/**
+ * Shareable guest link for a call: `<origin>/call/<conversationId>?k=<key>`.
+ * Returns null outside the browser (SSR).
+ */
+export function buildGuestCallLink(conversationId: string, guestKey: string): string | null {
+  if (typeof window === "undefined" || !conversationId || !guestKey) return null;
+  return `${window.location.origin}/call/${conversationId}?k=${encodeURIComponent(guestKey)}`;
+}

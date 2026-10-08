@@ -281,7 +281,6 @@ export function useCall(
   meRef.current = me;
   const conversationIdRef = useRef<string | null>(conversationId);
   conversationIdRef.current = conversationId;
-  onSwitchConversationRef.current = options?.onSwitchConversation;
   const callConversationRef = useRef<string | null>(null);
   const joinedAsRef = useRef<string | null>(null);
 
@@ -313,6 +312,7 @@ export function useCall(
   const connectAttemptsRef = useRef(new Map<string, number>());
   const remoteAcceptedRef = useRef(false);
   const onSwitchConversationRef = useRef(options?.onSwitchConversation);
+  onSwitchConversationRef.current = options?.onSwitchConversation;
 
   const inCallRef = useRef(false);
   const joiningRef = useRef(false);
@@ -1347,7 +1347,7 @@ export function useCall(
           })
           .on("presence", { event: "leave" }, ({ leftPresences }) => {
             for (const presence of leftPresences ?? []) {
-              const peerId = presence.userId;
+              const peerId = presence["userId"];
               if (!peerId || peerId === self.id) continue;
               volumesRef.current.delete(peerId);
               localMutedRef.current.delete(peerId);
