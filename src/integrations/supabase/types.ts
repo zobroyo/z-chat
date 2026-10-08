@@ -420,6 +420,54 @@ export type Database = {
         };
         Relationships: [];
       };
+      ban_appeal_threads: {
+        Row: {
+          created_at: string;
+          resolved: boolean;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          resolved?: boolean;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          resolved?: boolean;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      ban_appeal_messages: {
+        Row: {
+          body: string;
+          created_at: string;
+          id: string;
+          is_moderator: boolean;
+          sender_id: string;
+          user_id: string;
+        };
+        Insert: {
+          body: string;
+          created_at?: string;
+          id?: string;
+          is_moderator?: boolean;
+          sender_id: string;
+          user_id: string;
+        };
+        Update: {
+          body?: string;
+          created_at?: string;
+          id?: string;
+          is_moderator?: boolean;
+          sender_id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: {
       [_ in never]: never;

@@ -15,7 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { BanAppealDialog } from "@/components/chat/BanAppealDialog";
+import { OpenChatDialog } from "@/components/chat/OpenChatDialog";
 import { CallButton } from "@/components/call/CallButton";
 import { CallOverlay } from "@/components/call/CallOverlay";
 import { Composer } from "@/components/chat/Composer";
@@ -114,18 +114,22 @@ function ChatPage() {
       return;
     }
     let cancelled = false;
-    void supabase
-      .from("profiles")
-      .select("application_status")
-      .eq("id", user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return;
-        const status = (data?.application_status as string | undefined) ?? "approved";
-        setApplicationStatus(status === "pending" ? "pending" : status === "rejected" ? "rejected" : "approved");
-      });
+    const check = () =>
+      supabase
+        .from("profiles")
+        .select("application_status")
+        .eq("id", user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (cancelled) return;
+          const status = (data?.application_status as string | undefined) ?? "approved";
+          setApplicationStatus(status === "pending" ? "pending" : status === "rejected" ? "rejected" : "approved");
+        });
+    void check();
+    const timer = window.setInterval(check, 15000);
     return () => {
       cancelled = true;
+      window.clearInterval(timer);
     };
   }, [user]);
 
@@ -1258,7 +1262,7 @@ function ChatPage() {
     <div className="chat-app-shell flex overflow-hidden">
       <GamesAnnouncementDialog userId={user?.id ?? ""} />
       <ProfileDialog userId={profileCardId} onClose={() => setProfileCardId(null)} />
-      <BanAppealDialog
+      <OpenChatDialog
         open={banAppealOpen}
         onOpenChange={setBanAppealOpen}
         userId={user?.id ?? ""}
@@ -1371,7 +1375,7 @@ function ChatPage() {
               onClick={() => setBanAppealOpen(true)}
               className="shrink-0"
             >
-              Appeal ban
+              Open chat
             </Button>
           </div>
         )}
