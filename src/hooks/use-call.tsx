@@ -1231,188 +1231,290 @@ export function useCall(
     setActiveConversationId(null);
   }, [closePeer]);
 
-  const joinCall = useCallback(async () => {
-    const self = meRef.current;
-    const targetConversation = conversationIdRef.current;
-    if (!targetConversation || !self.id || inCallRef.current || joiningRef.current) return;
+  const joinCall = useCallback(
+    async (targetConversationOverride?: string | null) => {
+      const self = meRef.current;
+      const targetConversation = targetConversationOverride ?? conversationIdRef.current;
+      if (!targetConversation || !self.id || inCallRef.current || joiningRef.current) return;
 
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      setError("This browser does not support calls.");
-      return;
-    }
+      if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+        setError("This browser does not support calls.");
+        return;
+      }
 
-    joiningRef.current = true;
-    setJoining(true);
-    setError(null);
+      const attempt = ++joinAttemptRef.current;
+      const cancelled = () => joinAttemptRef.current !== attempt;
 
-    let channel: RealtimeChannel | null = null;
-
-    try {
-      // Joining is a user gesture: unlock Web Audio here so remote volume and
-      // the soundboard work immediately.
-      void resumeCallAudio();
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-      localStreamRef.current = stream;
-
-      channel = clientRef.current.channel(`call:${targetConversation}`, {
-        config: { broadcast: { self: false } },
-      });
-      channelRef.current = channel;
-
-      channel
-        .on("broadcast", { event: "join" }, (message) => {
-          void handleJoin(asPayload<JoinPayload>(message["payload"]));
-        })
-        .on("broadcast", { event: "offer" }, (message) => {
-          void handleOffer(asPayload<OfferPayload>(message["payload"]));
-        })
-        .on("broadcast", { event: "answer" }, (message) => {
-          void handleAnswer(asPayload<AnswerPayload>(message["payload"]));
-        })
-        .on("broadcast", { event: "ice" }, (message) => {
-          handleIce(asPayload<IcePayload>(message["payload"]));
-        })
-        .on("broadcast", { event: "state" }, (message) => {
-          handleState(asPayload<StatePayload>(message["payload"]));
-        })
-        .on("broadcast", { event: "leave" }, (message) => {
-          handleLeave(asPayload<LeavePayload>(message["payload"]));
-        })
-        .on("broadcast", { event: "mod" }, (message) => {
-          handleMod(asPayload<ModPayload>(message["payload"]));
-        })
-        .on("broadcast", { event: "sound" }, (message) => {
-          handleSound(asPayload<SoundPayload>(message["payload"]));
-        })
-        .on("broadcast", { event: "rooms" }, (message) => {
-          handleRooms(asPayload<RoomsPayload>(message["payload"]));
-        })
-        .on("broadcast", { event: "decline" }, (message) => {
-          const payload = asPayload<{ userId?: string; name?: string }>(message["payload"]);
-          if (payload?.userId && payload.userId !== meRef.current.id) {
-            toast(`${payload.name ?? "Someone"} declined the call`);
-          }
-        });
-
-      await new Promise<void>((resolve, reject) => {
-        let settled = false;
-        const timer = window.setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          reject(new Error("Could not connect to the call."));
-        }, CHANNEL_TIMEOUT_MS);
-
-        channel?.subscribe((status) => {
-          if (settled) return;
-          if (status === "SUBSCRIBED") {
-            settled = true;
-            window.clearTimeout(timer);
-            resolve();
-          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-            settled = true;
-            window.clearTimeout(timer);
-            reject(new Error("Could not connect to the call."));
-          }
-        });
-      });
-
-      const pageHide = () => {
-        const active = channelRef.current;
-        if (!active || !inCallRef.current) return;
-        try {
-          void active
-            .send({ type: "broadcast", event: "leave", payload: { userId: meRef.current.id } })
-            .catch(() => undefined);
-        } catch {
-          // Socket already gone.
-        }
-      };
-      pageHideRef.current = pageHide;
-      window.addEventListener("pagehide", pageHide);
-
-      // Retry Web Audio playback on the next gesture if it was blocked.
-      const unlockAudio = () => {
-        void resumeCallAudio().then((running) => {
-          if (!running) return;
-          for (const peerId of peersRef.current.keys()) applyPeerVolume(peerId);
-        });
-      };
-      unlockAudioRef.current = unlockAudio;
-      window.addEventListener("pointerdown", unlockAudio);
-      window.addEventListener("keydown", unlockAudio);
-
-      callConversationRef.current = targetConversation;
-      joinedAsRef.current = self.id;
+      joiningRef.current = true;
+      setJoining(true);
+      setError(null);
       myJoinedAtRef.current = Date.now();
 
-      // First into an empty call: this client hosts it.
-      const alone = peersRef.current.size === 0 && knownRef.current.size === 0;
-      if (alone && !isGuestRef.current) {
-        hostIdRef.current = self.id;
-        isHostRef.current = true;
-        setHostId(self.id);
-      } else {
-        recomputeHost();
-      }
-
-      setLocalStream(stream);
-      setActiveConversationId(targetConversation);
-      inCallRef.current = true;
-      setInCall(true);
-
-      send("join", {
-        userId: self.id,
-        name: self.name,
-        host: isHostRef.current,
-        guest: isGuestRef.current,
-        joinedAt: myJoinedAtRef.current,
-        roomId: myRoomIdRef.current,
-        ...(isGuestRef.current && guestKeyRef.current ? { key: guestKeyRef.current } : {}),
-      });
-      broadcastState();
-
-      if (isHostRef.current) ensureGuestKey();
-    } catch (cause) {
-      const local = localStreamRef.current;
-      if (local) {
-        local.getTracks().forEach((track) => track.stop());
-        localStreamRef.current = null;
-      }
-      if (pageHideRef.current) {
-        window.removeEventListener("pagehide", pageHideRef.current);
-        pageHideRef.current = null;
-      }
-      if (unlockAudioRef.current) {
-        window.removeEventListener("pointerdown", unlockAudioRef.current);
-        window.removeEventListener("keydown", unlockAudioRef.current);
-        unlockAudioRef.current = null;
-      }
-      if (channel) {
+      // Watchdog: never leave the UI stuck on "Joining…".
+      joinWatchdogRef.current = window.setTimeout(() => {
+        if (!joiningRef.current || joinAttemptRef.current !== attempt) return;
+        joinAttemptRef.current += 1; // cancels the in-flight attempt
+        joiningRef.current = false;
+        setJoining(false);
+        setError(
+          "Couldn't join the call — the connection timed out. Check your microphone permission and try again.",
+        );
+        const stalled = channelRef.current;
         channelRef.current = null;
-        void clientRef.current.removeChannel(channel);
+        if (stalled) void clientRef.current.removeChannel(stalled);
+        const stalledStream = localStreamRef.current;
+        if (stalledStream) {
+          stalledStream.getTracks().forEach((track) => track.stop());
+          localStreamRef.current = null;
+        }
+      }, JOIN_WATCHDOG_MS);
+
+      let channel: RealtimeChannel | null = null;
+
+      try {
+        // Joining is a user gesture: unlock Web Audio here so remote volume and
+        // the soundboard work immediately.
+        void resumeCallAudio();
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        if (cancelled()) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        localStreamRef.current = stream;
+
+        const targetChannel = clientRef.current.channel(`call:${targetConversation}`, {
+          config: { broadcast: { self: false }, presence: { key: self.id } },
+        });
+        channel = targetChannel;
+        channelRef.current = targetChannel;
+
+        targetChannel
+          .on("broadcast", { event: "join" }, (message) => {
+            void handleJoin(asPayload<JoinPayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "offer" }, (message) => {
+            void handleOffer(asPayload<OfferPayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "answer" }, (message) => {
+            void handleAnswer(asPayload<AnswerPayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "ice" }, (message) => {
+            handleIce(asPayload<IcePayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "state" }, (message) => {
+            handleState(asPayload<StatePayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "leave" }, (message) => {
+            handleLeave(asPayload<LeavePayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "mod" }, (message) => {
+            handleMod(asPayload<ModPayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "sound" }, (message) => {
+            handleSound(asPayload<SoundPayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "rooms" }, (message) => {
+            handleRooms(asPayload<RoomsPayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "decline" }, (message) => {
+            const payload = asPayload<{ userId?: string; name?: string }>(message["payload"]);
+            if (payload?.userId && payload.userId !== meRef.current.id) {
+              toast(`${payload.name ?? "Someone"} declined the call`);
+            }
+          })
+          // Presence is how late joiners (and clients whose `join` broadcast
+          // was lost) discover each other and repair the mesh.
+          .on("presence", { event: "sync" }, () => {
+            if (channelRef.current !== targetChannel || !inCallRef.current) return;
+            let presence: Record<string, PresenceMeta[]> = {};
+            try {
+              presence = targetChannel.presenceState<PresenceMeta>();
+            } catch {
+              return;
+            }
+            for (const [peerId, metas] of Object.entries(presence)) {
+              if (peerId === self.id) continue;
+              const meta = metas[0];
+              if (!meta) continue;
+              patchParticipant(peerId, {
+                ...(meta.name ? { name: meta.name } : {}),
+                ...(typeof meta.joinedAt === "number" && meta.joinedAt > 0
+                  ? { joinedAt: meta.joinedAt }
+                  : {}),
+              });
+              void maybeConnectPeer(peerId, meta.name);
+            }
+          })
+          .on("presence", { event: "leave" }, ({ leftPresences }) => {
+            for (const presence of leftPresences ?? []) {
+              const peerId = presence.userId;
+              if (!peerId || peerId === self.id) continue;
+              volumesRef.current.delete(peerId);
+              localMutedRef.current.delete(peerId);
+              closePeer(peerId);
+              knownRef.current.delete(peerId);
+              commitParticipants();
+              recomputeHost();
+            }
+          });
+
+        await new Promise<void>((resolve, reject) => {
+          let settled = false;
+          const timer = window.setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            reject(new Error("Could not connect to the call."));
+          }, CHANNEL_TIMEOUT_MS);
+
+          targetChannel.subscribe((status) => {
+            if (settled) return;
+            if (status === "SUBSCRIBED") {
+              settled = true;
+              window.clearTimeout(timer);
+              void targetChannel
+                .track({ userId: self.id, name: self.name, joinedAt: myJoinedAtRef.current })
+                .catch(() => undefined);
+              resolve();
+            } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+              settled = true;
+              window.clearTimeout(timer);
+              reject(new Error("Could not connect to the call."));
+            }
+          });
+        });
+
+        if (cancelled()) return;
+
+        const pageHide = () => {
+          const active = channelRef.current;
+          if (!active || !inCallRef.current) return;
+          try {
+            void active
+              .send({ type: "broadcast", event: "leave", payload: { userId: meRef.current.id } })
+              .catch(() => undefined);
+          } catch {
+            // Socket already gone.
+          }
+        };
+        pageHideRef.current = pageHide;
+        window.addEventListener("pagehide", pageHide);
+
+        // Retry Web Audio playback on the next gesture if it was blocked.
+        const unlockAudio = () => {
+          void resumeCallAudio().then((running) => {
+            if (!running) return;
+            for (const peerId of peersRef.current.keys()) applyPeerVolume(peerId);
+          });
+        };
+        unlockAudioRef.current = unlockAudio;
+        window.addEventListener("pointerdown", unlockAudio);
+        window.addEventListener("keydown", unlockAudio);
+
+        callConversationRef.current = targetConversation;
+        joinedAsRef.current = self.id;
+
+        // First into an empty call: this client hosts it.
+        const alone = peersRef.current.size === 0 && knownRef.current.size === 0;
+        if (alone && !isGuestRef.current) {
+          hostIdRef.current = self.id;
+          isHostRef.current = true;
+          setHostId(self.id);
+        } else {
+          recomputeHost();
+        }
+
+        setLocalStream(stream);
+        setActiveConversationId(targetConversation);
+        inCallRef.current = true;
+        setInCall(true);
+
+        // Repeated announcements: a single `join` can race the others'
+        // subscriptions, so send it a few times; the heartbeat continues after.
+        const announce = () => {
+          if (cancelled() || !inCallRef.current) return;
+          send("join", {
+            userId: self.id,
+            name: self.name,
+            host: isHostRef.current,
+            guest: isGuestRef.current,
+            joinedAt: myJoinedAtRef.current,
+            roomId: myRoomIdRef.current,
+            ...(isGuestRef.current && guestKeyRef.current ? { key: guestKeyRef.current } : {}),
+          });
+          broadcastState();
+        };
+        joinAnnounceTimersRef.current = JOIN_ANNOUNCE_DELAYS_MS.map((delay) =>
+          window.setTimeout(announce, delay),
+        );
+
+        startHeartbeat();
+
+        if (isHostRef.current) ensureGuestKey();
+        // Tell the members of this conversation on their personal ring channel.
+        if (!isGuestRef.current) void ringConversationMembers(targetConversation);
+      } catch (cause) {
+        if (cancelled()) {
+          // The watchdog or teardown already cleaned up and set the error.
+          const stalled = channelRef.current;
+          channelRef.current = null;
+          if (stalled) void clientRef.current.removeChannel(stalled);
+          return;
+        }
+
+        const local = localStreamRef.current;
+        if (local) {
+          local.getTracks().forEach((track) => track.stop());
+          localStreamRef.current = null;
+        }
+        if (pageHideRef.current) {
+          window.removeEventListener("pagehide", pageHideRef.current);
+          pageHideRef.current = null;
+        }
+        if (unlockAudioRef.current) {
+          window.removeEventListener("pointerdown", unlockAudioRef.current);
+          window.removeEventListener("keydown", unlockAudioRef.current);
+          unlockAudioRef.current = null;
+        }
+        if (channel) {
+          channelRef.current = null;
+          void clientRef.current.removeChannel(channel);
+        }
+        setError(mediaErrorMessage(cause, "microphone"));
+      } finally {
+        if (joinAttemptRef.current === attempt) {
+          joiningRef.current = false;
+          setJoining(false);
+        }
+        if (joinWatchdogRef.current !== null) {
+          window.clearTimeout(joinWatchdogRef.current);
+          joinWatchdogRef.current = null;
+        }
       }
-      setError(mediaErrorMessage(cause, "microphone"));
-    } finally {
-      joiningRef.current = false;
-      setJoining(false);
-    }
-  }, [
-    applyPeerVolume,
-    broadcastState,
-    ensureGuestKey,
-    handleAnswer,
-    handleIce,
-    handleJoin,
-    handleLeave,
-    handleMod,
-    handleOffer,
-    handleRooms,
-    handleSound,
-    handleState,
-    recomputeHost,
-    send,
-  ]);
+    },
+    [
+      applyPeerVolume,
+      broadcastState,
+      closePeer,
+      commitParticipants,
+      ensureGuestKey,
+      handleAnswer,
+      handleIce,
+      handleJoin,
+      handleLeave,
+      handleMod,
+      handleOffer,
+      handleRooms,
+      handleSound,
+      handleState,
+      maybeConnectPeer,
+      patchParticipant,
+      recomputeHost,
+      ringConversationMembers,
+      send,
+      startHeartbeat,
+    ],
+  );
 
   const leaveCall = useCallback(async () => {
     const channel = channelRef.current;
@@ -1427,8 +1529,15 @@ export function useCall(
         // Channel may already be closed; teardown still runs.
       }
     }
+
+    // If nobody else is connected, the call is over: stop distant ringers.
+    if (!isGuestRef.current && callConversationRef.current && peersRef.current.size === 0) {
+      const payload = { conversationId: callConversationRef.current, callerId: meRef.current.id };
+      for (const target of ringTargetsRef.current) sendRing(target, "ring-cancel", payload);
+    }
+
     teardown();
-  }, [teardown]);
+  }, [sendRing, teardown]);
 
   const toggleMute = useCallback(() => {
     if (!inCallRef.current) return;

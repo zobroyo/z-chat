@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bug,
+  Download,
   Hash,
   LogOut,
   Menu,
@@ -1489,8 +1489,8 @@ function ChatPage() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-1">
-      <h2 className="px-2 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
+    <section className="space-y-0.5">
+      <h2 className="px-2 pb-1 text-[10px] font-semibold tracking-[0.14em] text-muted-foreground/80 uppercase">
         {title}
       </h2>
 
@@ -1519,7 +1519,7 @@ function Row({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-[background-color,transform] duration-150 ease-out active:scale-[0.99]",
+        "flex w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors duration-150 ease-out",
         active ? "bg-surface-2" : "hover:bg-surface-2/60",
       )}
     >
@@ -1532,7 +1532,7 @@ function Row({
       </span>
 
       {badge > 0 && (
-        <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-primary-foreground">
+        <span className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
           {badge}
         </span>
       )}
