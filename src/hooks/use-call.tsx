@@ -264,7 +264,7 @@ export function useCall(
   const [deafened, setDeafened] = useState(false);
   const [serverMuted, setServerMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [incomingCall, setIncomingCall] = useState<{ userId: string; name: string } | null>(null);
+  const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [ringAudioBlocked, setRingAudioBlocked] = useState(false);
   const [hostId, setHostId] = useState<string | null>(null);
   const [guestKey, setGuestKey] = useState<string | null>(options?.guestKey ?? null);
@@ -282,6 +282,7 @@ export function useCall(
   meRef.current = me;
   const conversationIdRef = useRef<string | null>(conversationId);
   conversationIdRef.current = conversationId;
+  onSwitchConversationRef.current = options?.onSwitchConversation;
   const callConversationRef = useRef<string | null>(null);
   const joinedAsRef = useRef<string | null>(null);
 
@@ -291,13 +292,29 @@ export function useCall(
   const localStreamRef = useRef<MediaStream | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const pageHideRef = useRef<(() => void) | null>(null);
-  const listenChannelRef = useRef<RealtimeChannel | null>(null);
-  const incomingCallRef = useRef<{ userId: string; name: string } | null>(null);
+  const incomingCallRef = useRef<IncomingCall | null>(null);
   const ringtoneHandleRef = useRef<RingtoneHandle | null>(null);
   const ringRetryRef = useRef<(() => void) | null>(null);
   const ringTimeoutRef = useRef<number | null>(null);
   const titleBeforeRingRef = useRef<string | null>(null);
   const unlockAudioRef = useRef<(() => void) | null>(null);
+
+  // Global ring plumbing (`call-ring:{userId}`).
+  const ringInRef = useRef<RealtimeChannel | null>(null);
+  const ringOutRef = useRef(new Map<string, { channel: RealtimeChannel; ready: boolean }>());
+  const ringTargetsRef = useRef<string[]>([]);
+  const ringSessionRef = useRef(0);
+  const ringDeclinedAtRef = useRef(0);
+  const ringAcceptedAtRef = useRef(0);
+
+  // Join / connection health.
+  const joinAttemptRef = useRef(0);
+  const joinWatchdogRef = useRef<number | null>(null);
+  const joinAnnounceTimersRef = useRef<number[]>([]);
+  const heartbeatRef = useRef<number | null>(null);
+  const connectAttemptsRef = useRef(new Map<string, number>());
+  const remoteAcceptedRef = useRef(false);
+  const onSwitchConversationRef = useRef(options?.onSwitchConversation);
 
   const inCallRef = useRef(false);
   const joiningRef = useRef(false);
@@ -327,6 +344,122 @@ export function useCall(
       // `_push` throws when the channel has not finished joining; drop the event.
     }
   }, []);
+
+  /**
+   * Broadcasts an event to another user's personal ring channel. Channels are
+   * cached per target and sends are retried briefly while the channel joins, so
+   * a ring is not lost just because the target's socket was still connecting.
+   */
+  const sendRing = useCallback((userId: string, event: string, payload: Record<string, unknown>) => {
+    if (!userId || userId === meRef.current.id) return;
+
+    let entry = ringOutRef.current.get(userId);
+    if (!entry) {
+      const channel = clientRef.current.channel(`${RING_CHANNEL_PREFIX}${userId}`, {
+        config: { broadcast: { self: false } },
+      });
+      const created = { channel, ready: false };
+      ringOutRef.current.set(userId, created);
+      entry = created;
+      channel.subscribe((status) => {
+        if (ringOutRef.current.get(userId) !== created) return;
+        if (status === "SUBSCRIBED") {
+          created.ready = true;
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          ringOutRef.current.delete(userId);
+          void clientRef.current.removeChannel(channel);
+        }
+      });
+    }
+
+    const active = entry;
+    const push = (attempt: number) => {
+      if (ringOutRef.current.get(userId) !== active) return;
+      try {
+        void active.channel.send({ type: "broadcast", event, payload }).catch(() => undefined);
+      } catch {
+        // Channel still joining; retried below.
+      }
+      if (!active.ready && attempt < 3) {
+        window.setTimeout(() => push(attempt + 1), 700);
+      }
+    };
+    push(0);
+  }, []);
+
+  const resolveCallTitle = useCallback(async (targetConversation: string): Promise<string | null> => {
+    try {
+      const { data } = await clientRef.current
+        .from("conversations")
+        .select("name")
+        .eq("id", targetConversation)
+        .maybeSingle();
+      const row = data as { name?: string | null } | null;
+      return row?.name ?? null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /**
+   * Rings every other member of the conversation on their personal ring
+   * channel. Sent when this client starts (or answers) a call, retried once in
+   * case `join` raced the recipient's subscription.
+   */
+  const ringConversationMembers = useCallback(
+    async (targetConversation: string) => {
+      if (isGuestRef.current || !targetConversation) return;
+      const self = meRef.current;
+      const session = ++ringSessionRef.current;
+
+      let ids: string[] = [];
+      let title: string | null = null;
+      try {
+        const [membersResult, resolvedTitle] = await Promise.all([
+          clientRef.current
+            .from("conversation_members")
+            .select("user_id")
+            .eq("conversation_id", targetConversation),
+          resolveCallTitle(targetConversation),
+        ]);
+        title = resolvedTitle;
+        const rows = (membersResult.data ?? []) as Array<{ user_id?: string }>;
+        ids = Array.from(
+          new Set(
+            rows.map((row) => row.user_id).filter((id): id is string => !!id && id !== self.id),
+          ),
+        );
+      } catch {
+        return;
+      }
+
+      ringTargetsRef.current = ids;
+      const payload = {
+        conversationId: targetConversation,
+        callerId: self.id,
+        callerName: self.name,
+        title,
+        joinedAt: myJoinedAtRef.current,
+      };
+      const stillValid = () =>
+        ringSessionRef.current === session &&
+        inCallRef.current &&
+        callConversationRef.current === targetConversation;
+
+      for (const id of ids) sendRing(id, "ring", payload);
+      window.setTimeout(() => {
+        if (!stillValid()) return;
+        for (const id of ids) sendRing(id, "ring", payload);
+      }, 2_000);
+      window.setTimeout(() => {
+        if (!stillValid()) return;
+        for (const id of ids) sendRing(id, "ring", payload);
+      }, 5_000);
+    },
+    [resolveCallTitle, sendRing],
+  );
 
   // ---- Participant bookkeeping ----------------------------------------------
 

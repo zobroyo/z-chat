@@ -50,7 +50,7 @@ async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-export async function getDeviceFingerprint(): Promise<string | null> {
+async function computeDeviceFingerprint(): Promise<string | null> {
   try {
     const uaData = (
       navigator as Navigator & { userAgentData?: { platform?: string; mobile?: boolean } }
@@ -84,6 +84,17 @@ export async function getDeviceFingerprint(): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+// The fingerprint is deterministic for a page load; compute it once and share
+// the promise between the sign-in page, the auth provider and chat.
+let fingerprintPromise: Promise<string | null> | null = null;
+
+export function getDeviceFingerprint(): Promise<string | null> {
+  if (!fingerprintPromise) {
+    fingerprintPromise = computeDeviceFingerprint();
+  }
+  return fingerprintPromise;
 }
 
 /**
