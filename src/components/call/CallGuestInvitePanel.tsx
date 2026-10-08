@@ -4,6 +4,7 @@ import { Check, Copy, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PopoverContent } from "@/components/ui/popover";
+import { buildGuestCallLink } from "@/lib/call-guest";
 
 type Props = {
   isHost: boolean;
@@ -26,9 +27,7 @@ export function CallGuestInvitePanel({ isHost, guestKey, conversationId, onEnsur
   }, [guestKey, isHost, onEnsureKey]);
 
   const link =
-    guestKey && conversationId && typeof window !== "undefined"
-      ? `${window.location.origin}/call/${conversationId}?k=${encodeURIComponent(guestKey)}`
-      : null;
+    guestKey && conversationId ? buildGuestCallLink(conversationId, guestKey) : null;
 
   const copy = async () => {
     if (!link) return;

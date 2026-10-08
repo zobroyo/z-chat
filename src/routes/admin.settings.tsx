@@ -46,6 +46,47 @@ async function updateAiModerationSettings(fields: Partial<AiModerationSettings>)
   if (error) throw error;
 }
 
+type QuickTunnelSiteKey = "zchat" | "games" | "slides";
+type QuickTunnelEntry = { enabled: boolean; url: string; updatedAt: string };
+type QuickTunnelState = Record<QuickTunnelSiteKey, QuickTunnelEntry>;
+
+const QUICK_TUNNEL_SITES: { key: QuickTunnelSiteKey; host: string; label: string }[] = [
+  { key: "zchat", host: "z-chat.men", label: "Z Chat" },
+  { key: "games", host: "game.z-chat.men", label: "Z Games" },
+  { key: "slides", host: "present.z-chat.men", label: "Z Slides" },
+];
+
+async function quickTunnelHeaders(): Promise<Record<string, string>> {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function fetchQuickTunnels(): Promise<QuickTunnelState> {
+  const response = await fetch("/api/admin/site-tunnels", {
+    headers: await quickTunnelHeaders(),
+  });
+  if (!response.ok) throw new Error(`Quick tunnel state request failed (${response.status})`);
+  const body = (await response.json()) as { sites?: QuickTunnelState };
+  if (!body.sites) throw new Error("Quick tunnel state missing");
+  return body.sites;
+}
+
+async function setQuickTunnelEnabled(
+  site: QuickTunnelSiteKey,
+  enabled: boolean,
+): Promise<QuickTunnelState> {
+  const response = await fetch("/api/admin/site-tunnels", {
+    method: "POST",
+    headers: { ...(await quickTunnelHeaders()), "Content-Type": "application/json" },
+    body: JSON.stringify({ site, enabled }),
+  });
+  if (!response.ok) throw new Error(`Could not update quick tunnel (${response.status})`);
+  const body = (await response.json()) as { sites?: QuickTunnelState };
+  if (!body.sites) throw new Error("Quick tunnel state missing");
+  return body.sites;
+}
+
 function AdminSettings() {
   const [settings, setSettings] = useState<ChatSettings | null>(null);
   const [keywords, setKeywords] = useState<BlockedKeyword[] | null>(null);
@@ -56,6 +97,8 @@ function AdminSettings() {
   const [newReplacement, setNewReplacement] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tunnels, setTunnels] = useState<QuickTunnelState | null>(null);
+  const [tunnelBusy, setTunnelBusy] = useState<QuickTunnelSiteKey | null>(null);
 
   const load = () => {
     Promise.all([fetchChatSettings(), fetchBlockedKeywords(), fetchAiModerationSettings()])
@@ -69,6 +112,24 @@ function AdminSettings() {
   };
 
   useEffect(load, []);
+
+  useEffect(() => {
+    fetchQuickTunnels()
+      .then(setTunnels)
+      .catch(() => setTunnels(null));
+  }, []);
+
+  const toggleTunnel = async (site: QuickTunnelSiteKey) => {
+    setTunnelBusy(site);
+    try {
+      const next = await setQuickTunnelEnabled(site, !tunnels?.[site]?.enabled);
+      setTunnels(next);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update quick tunnel");
+    } finally {
+      setTunnelBusy(null);
+    }
+  };
 
   const applyLimit = async (limit: number) => {
     if (!settings || limit === settings.character_limit) return;
@@ -364,6 +425,62 @@ function AdminSettings() {
         >
           Save
         </Button>
+      </section>
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">Quick tunnel mode</h2>
+          <p className="text-xs text-muted-foreground">
+            Redirect a public domain to a random https://*.trycloudflare.com URL that rotates daily
+            at local midnight. Login, OAuth and password-recovery pages always stay on the main
+            domain. Sessions and Google sign-in do not carry over to the quick URL — email/password
+            sign-in works there.
+          </p>
+        </div>
+
+        {!tunnels ? (
+          <p className="text-xs text-muted-foreground">Quick tunnel state unavailable.</p>
+        ) : (
+          <div className="divide-y divide-border rounded-xl border border-border bg-surface">
+            {QUICK_TUNNEL_SITES.map(({ key, host, label }) => {
+              const entry = tunnels[key];
+              return (
+                <div key={key} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <div className="text-sm text-foreground">
+                      {label} <span className="text-xs text-muted-foreground">({host})</span>
+                    </div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {entry.url ? (
+                        <a
+                          href={entry.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline underline-offset-2 hover:text-foreground"
+                        >
+                          {entry.url}
+                        </a>
+                      ) : (
+                        "No quick URL captured yet"
+                      )}
+                    </div>
+                  </div>
+                  <Switch
+                    checked={entry.enabled}
+                    disabled={busy || tunnelBusy !== null}
+                    onCheckedChange={() => void toggleTunnel(key)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          When enabled, visitors to the main domain are redirected to the quick URL. /auth, /oauth,
+          /login, /api/auth*, /api/oauth*, /recovery and OAuth callback requests are still served
+          from the main domain. Quick tunnels are not a security boundary.
+        </p>
       </section>
     </div>
   );

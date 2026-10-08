@@ -29,7 +29,10 @@ export function friendlyAuthError(error: AuthError): string {
     case "email_exists":
       return "An account with that email already exists. Try logging in instead.";
     case "weak_password":
-      return error.message || "That password is too weak. Use at least 8 characters, with letters and numbers.";
+      return (
+        error.message ||
+        "That password is too weak. Use at least 8 characters, with letters and numbers."
+      );
     case "over_email_send_rate_limit":
       return "We've sent too many emails just now. Please wait a few minutes and try again.";
     case "over_request_rate_limit":
@@ -103,7 +106,8 @@ export function extractAuthRedirectError(): AuthRedirectError | null {
     ? window.location.hash.slice(1)
     : window.location.hash;
   const hash = new URLSearchParams(hashRaw);
-  const code = search.get("error_code") ?? hash.get("error_code") ?? search.get("error") ?? hash.get("error");
+  const code =
+    search.get("error_code") ?? hash.get("error_code") ?? search.get("error") ?? hash.get("error");
   if (!code) return null;
   const description = search.get("error_description") ?? hash.get("error_description") ?? "";
   return { code, description: description.replace(/\+/g, " ") };
@@ -193,8 +197,8 @@ export async function registerBannedDeviceLogin(
     if (error) return false;
     return Boolean(
       data &&
-        typeof data === "object" &&
-        (data as { banned_device?: boolean }).banned_device === true,
+      typeof data === "object" &&
+      (data as { banned_device?: boolean }).banned_device === true,
     );
   } catch {
     return false;
@@ -215,10 +219,7 @@ export type HardwareBanRow = {
 type ListResult<T> = { data: T | null; error: { message: string } | null };
 type UntypedListQuery = {
   select(columns: string): {
-    order(
-      column: string,
-      options: { ascending: boolean },
-    ): Promise<ListResult<HardwareBanRow[]>>;
+    order(column: string, options: { ascending: boolean }): Promise<ListResult<HardwareBanRow[]>>;
   };
 };
 

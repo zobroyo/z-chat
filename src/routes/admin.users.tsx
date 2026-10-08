@@ -22,11 +22,7 @@ import {
   PAGE_SIZE,
   type AdminProfile,
 } from "@/lib/admin";
-import {
-  adminUnbanHardware,
-  fetchHardwareBans,
-  type HardwareBanRow,
-} from "@/lib/auth-security";
+import { adminUnbanHardware, fetchHardwareBans, type HardwareBanRow } from "@/lib/auth-security";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -137,10 +133,7 @@ function AdminUsers() {
         setHardwareBans(rows);
         const ids = [...new Set(rows.map((row) => row.user_id).filter((id): id is string => !!id))];
         if (ids.length) {
-          const { data } = await supabase
-            .from("profiles")
-            .select("id, display_name")
-            .in("id", ids);
+          const { data } = await supabase.from("profiles").select("id, display_name").in("id", ids);
           if (!cancelled && data) {
             setHwNames(
               Object.fromEntries(
@@ -154,7 +147,8 @@ function AdminUsers() {
         }
       })
       .catch((e) => {
-        if (!cancelled) setHwError(e instanceof Error ? e.message : "Failed to load banned devices");
+        if (!cancelled)
+          setHwError(e instanceof Error ? e.message : "Failed to load banned devices");
       });
     return () => {
       cancelled = true;
@@ -285,9 +279,7 @@ function AdminUsers() {
       .maybeSingle()
       .then(({ data }) => {
         if (!cancelled) {
-          setR6Draft(
-            ((data as unknown as { r6_profile?: string | null } | null)?.r6_profile) ?? "",
-          );
+          setR6Draft((data as unknown as { r6_profile?: string | null } | null)?.r6_profile ?? "");
         }
       });
     return () => {

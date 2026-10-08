@@ -1,5 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, ArrowUpRight, Gamepad2, MessageSquare, Presentation, ShieldCheck } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Download,
+  Gamepad2,
+  MessageSquare,
+  MonitorDown,
+  Presentation,
+  ShieldCheck,
+} from "lucide-react";
 
 export const Route = createFileRoute("/services")({
   head: () => ({ meta: [{ title: "Z services — ZChat" }] }),
@@ -33,6 +42,9 @@ const SERVICES = [
   },
 ] as const;
 
+const DOWNLOAD_URL = "https://z-chat.men/media/downloads/ZChat-windows.zip?v=1";
+const EXE_URL = "https://z-chat.men/media/downloads/ZChat.exe?v=1";
+
 function ServicesPage() {
   return (
     <main className="standalone-scroll-page ios-safe-top ios-safe-bottom mx-auto min-h-screen w-full max-w-md px-5 py-8">
@@ -49,6 +61,34 @@ function ServicesPage() {
           <p className="text-xs text-muted-foreground">Everything Z Chat runs — one account, all of it.</p>
         </div>
       </div>
+
+      <section className="surface-panel mb-6 rounded-2xl p-5 shadow-lift">
+        <div className="flex items-start gap-3">
+          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <MonitorDown className="size-5" />
+          </span>
+          <div className="min-w-0">
+            <h2 className="font-display text-base font-bold">ZChat for Windows</h2>
+            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+              The desktop app — same chats in a native window. No installer: unzip and run.
+            </p>
+          </div>
+        </div>
+
+        <a
+          href={DOWNLOAD_URL}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Download className="size-4" />
+          Download for Windows
+        </a>
+        <p className="mt-2 text-center text-[11px] text-muted-foreground">
+          ZIP with the app + required DLLs (~260 KB) ·{" "}
+          <a href={EXE_URL} className="underline underline-offset-2 hover:text-foreground">
+            just ZChat.exe
+          </a>
+        </p>
+      </section>
 
       <div className="space-y-3">
         {SERVICES.map((service) => (

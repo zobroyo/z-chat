@@ -1200,7 +1200,7 @@ function ChatPage() {
 
       <div className="mx-3 mb-2 space-y-2">
         <a
-          href="https://z-chat.men/media/downloads/ZChat.exe"
+          href="https://z-chat.men/media/downloads/ZChat-windows.zip?v=1"
           className="flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <Download className="size-4" />

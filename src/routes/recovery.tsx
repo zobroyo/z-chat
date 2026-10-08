@@ -7,11 +7,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  InputOTP,
-  InputOTPGroup,
-  InputOTPSlot,
-} from "@/components/ui/input-otp";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { supabase } from "@/integrations/supabase/client";
 import {
   clearAuthRedirectError,
@@ -226,7 +222,11 @@ function RecoveryPage() {
             />
           </div>
           <Button onClick={() => void requestCode()} disabled={loading}>
-            {loading ? <Loader2 className="mr-2 size-4 animate-spin" /> : <MailCheck className="mr-2 size-4" />}
+            {loading ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <MailCheck className="mr-2 size-4" />
+            )}
             Send reset code
           </Button>
         </>
@@ -236,8 +236,8 @@ function RecoveryPage() {
         <>
           <h1 className="text-xl font-semibold">Enter your code</h1>
           <p className="text-sm leading-6 text-muted-foreground">
-            We sent a 6-digit code to <strong className="text-foreground">{email}</strong>. It expires
-            shortly, so enter it soon.
+            We sent a 6-digit code to <strong className="text-foreground">{email}</strong>. It
+            expires shortly, so enter it soon.
           </p>
           <div className="flex justify-center py-2">
             <InputOTP
@@ -280,7 +280,8 @@ function RecoveryPage() {
             </button>
           </div>
           <p className="text-xs leading-5 text-muted-foreground">
-            You can also tap the link in the email — it brings you back here to choose a new password.
+            You can also tap the link in the email — it brings you back here to choose a new
+            password.
           </p>
         </>
       )}

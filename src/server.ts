@@ -5,6 +5,7 @@ import { renderErrorPage } from "./lib/error-page";
 import { handleDeployHookRoute } from "./lib/serverDeployHook";
 import { handleLinkPreviewRoute } from "./lib/serverLinkPreview";
 import { handleModerateRoute, handleSendMessageRoute } from "./lib/serverModeration";
+import { handleSiteTunnelsRoute } from "./lib/serverTunnels";
 import {
   handleApprovalPushRoute,
   handlePushPublicKeyRoute,
@@ -108,6 +109,18 @@ export default {
           status: 404,
           headers: { "content-type": "application/json" },
         });
+      } catch (error) {
+        console.error(error);
+        return new Response(JSON.stringify({ error: "Internal server error" }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+
+    if (url.pathname === "/api/admin/site-tunnels") {
+      try {
+        return await handleSiteTunnelsRoute(request);
       } catch (error) {
         console.error(error);
         return new Response(JSON.stringify({ error: "Internal server error" }), {

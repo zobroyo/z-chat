@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Copy,
   DoorOpen,
   HeadphoneOff,
   Headphones,
@@ -93,7 +94,11 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
           </Avatar>
 
           <p className="mt-4 font-display text-lg font-semibold">{call.incomingCall.name}</p>
-          <p className="mt-1 text-sm text-muted-foreground">is calling in {conversationTitle}…</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {call.incomingCall.conversationTitle
+              ? `is calling in ${call.incomingCall.conversationTitle}…`
+              : "is calling you…"}
+          </p>
 
           {call.ringAudioBlocked && (
             <button
@@ -184,6 +189,20 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
               onEnsureKey={call.ensureGuestKey}
             />
           </Popover>
+        )}
+
+        {!call.isGuest && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label="Copy call link"
+            title="Copy call link"
+            onClick={() => void call.copyCallInviteLink()}
+          >
+            <Copy className="size-5" />
+          </Button>
         )}
 
         <Popover>

@@ -1,4 +1,3 @@
-
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -65,7 +64,9 @@ function AuthPage() {
   const [loginPassword, setLoginPassword] = useState("");
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
-  const [usernameState, setUsernameState] = useState<"idle" | "checking" | "ok" | "taken" | "invalid">("idle");
+  const [usernameState, setUsernameState] = useState<
+    "idle" | "checking" | "ok" | "taken" | "invalid"
+  >("idle");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [notifyConsent, setNotifyConsent] = useState(false);
@@ -156,10 +157,9 @@ function AuthPage() {
       if (fingerprint) {
         const ban = await checkHardwareBan(fingerprint);
         if (ban.banned) {
-          toast.error(
-            BANNED_DEVICE_MESSAGE + (ban.reason ? ` (${ban.reason})` : ""),
-            { duration: 12000 },
-          );
+          toast.error(BANNED_DEVICE_MESSAGE + (ban.reason ? ` (${ban.reason})` : ""), {
+            duration: 12000,
+          });
           return;
         }
       }
@@ -234,10 +234,9 @@ function AuthPage() {
           { duration: 10000 },
         );
       } else if (permission === "unsupported") {
-        toast.info(
-          "This browser doesn't support notifications, so they stay off for now.",
-          { duration: 8000 },
-        );
+        toast.info("This browser doesn't support notifications, so they stay off for now.", {
+          duration: 8000,
+        });
       }
 
       const { data: available, error: usernameError } = await supabase.rpc("username_available", {
@@ -252,10 +251,9 @@ function AuthPage() {
       if (fingerprint) {
         const ban = await checkHardwareBan(fingerprint);
         if (ban.banned) {
-          toast.error(
-            BANNED_DEVICE_MESSAGE + (ban.reason ? ` (${ban.reason})` : ""),
-            { duration: 12000 },
-          );
+          toast.error(BANNED_DEVICE_MESSAGE + (ban.reason ? ` (${ban.reason})` : ""), {
+            duration: 12000,
+          });
           return;
         }
       }
@@ -329,10 +327,9 @@ function AuthPage() {
       if (fingerprint) {
         const ban = await checkHardwareBan(fingerprint);
         if (ban.banned) {
-          toast.error(
-            BANNED_DEVICE_MESSAGE + (ban.reason ? ` (${ban.reason})` : ""),
-            { duration: 12000 },
-          );
+          toast.error(BANNED_DEVICE_MESSAGE + (ban.reason ? ` (${ban.reason})` : ""), {
+            duration: 12000,
+          });
           return;
         }
       }
@@ -465,7 +462,9 @@ function AuthPage() {
                   value={username}
                   maxLength={20}
                   autoComplete="off"
-                  onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                  onChange={(event) =>
+                    setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))
+                  }
                   placeholder="yourname"
                 />
                 <p
@@ -541,7 +540,12 @@ function AuthPage() {
               "Allow ZChat notifications so you don't miss messages (required for new accounts).",
             )}
 
-            <Button variant="secondary" className="w-full" disabled={busy} onClick={() => void withGoogle()}>
+            <Button
+              variant="secondary"
+              className="w-full"
+              disabled={busy}
+              onClick={() => void withGoogle()}
+            >
               Continue with Google
             </Button>
           </div>
