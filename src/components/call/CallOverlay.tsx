@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useState } from "react";
 import {
   AlertTriangle,
   Copy,
@@ -91,17 +91,13 @@ function ControlButton({
 }
 
 /** Round ghost button used as a popover trigger inside the controls pill. */
-function BarPopoverButton({
-  label,
-  children,
-  className,
-}: {
-  label: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
+const BarPopoverButton = forwardRef<
+  HTMLButtonElement,
+  React.ComponentPropsWithoutRef<typeof Button> & { label: string }
+>(function BarPopoverButton({ label, children, className, ...props }, ref) {
   return (
     <Button
+      ref={ref}
       type="button"
       variant="ghost"
       size="icon"
@@ -109,13 +105,14 @@ function BarPopoverButton({
         "size-11 shrink-0 rounded-full border border-white/10 bg-white/10 text-white hover:bg-white/20 hover:text-white sm:size-12",
         className,
       )}
+      {...props}
       aria-label={label}
       title={label}
     >
       {children}
     </Button>
   );
-}
+});
 
 /**
  * Full-screen call surface: incoming ring, a Google-Meet-style participant
