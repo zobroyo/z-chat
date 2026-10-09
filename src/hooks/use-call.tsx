@@ -23,10 +23,20 @@ import { startRingtone, type RingtoneHandle } from "@/lib/ringtone";
  * state  { userId, name?, muted, video, deafened, serverMuted, guest,
  *          joinedAt, roomId, host?, guestKey? } mute / camera / room flags
  * mod    { target, muted, by }                 host server-mutes a participant
+ * kick   { target, by }                        host removes a participant
+ * ban    { target, by }                        host bans a participant for the session
+ * bans   { ids, by }                           host re-broadcasts the ban list
  * sound  { userId, soundId, name? }            soundboard trigger (synth locally)
  * rooms  { rooms, assignments, by, guestKey? } host breakout-room state
  * leave  { userId }                            graceful disconnect
  * decline{ userId, name }                      recipient declined the ring
+ *
+ * Moderation: only messages from the currently elected host are honored. A
+ * kick makes the target tear its connections down and leave the UI with a
+ * notice; a ban makes every client remember the target for the rest of the
+ * call session, and any (re)join or offer from a banned id is declined. The
+ * ban list lives on every client (and is re-broadcast by the host on join and
+ * whenever host election changes), so a newly elected host inherits it.
  *
  * Every event carrying `to` is ignored unless `to` is my own user id. The
  * joiner never initiates: after the `join` broadcast, each participant that is
@@ -143,6 +153,12 @@ export type UseCallOptions = {
   /** Set false on the guest page so joins are never treated as incoming calls. */
   listenForIncoming?: boolean;
   /**
+   * Ring the conversation members when this client joins a call. Defaults to
+   * true; the shared /call link sets it false because the link already told
+   * the joiner about the call.
+   */
+  ringOnJoin?: boolean;
+  /**
    * Called when an incoming call is accepted and belongs to another
    * conversation; lets the host app switch the UI to that conversation.
    * Optional: calls still connect without it.
@@ -190,6 +206,9 @@ type StatePayload = {
 };
 type LeavePayload = { userId?: string };
 type ModPayload = { target?: string; muted?: boolean; by?: string };
+type KickPayload = { target?: string; by?: string; name?: string };
+type BanPayload = { target?: string; by?: string; name?: string };
+type BansPayload = { ids?: unknown; by?: string };
 type SoundPayload = { userId?: string; soundId?: string; name?: string };
 type RoomsPayload = {
   rooms?: BreakoutRoom[];
