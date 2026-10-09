@@ -116,7 +116,7 @@ async function loadIceServers(): Promise<RTCIceServer[]> {
     const response = await fetch("/api/turn-credentials", {
       headers: { accept: "application/json" },
       cache: "no-store",
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(2500),
     });
     if (!response.ok) return ICE_SERVERS;
     const data: unknown = await response.json();
@@ -874,9 +874,11 @@ export function useCall(
       peer.videoSender = transceiver.sender;
       peer.videoTransceiver = transceiver;
 
-      const cameraTrack = cameraStreamRef.current?.getVideoTracks()[0];
-      if (cameraTrack && peer.videoSender) {
-        void peer.videoSender.replaceTrack(cameraTrack).catch(() => undefined);
+      const initialVideoTrack = screenSharingRef.current
+        ? (screenStreamRef.current?.getVideoTracks()[0] ?? null)
+        : (cameraStreamRef.current?.getVideoTracks()[0] ?? null);
+      if (initialVideoTrack && peer.videoSender) {
+        void peer.videoSender.replaceTrack(initialVideoTrack).catch(() => undefined);
         capVideoSender(peer.videoSender);
       }
 
@@ -1275,10 +1277,12 @@ export function useCall(
               // Already stopped.
             }
           }
-          const cameraTrack = cameraStreamRef.current?.getVideoTracks()[0];
-          if (cameraTrack) {
-            void negotiatedVideo.sender.replaceTrack(cameraTrack).catch(() => undefined);
-      capVideoSender(negotiatedVideo.sender);
+          const initialVideoTrack = screenSharingRef.current
+            ? (screenStreamRef.current?.getVideoTracks()[0] ?? null)
+            : (cameraStreamRef.current?.getVideoTracks()[0] ?? null);
+          if (initialVideoTrack) {
+            void negotiatedVideo.sender.replaceTrack(initialVideoTrack).catch(() => undefined);
+            capVideoSender(negotiatedVideo.sender);
           }
         }
 
@@ -1573,6 +1577,17 @@ export function useCall(
       cameraStreamRef.current = null;
     }
 
+    // Leaving mid-share must also end the screen capture, otherwise the
+    // browser keeps showing its "Stop sharing" bar.
+    const display = screenStreamRef.current;
+    if (display) {
+      display.getTracks().forEach((track) => track.stop());
+      screenStreamRef.current = null;
+      screenSharingRef.current = false;
+      setScreenSharing(false);
+      setScreenStream(null);
+    }
+
     const channel = channelRef.current;
     channelRef.current = null;
     callConversationRef.current = null;
@@ -1678,13 +1693,13 @@ export function useCall(
       iceServersRef.current = await loadIceServers();
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          // Noise suppression for mics: echo cancellation, background-noise
-          // suppression and auto gain are all on by default now.
+          // Echo cancellation + noise suppression on; auto gain staying OFF
+          // because it pumps up room hiss into audible white noise.
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
+          autoGainControl: false,
           ...(storedDevice(DEVICE_KEYS.mic)
-            ? { deviceId: { exact: storedDevice(DEVICE_KEYS.mic) } }
+            ? { deviceId: { ideal: storedDevice(DEVICE_KEYS.mic) } }
             : {}),
         },
         video: false,
@@ -2030,7 +2045,7 @@ export function useCall(
       const camera = await navigator.mediaDevices.getUserMedia({
         video: {
           ...(storedDevice(DEVICE_KEYS.cam)
-            ? { deviceId: { exact: storedDevice(DEVICE_KEYS.cam) } }
+            ? { deviceId: { ideal: storedDevice(DEVICE_KEYS.cam) } }
             : {}),
           // 1080p cap: crisp enough for talking heads, bounded relay traffic.
           width: { ideal: 1920 },
