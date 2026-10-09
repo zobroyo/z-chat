@@ -8,6 +8,54 @@ export type Database = {
   };
   public: {
     Tables: {
+      lunch_card_orders: {
+        Row: {
+          amount_aed: number;
+          back_url: string;
+          created_at: string;
+          front_url: string;
+          full_name: string;
+          id: string;
+          meeting_area: string;
+          meeting_time: string;
+          status: string;
+          stripe_session_id: string | null;
+          student_class: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          amount_aed?: number;
+          back_url: string;
+          created_at?: string;
+          front_url: string;
+          full_name: string;
+          id?: string;
+          meeting_area: string;
+          meeting_time: string;
+          status?: string;
+          stripe_session_id?: string | null;
+          student_class: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          amount_aed?: number;
+          back_url?: string;
+          created_at?: string;
+          front_url?: string;
+          full_name?: string;
+          id?: string;
+          meeting_area?: string;
+          meeting_time?: string;
+          status?: string;
+          stripe_session_id?: string | null;
+          student_class?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       message_receipts: {
         Row: {
           conversation_id: string;
