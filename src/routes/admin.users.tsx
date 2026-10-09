@@ -389,6 +389,27 @@ function AdminUsers() {
     toast.success("R6 tracker link saved");
   };
 
+  const assignPlan = async (plan: "free" | "pro" | "max") => {
+    if (!selected || selected.plan === plan) return;
+    setBusy(true);
+    const { error } = await supabase.rpc("admin_set_plan", {
+      _target: selected.id,
+      _plan: plan,
+    });
+    setBusy(false);
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    toast.success(
+      plan === "free"
+        ? `${selected.display_name || "User"} is back on Free`
+        : `${selected.display_name || "User"} gifted ${plan.toUpperCase()} (no charge)`,
+    );
+    setSelected({ ...selected, plan, plan_status: plan === "free" ? null : "comped" });
+    reload();
+  };
+
   const applyTimeout = async (seconds: number, label: string) => {
     if (!selected) return;
     const timeoutUntil = new Date(Date.now() + seconds * 1000).toISOString();
@@ -729,6 +750,33 @@ function AdminUsers() {
                   left
                 </span>
               )}
+            </div>
+
+            <div className="mt-4">
+              <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+                Plan
+              </p>
+              <div className="flex gap-1.5">
+                {(["free", "pro", "max"] as const).map((plan) => (
+                  <Button
+                    key={plan}
+                    size="sm"
+                    variant={selected.plan === plan ? "default" : "outline"}
+                    disabled={busy}
+                    onClick={() => void assignPlan(plan)}
+                    className="h-7 flex-1 px-2 text-xs capitalize"
+                  >
+                    {plan}
+                  </Button>
+                ))}
+              </div>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {selected.plan === "free"
+                  ? "No paid plan."
+                  : selected.plan_status === "comped"
+                    ? "Gifted by an admin - no charge."
+                    : `Stripe - ${selected.plan_status ?? "active"}`}
+              </p>
             </div>
 
             {isTimedOut(selected) && selected.timeout_reason && (

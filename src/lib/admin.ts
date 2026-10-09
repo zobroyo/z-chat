@@ -48,14 +48,19 @@ export type AdminProfile = {
   created_at: string;
   is_admin: boolean;
   banned: boolean;
+  plan: string;
+  plan_status: string | null;
 };
 
 export async function fetchAdminUsers(page: number, search: string) {
   let query = supabase
     .from("profiles")
-    .select("id, display_name, avatar_url, last_seen, created_at, is_admin, banned", {
-      count: "exact",
-    })
+    .select(
+      "id, display_name, avatar_url, last_seen, created_at, is_admin, banned, plan, plan_status",
+      {
+        count: "exact",
+      },
+    )
     .order("display_name")
     .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
   if (search.trim()) query = query.ilike("display_name", `%${search.trim()}%`);
