@@ -506,6 +506,11 @@ function AdminUsers() {
                   {u.display_name || "Unnamed"}
                   {u.is_admin && <ShieldCheck className="size-3.5 shrink-0 text-primary" />}
                   {u.banned && <Ban className="size-3.5 shrink-0 text-destructive" />}
+                  {u.plan !== "free" && (
+                    <span className="shrink-0 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500 uppercase">
+                      {u.plan}
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Joined {fmtJoined(u.created_at)}

@@ -161,6 +161,9 @@ export type Database = {
           last_seen: string;
           last_strike_at: string | null;
           moderation_strikes: number;
+          plan: string;
+          plan_renews_at: string | null;
+          plan_status: string | null;
           r6_profile: string | null;
           timeout_reason: string | null;
           timeout_until: string | null;
@@ -181,6 +184,9 @@ export type Database = {
           last_seen?: string;
           last_strike_at?: string | null;
           moderation_strikes?: number;
+          plan?: string;
+          plan_renews_at?: string | null;
+          plan_status?: string | null;
           r6_profile?: string | null;
           timeout_reason?: string | null;
           timeout_until?: string | null;
@@ -201,6 +207,9 @@ export type Database = {
           last_seen?: string;
           last_strike_at?: string | null;
           moderation_strikes?: number;
+          plan?: string;
+          plan_renews_at?: string | null;
+          plan_status?: string | null;
           r6_profile?: string | null;
           timeout_reason?: string | null;
           timeout_until?: string | null;
@@ -479,6 +488,10 @@ export type Database = {
       };
       admin_set_is_admin: {
         Args: { _target: string; _value: boolean };
+        Returns: undefined;
+      };
+      admin_set_plan: {
+        Args: { _plan: string; _target: string };
         Returns: undefined;
       };
       backfill_device_fingerprint: {
