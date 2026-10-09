@@ -7,8 +7,10 @@ import {
   Headphones,
   Link2,
   Loader2,
+  Maximize2,
   Mic,
   MicOff,
+  Minimize2,
   Music,
   PhoneCall,
   PhoneOff,
@@ -127,6 +129,8 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   const [breakoutOpen, setBreakoutOpen] = useState(false);
   const [soundboardOpen, setSoundboardOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  /** Minimised ("picture-in-picture") mode: keep the call alive but out of the way. */
+  const [minimized, setMinimized] = useState(false);
 
   // Join/leave activity: transient banner + the tile pop-in animation.
   const [activity, setActivity] = useState<{ key: number; text: string } | null>(null);
@@ -161,6 +165,12 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
       if (!current.has(id)) show(`${name} left the call`);
     }
   }, [call.participants]);
+
+  // A fresh call always starts full-screen (leave/join must never inherit the
+  // previous session's minimised state).
+  useEffect(() => {
+    if (!call.inCall && !call.joining) setMinimized(false);
+  }, [call.inCall, call.joining]);
 
   if (call.incomingCall && !call.inCall && !call.joining) {
     return (
@@ -228,6 +238,83 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   const inBreakout = myRoomId !== null;
   const totalTiles = roomParticipants.length + 1;
 
+  // Picture-in-picture: the call stays connected (audio + WebRTC keep running
+  // because the hook owns the streams), but the full-screen surface is replaced
+  // by a small floating pill so the rest of Z Chat stays reachable.
+  if (minimized) {
+    return (
+      <div
+        data-testid="call-minimized"
+        className="fixed right-3 bottom-24 z-40 flex max-w-[calc(100vw-1.5rem)] items-center gap-1.5 rounded-full border border-white/10 bg-[#0a0c11]/95 p-1.5 pl-3 text-white shadow-2xl backdrop-blur-xl sm:right-4 sm:bottom-24"
+      >
+        <button
+          type="button"
+          onClick={() => setMinimized(false)}
+          className="flex min-w-0 items-center gap-2 rounded-full pr-2 text-left transition-opacity hover:opacity-90"
+          aria-label="Expand call"
+          title="Back to call"
+        >
+          <span className="relative flex size-7 shrink-0 items-center justify-center rounded-full bg-green-600/20 text-green-400">
+            <PhoneCall className="size-3.5" />
+            <span className="absolute -top-0.5 -right-0.5 size-2.5 animate-pulse rounded-full bg-green-500" />
+          </span>
+          <span className="min-w-0">
+            <span className="block max-w-36 truncate text-xs font-semibold">
+              {conversationTitle}
+            </span>
+            <span className="block truncate text-[10px] text-white/60">
+              {showJoining ? "Connecting…" : `${call.participants.length + 1} in call`}
+            </span>
+          </span>
+        </button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "size-9 shrink-0 rounded-full border border-white/10 text-white hover:bg-white/20 hover:text-white",
+            (call.muted || call.serverMuted) && "border-primary/70 bg-primary text-primary-foreground",
+          )}
+          aria-label={call.muted ? "Unmute" : "Mute"}
+          aria-pressed={call.muted || call.serverMuted}
+          title={call.muted ? "Unmute" : "Mute"}
+          onClick={call.toggleMute}
+        >
+          {call.muted || call.serverMuted ? (
+            <MicOff className="size-4" />
+          ) : (
+            <Mic className="size-4" />
+          )}
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-9 shrink-0 rounded-full border border-white/10 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+          aria-label="Back to call"
+          title="Back to call"
+          onClick={() => setMinimized(false)}
+        >
+          <Maximize2 className="size-4" />
+        </Button>
+
+        <Button
+          type="button"
+          variant="destructive"
+          size="icon"
+          className="size-9 shrink-0 rounded-full"
+          aria-label="Leave call"
+          title="Leave call"
+          onClick={() => void call.leaveCall()}
+        >
+          <PhoneOff className="size-4" />
+        </Button>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-1.5 backdrop-blur-2xl sm:p-3">
       <div
@@ -265,6 +352,18 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
               Admin
             </span>
           )}
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 rounded-full text-white/70 hover:bg-white/10 hover:text-white"
+            aria-label="Minimize call"
+            title="Minimize call — keep chatting"
+            onClick={() => setMinimized(true)}
+          >
+            <Minimize2 className="size-4" />
+          </Button>
         </header>
 
         {activity && (
