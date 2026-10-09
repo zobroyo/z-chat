@@ -28,15 +28,15 @@ const WEBHOOK_URL = "https://z-chat.men/api/stripe/webhook";
 const LOCAL_PROBE = "http://127.0.0.1:1298/api/stripe/checkout";
 
 const key = (process.argv[2] || "").trim();
-if (!/^sk_(live|test)_[A-Za-z0-9]+$/.test(key)) {
-  console.error("usage: sudo zchat-stripe sk_live_...   (sk_test_... also works)");
+if (!/^(sk|rk)_(live|test)_[A-Za-z0-9]+$/.test(key)) {
+  console.error("usage: sudo zchat-stripe sk_live_...   (sk_test_/rk_live_/rk_test_ also work)");
   process.exit(1);
 }
 if (typeof process.getuid === "function" && process.getuid() !== 0) {
   console.error("must run as root: sudo zchat-stripe sk_live_...");
   process.exit(1);
 }
-if (key.startsWith("sk_test_")) {
+if (/^(sk|rk)_test_/.test(key)) {
   console.log("note: test key - subscriptions will not charge real cards");
 }
 
@@ -173,9 +173,17 @@ async function initSyncKey(syncKey, supa) {
 
 async function main() {
   console.log("1/7 verifying the Stripe key...");
-  const balance = await stripe("/v1/balance");
-  if (!balance.object) throw new Error("unexpected response from Stripe");
-  console.log(`    key OK (livemode=${balance.livemode === true})`);
+  try {
+    const balance = await stripe("/v1/balance");
+    console.log(`    key OK (livemode=${balance.livemode === true})`);
+  } catch (error) {
+    const message = error && error.message ? error.message : String(error);
+    if (message.includes("-> 401 ")) throw error;
+    // Restricted keys often cannot read the balance; products must be
+    // readable for this setup anyway, so that doubles as the probe.
+    await stripe("/v1/products?limit=1");
+    console.log("    key OK (restricted key, balance not readable)");
+  }
 
   console.log("2/7 ensuring products/prices...");
   const pricePro = await ensurePrice("zchat_pro_monthly", "Z Chat Pro", 1000);
