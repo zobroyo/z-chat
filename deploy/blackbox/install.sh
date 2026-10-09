@@ -56,6 +56,9 @@ fi
 echo "==> install root helpers (deliberately NOT updated by git)"
 install -m 0755 "${HERE}/zchat-deploy.sh" /usr/local/sbin/zchat-deploy
 install -m 0755 "${HERE}/zchat-healthcheck.sh" /usr/local/sbin/zchat-healthcheck
+install -d -m 0755 /usr/local/lib/zchat
+install -m 0644 "${HERE}/stripe-bootstrap.mjs" /usr/local/lib/zchat/stripe-bootstrap.mjs
+install -m 0755 "${HERE}/zchat-stripe" /usr/local/bin/zchat-stripe
 
 echo "==> resilience settings"
 install -m 0644 "${HERE}/ollama-resilience.conf" /etc/systemd/system/ollama.service.d/resilience.conf

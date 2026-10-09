@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# One-command Stripe setup for Z Chat billing.
+#
+#   sudo zchat-stripe sk_live_...
+#
+# Creates the Pro/Max products and prices, the webhook endpoint, writes
+# /srv/zchat/state/stripe.env and restarts the app. Safe to re-run; run
+# `sudo zchat-stripe --help` only by mistake (it prints this usage).
+set -euo pipefail
+
+if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+  echo "Run as root: sudo zchat-stripe sk_live_..." >&2
+  exit 1
+fi
+
+if [[ "$#" -ne 1 || "${1}" == "--help" || "${1}" == "-h" ]]; then
+  echo "usage: sudo zchat-stripe sk_live_...   (sk_test_... also works)" >&2
+  exit 1
+fi
+
+NODE_BIN="$(command -v node || true)"
+if [[ -z "${NODE_BIN}" ]]; then
+  NODE_BIN=/usr/bin/node
+fi
+if [[ ! -x "${NODE_BIN}" ]]; then
+  echo "node not found - is Node.js installed?" >&2
+  exit 1
+fi
+
+exec "${NODE_BIN}" /usr/local/lib/zchat/stripe-bootstrap.mjs "$1"
