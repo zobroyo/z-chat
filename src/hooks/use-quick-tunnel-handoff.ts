@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "@tanstack/react-router";
 import type { Session } from "@supabase/supabase-js";
 
 import { supabase } from "@/integrations/supabase/client";
 
 /*
- * Quick-tunnel session handoff.
+ * Quick-tunnel session handoff + locked-host gate.
  *
  * SEND (main domain only): once the tab has a Supabase session, send the
  * browser to the current zchat quick tunnel URL with the session tokens in the
@@ -14,11 +15,24 @@ import { supabase } from "@/integrations/supabase/client";
  *
  * RECEIVE (any origin): if the URL carries a #zt= payload, restore the session
  * with setSession and strip the fragment immediately, even when the tokens are
- * fake or expired. Errors stay silent — the login screen is the fallback.
+ * fake or expired. Errors stay silent. A successful restore also sets a
+ * sessionStorage marker so reloads of the quick origin stay unlocked.
+ *
+ * GATE (locked hosts only): any hostname outside the main allowlist is
+ * "locked" — this includes the rotating d-*.z-chat.men quick tunnels. A locked
+ * visitor only gets the app when this load carried a #zt= handoff, the tab
+ * already has the session marker, or a local Supabase session can be restored.
+ * Otherwise no route content (and therefore no login UI) ever renders: a blank
+ * dark page is shown instead. Main-domain behavior is unchanged.
  */
 
+/* Hosts that serve the real app directly; the login lives only on these. */
+const MAIN_HOSTS = new Set(["z-chat.men", "www.z-chat.men", "jorking-lord"]);
+const JORKING_SUFFIX = ".jorking-lord";
+/* The send side deliberately stays on the public domains. */
 const HANDOFF_HOSTS = new Set(["z-chat.men", "www.z-chat.men"]);
 const STAY_KEY = "qt-stay";
+const SESSION_OK_KEY = "zt-ok";
 
 type HandoffTokens = { accessToken: string; refreshToken: string };
 
@@ -28,6 +42,34 @@ type HandoffFlags = {
   /* This load consumed a #zt= payload; never bounce straight back out. */
   received: boolean;
 };
+
+export function isMainHostname(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase();
+  if (!host) return false;
+  return MAIN_HOSTS.has(host) || host.endsWith(JORKING_SUFFIX);
+}
+
+function hostnameFromOrigin(origin: string): string {
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return "";
+  }
+}
+
+/*
+ * Inline boot script for <head>. On a locked host the matched route's own
+ * document title (e.g. "ZChat — Sign in") would hint at a login form that must
+ * not exist there, so rewrite it to the neutral app title before the app boots.
+ */
+export const QUICK_TUNNEL_BOOT_SCRIPT = `(() => {
+  try {
+    const host = window.location.hostname.toLowerCase();
+    const mainHosts = ${JSON.stringify(Array.from(MAIN_HOSTS))};
+    const suffix = ${JSON.stringify(JORKING_SUFFIX)};
+    if (!mainHosts.includes(host) && !host.endsWith(suffix)) document.title = "ZChat";
+  } catch {}
+})();`;
 
 function toBase64Url(value: string): string {
   const bytes = new TextEncoder().encode(value);
@@ -75,6 +117,31 @@ function readHandoffHash(): HandoffTokens | null {
   } catch {
     return null;
   }
+}
+
+/* Presence only; the value is never read. */
+function markSessionOk(): void {
+  try {
+    sessionStorage.setItem(SESSION_OK_KEY, "1");
+  } catch {
+    // Private-mode storage failures just mean the marker is not remembered.
+  }
+}
+
+function hasSessionOk(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return sessionStorage.getItem(SESSION_OK_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function hasHandoffHash(): boolean {
+  if (typeof window === "undefined") return false;
+  const hash = window.location.hash;
+  if (!hash) return false;
+  return new URLSearchParams(hash.slice(1)).has("zt");
 }
 
 function isStayOptOut(url: URL): boolean {
@@ -144,6 +211,9 @@ export function useQuickTunnelHandoff(): void {
           access_token: handoff.accessToken,
           refresh_token: handoff.refreshToken,
         })
+        .then(({ error }) => {
+          if (!error) markSessionOk();
+        })
         .catch(() => undefined);
     }
 
@@ -167,4 +237,51 @@ export function useQuickTunnelHandoff(): void {
 export function QuickTunnelHandoff() {
   useQuickTunnelHandoff();
   return null;
+}
+
+/*
+ * Early gate state for locked hosts. `router.origin` is the request origin
+ * during SSR and `window.origin` on the client, so `locked` agrees across
+ * hydration and the first client render reproduces the server's decision
+ * exactly. For a locked host `allowed` starts false (the caller renders a blank
+ * page) and is resolved in the effect below; nothing app-like can render before
+ * that resolution.
+ */
+export function useQuickTunnelGate(): boolean {
+  const router = useRouter();
+  const locked = !isMainHostname(hostnameFromOrigin(router.origin));
+  const [allowed, setAllowed] = useState(!locked);
+  /* Captured during the first render, before the handoff hook strips the hash. */
+  const [sawHandoff] = useState(hasHandoffHash);
+
+  useEffect(() => {
+    if (!locked) return;
+    let cancelled = false;
+
+    if (sawHandoff || hasSessionOk()) {
+      setAllowed(true);
+      return;
+    }
+
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        if (cancelled) return;
+        if (data.session) {
+          markSessionOk();
+          setAllowed(true);
+          return;
+        }
+        // Still blocked: the route's head (e.g. "ZChat — Sign in") was applied
+        // during hydration, so neutralize it until the gate lets the app in.
+        document.title = "ZChat";
+      })
+      .catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locked, sawHandoff]);
+
+  return allowed;
 }

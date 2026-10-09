@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 
+import { PersonMuteToggle } from "@/components/chat/PersonMuteToggle";
 import { UserAvatar } from "@/components/UserAvatar";
 import {
   Dialog,
@@ -23,9 +24,11 @@ type CardProfile = {
 /** Small profile card shown when a name/avatar is clicked in chat. */
 export function ProfileDialog({
   userId,
+  currentUserId,
   onClose,
 }: {
   userId: string | null;
+  currentUserId?: string | null;
   onClose: () => void;
 }) {
   const [profile, setProfile] = useState<CardProfile | null>(null);
@@ -98,6 +101,12 @@ export function ProfileDialog({
                 R6 Tracker profile ↗
               </a>
             )}
+
+            <PersonMuteToggle
+              personId={profile.id}
+              currentUserId={currentUserId}
+              displayName={profile.display_name}
+            />
           </div>
         )}
       </DialogContent>

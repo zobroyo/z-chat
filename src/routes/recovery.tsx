@@ -28,6 +28,16 @@ type Stage = "request" | "code" | "reset";
 
 const RESEND_SECONDS = 60;
 
+/**
+ * Recovery supports both Supabase email flows:
+ *  - 6-digit code: requires the project's "Reset Password" email template to
+ *    include `{{ .Token }}` (Dashboard -> Authentication -> Emails ->
+ *    Templates). Without that variable the email only carries a link and the
+ *    code step below can never work.
+ *  - magic link: clicking `{{ .ConfirmationURL }}` returns to /recovery and
+ *    supabase-js exchanges the URL for a PASSWORD_RECOVERY session itself.
+ */
+
 function RecoveryPage() {
   const navigate = useNavigate();
   const [stage, setStage] = useState<Stage>("request");
@@ -108,6 +118,10 @@ function RecoveryPage() {
       });
       if (error) {
         toast.error(friendlyAuthError(error), { duration: 10000 });
+        if (error.status === 429 || error.code === "over_email_send_rate_limit") {
+          // Start the cooldown anyway so the user can't hammer the rate limit.
+          setResendIn(RESEND_SECONDS);
+        }
         return;
       }
       setResendIn(RESEND_SECONDS);
@@ -127,7 +141,7 @@ function RecoveryPage() {
     }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.verifyOtp({
+      const { data, error } = await supabase.auth.verifyOtp({
         email,
         token,
         type: "recovery",
@@ -140,6 +154,16 @@ function RecoveryPage() {
           toast.error(friendlyAuthError(error), { duration: 10000 });
         }
         setCode("");
+        return;
+      }
+      if (!data.session) {
+        // Verified, but no session means the OTP couldn't establish a recovery
+        // session — send the user back to request a fresh code.
+        toast.error("That code couldn't start a reset session. Request a new one.", {
+          duration: 10000,
+        });
+        setCode("");
+        setStage("request");
         return;
       }
       setStage("reset");
@@ -170,6 +194,16 @@ function RecoveryPage() {
           toast.error("For security, request a fresh reset code and try again.", {
             duration: 10000,
           });
+          setStage("request");
+          return;
+        }
+        if (error.code === "session_not_found" || /auth session missing/i.test(error.message)) {
+          // The magic link / verified OTP session has expired (or was never
+          // established) — restart cleanly instead of leaving a dead form.
+          toast.error("Your reset session has expired. Request a new code and try again.", {
+            duration: 10000,
+          });
+          setLinkInvalid(true);
           setStage("request");
           return;
         }
@@ -245,6 +279,7 @@ function RecoveryPage() {
               value={code}
               onChange={(value) => setCode(value.replace(/\D/g, ""))}
               inputMode="numeric"
+              autoComplete="one-time-code"
               autoFocus
             >
               <InputOTPGroup className="gap-2">

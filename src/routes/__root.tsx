@@ -12,7 +12,11 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "@/hooks/use-auth";
-import { QuickTunnelHandoff } from "@/hooks/use-quick-tunnel-handoff";
+import {
+  useQuickTunnelGate,
+  QuickTunnelHandoff,
+  QUICK_TUNNEL_BOOT_SCRIPT,
+} from "@/hooks/use-quick-tunnel-handoff";
 import { Toaster } from "@/components/ui/sonner";
 import { ThemeProvider, themeBootScript } from "@/components/theme/ThemeProvider";
 
@@ -130,6 +134,7 @@ function RootShell({ children }: { children: ReactNode }) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
         <HeadContent />
+        <script dangerouslySetInnerHTML={{ __html: QUICK_TUNNEL_BOOT_SCRIPT }} />
       </head>
       <body>
         {children}
@@ -139,18 +144,39 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+/*
+ * Blocks every locked host (e.g. the rotating d-*.z-chat.men quick tunnels)
+ * until the gate hook allows the visit. Rendering no children means no route
+ * content and no login UI exists on those hosts for a raw visitor.
+ */
+function QuickTunnelGate({ children }: { children: ReactNode }) {
+  const allowed = useQuickTunnelGate();
+  if (!allowed) {
+    return (
+      <div aria-hidden="true" className="grid min-h-screen w-full place-items-center bg-[#0b0b0d]">
+        <span className="font-display text-5xl font-extrabold text-white/10 select-none before:content-['Z']" />
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
-        <AuthProvider>
-          <QuickTunnelHandoff />
-          {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-          <Outlet />
-          <Toaster position="top-center" />
-        </AuthProvider>
+        {/* Kept mounted even while the gate blocks, so a #zt= handoff is always
+            consumed and stripped from the URL. */}
+        <QuickTunnelHandoff />
+        <QuickTunnelGate>
+          <AuthProvider>
+            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+            <Outlet />
+            <Toaster position="top-center" />
+          </AuthProvider>
+        </QuickTunnelGate>
       </ThemeProvider>
     </QueryClientProvider>
   );

@@ -21,6 +21,7 @@ import { OpenChatDialog } from "@/components/chat/OpenChatDialog";
 import { CallButton } from "@/components/call/CallButton";
 import { CallOverlay } from "@/components/call/CallOverlay";
 import { Composer } from "@/components/chat/Composer";
+import { ConversationMuteButton } from "@/components/chat/ConversationMuteButton";
 import { GamesAnnouncementDialog } from "@/components/chat/GamesAnnouncementDialog";
 import { ApplicationGate } from "@/components/chat/ApplicationGate";
 import { ProfileDialog } from "@/components/chat/ProfileDialog";
@@ -59,6 +60,7 @@ import {
   type Profile,
 } from "@/lib/chat";
 import { uploadChatImage } from "@/lib/media";
+import { isMessageNotificationMuted, useEnsureMutesLoaded } from "@/lib/mutes";
 import { recordDeviceFingerprint } from "@/lib/fingerprint";
 import { cn } from "@/lib/utils";
 
@@ -104,6 +106,10 @@ function ChatPage() {
       cancelled = true;
     };
   }, [user]);
+
+  // Load the current user's notification mutes once so the Realtime handler
+  // can synchronously decide whether a notification is suppressed.
+  useEnsureMutesLoaded(user?.id ?? null);
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [applicationStatus, setApplicationStatus] = useState<"unknown" | "approved" | "pending" | "rejected">("unknown");
@@ -513,14 +519,19 @@ function ChatPage() {
           }
 
           if (!isActive || document.visibilityState !== "visible") {
-            const sender = profilesRef.current.find((item) => item.id === message.sender_id);
+            // Muted conversations/people still count as unread (above), but must
+            // not raise a notification. An unloaded mute list means "no mute",
+            // so failures behave exactly as before.
+            if (!isMessageNotificationMuted(message.conversation_id, message.sender_id)) {
+              const sender = profilesRef.current.find((item) => item.id === message.sender_id);
 
-            const title = sender?.display_name ?? "New message";
-            const body = message.body ?? "Sent a photo";
+              const title = sender?.display_name ?? "New message";
+              const body = message.body ?? "Sent a photo";
 
-            toast(title, {
-              description: body,
-            });
+              toast(title, {
+                description: body,
+              });
+            }
           }
         },
       )
@@ -1332,7 +1343,11 @@ function ChatPage() {
   return (
     <div className="chat-app-shell flex overflow-hidden">
       <GamesAnnouncementDialog userId={user?.id ?? ""} />
-      <ProfileDialog userId={profileCardId} onClose={() => setProfileCardId(null)} />
+      <ProfileDialog
+        userId={profileCardId}
+        currentUserId={user?.id ?? ""}
+        onClose={() => setProfileCardId(null)}
+      />
       <OpenChatDialog
         open={banAppealOpen}
         onOpenChange={setBanAppealOpen}
@@ -1392,6 +1407,12 @@ function ChatPage() {
           </div>
 
           <div className="ml-auto flex shrink-0 items-center gap-0.5">
+            <ConversationMuteButton
+              conversationId={activeId}
+              userId={user?.id}
+              title={activeTitle}
+            />
+
             <CallButton
               onJoin={() => void call.joinCall()}
               joining={call.joining}

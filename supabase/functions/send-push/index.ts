@@ -62,6 +62,39 @@ Deno.serve(async (req) => {
       return new Response("no recipients", { status: 200 });
     }
 
+    // Notification mutes: recipients who muted this conversation or this
+    // sender must not get a push. If the lookup fails, degrade to the old
+    // behaviour (send to everyone) so a DB hiccup never drops notifications.
+    const mutedUserIds = new Set<string>();
+    const { data: mutes, error: mutesError } = await supabase
+      .from("notification_mutes")
+      .select("user_id, target_type, target_id")
+      .in(
+        "user_id",
+        members.map((member: { user_id: string }) => member.user_id),
+      );
+
+    if (mutesError) {
+      console.warn(
+        "[send-push] Mutes query failed, sending as before:",
+        mutesError,
+      );
+    } else {
+      for (const mute of mutes ?? []) {
+        const row = mute as {
+          user_id: string;
+          target_type: string;
+          target_id: string;
+        };
+        const matches =
+          (row.target_type === "conversation" &&
+            row.target_id === message.conversation_id) ||
+          (row.target_type === "user" && row.target_id === message.sender_id);
+        if (matches) mutedUserIds.add(row.user_id);
+      }
+      console.log("[send-push] Muted recipients:", mutedUserIds.size);
+    }
+
     const { data: sender, error: senderError } = await supabase
       .from("profiles")
       .select("display_name")
@@ -89,6 +122,11 @@ Deno.serve(async (req) => {
     console.log("[send-push] Notification body:", body);
 
     for (const member of members) {
+      if (mutedUserIds.has(member.user_id)) {
+        console.log("[send-push] Skipping muted recipient:", member.user_id);
+        continue;
+      }
+
       console.log(
         "[send-push] Checking subscriptions for:",
         member.user_id,
