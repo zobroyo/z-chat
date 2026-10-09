@@ -22,7 +22,6 @@ import {
   PAGE_SIZE,
   type AdminProfile,
 } from "@/lib/admin";
-import { adminUnbanHardware, fetchHardwareBans, type HardwareBanRow } from "@/lib/auth-security";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { UserAvatar } from "@/components/UserAvatar";
@@ -105,6 +104,85 @@ async function fetchUsersWithTimeouts(page: number, search: string) {
   };
 }
 
+// ------------------------------------------------------- hardware bans ----
+// The banned-devices panel used to go through fetchHardwareBans() in
+// @/lib/auth-security, which pulled `supabase.from` into a bare variable and
+// called it unbound. SupabaseClient.from() then evaluates `this.rest` with
+// `this === undefined` and throws
+// "Cannot read properties of undefined (reading 'rest')" — the section showed
+// that error instead of the list (and the lifted toggle appeared to crash).
+// Keep the data access here, always calling methods on the client object, and
+// normalise every field so a malformed row can never break the render.
+
+type HardwareBan = {
+  id: string;
+  fingerprint: string;
+  reason: string;
+  source: string;
+  user_id: string | null;
+  active: boolean;
+  created_at: string | null;
+  unbanned_at: string | null;
+};
+
+type UntypedResult = { data: unknown; error: { message: string } | null };
+type UntypedQuery = {
+  select(columns: string): {
+    order(column: string, options: { ascending: boolean }): Promise<UntypedResult>;
+  };
+};
+type UntypedRpc = (fn: string, args?: Record<string, unknown>) => Promise<UntypedResult>;
+
+const hardwareBansClient = supabase as unknown as {
+  from(table: string): UntypedQuery;
+  rpc: UntypedRpc;
+};
+
+function normalizeHardwareBan(row: unknown): HardwareBan | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Record<string, unknown>;
+  const id = typeof r["id"] === "string" ? r["id"] : "";
+  if (!id) return null;
+  return {
+    id,
+    fingerprint: typeof r["fingerprint"] === "string" ? r["fingerprint"] : "",
+    reason: typeof r["reason"] === "string" ? r["reason"] : "",
+    source: typeof r["source"] === "string" ? r["source"] : "unknown",
+    user_id: typeof r["user_id"] === "string" ? r["user_id"] : null,
+    active: r["active"] === true,
+    created_at: typeof r["created_at"] === "string" ? r["created_at"] : null,
+    unbanned_at: typeof r["unbanned_at"] === "string" ? r["unbanned_at"] : null,
+  };
+}
+
+/** Masks the middle of a fingerprint: ab12…ef90. */
+function maskFingerprint(fingerprint: string): string {
+  if (!fingerprint) return "unknown";
+  if (fingerprint.length <= 10) return fingerprint;
+  return `${fingerprint.slice(0, 4)}…${fingerprint.slice(-4)}`;
+}
+
+function fmtWhen(iso: string | null): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : date.toLocaleString();
+}
+
+async function fetchHardwareBansSafe(): Promise<HardwareBan[]> {
+  const { data, error } = await hardwareBansClient
+    .from("hardware_bans")
+    .select("id, fingerprint, reason, source, user_id, active, created_at, unbanned_at")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  if (!Array.isArray(data)) return [];
+  return data.map(normalizeHardwareBan).filter((ban): ban is HardwareBan => ban !== null);
+}
+
+async function liftHardwareBan(id: string): Promise<void> {
+  const { error } = await hardwareBansClient.rpc("admin_unban_hardware", { _id: id });
+  if (error) throw new Error(error.message);
+}
+
 function AdminUsers() {
   const { user: me } = useAuth();
   const [page, setPage] = useState(0);
@@ -119,15 +197,18 @@ function AdminUsers() {
   const [r6Draft, setR6Draft] = useState("");
   const [timeoutOpen, setTimeoutOpen] = useState(false);
   const [timeoutReason, setTimeoutReason] = useState("");
-  const [hardwareBans, setHardwareBans] = useState<HardwareBanRow[] | null>(null);
+  const [hardwareBans, setHardwareBans] = useState<HardwareBan[] | null>(null);
   const [hwError, setHwError] = useState<string | null>(null);
   const [hwBusyId, setHwBusyId] = useState<string | null>(null);
   const [showLifted, setShowLifted] = useState(false);
   const [hwNames, setHwNames] = useState<Record<string, string>>({});
+  const [hwReload, setHwReload] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    fetchHardwareBans()
+    setHwError(null);
+    setHardwareBans(null);
+    fetchHardwareBansSafe()
       .then(async (rows) => {
         if (cancelled) return;
         setHardwareBans(rows);
@@ -153,18 +234,18 @@ function AdminUsers() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [hwReload]);
 
-  const unbanDevice = async (ban: HardwareBanRow) => {
+  const unbanDevice = async (ban: HardwareBan) => {
     if (
       !window.confirm(
-        `Unban this device? Fingerprint ${ban.fingerprint.slice(0, 16)}… will be allowed to sign in and sign up again.`,
+        `Lift the device ban for ${maskFingerprint(ban.fingerprint)}? This device will be allowed to sign in and sign up again.`,
       )
     )
       return;
     setHwBusyId(ban.id);
     try {
-      await adminUnbanHardware(ban.id);
+      await liftHardwareBan(ban.id);
       setHardwareBans(
         (rows) =>
           rows?.map((row) =>
@@ -173,9 +254,12 @@ function AdminUsers() {
               : row,
           ) ?? null,
       );
-      toast.success("Device unbanned");
+      toast.success("Device ban lifted");
+      // Re-read from the database so the list is authoritative even if the
+      // optimistic update above missed something.
+      setHwReload((n) => n + 1);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to unban device");
+      toast.error(e instanceof Error ? e.message : "Failed to lift device ban");
     } finally {
       setHwBusyId(null);
     }
@@ -223,10 +307,9 @@ function AdminUsers() {
       await setUserBanned(selected.id, next);
       setSelected({ ...selected, banned: next });
       reload();
-      // Banning a user also bans their recorded device, so refresh the list.
-      void fetchHardwareBans()
-        .then(setHardwareBans)
-        .catch(() => {});
+      // Banning a user also records their device, and unbanning lifts the
+      // active hardware bans recorded for the account, so refresh the list.
+      setHwReload((n) => n + 1);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : `Failed to ${verb} user`);
     } finally {
@@ -464,9 +547,21 @@ function AdminUsers() {
           recorded for their account.
         </p>
 
-        {hwError && <p className="text-sm text-destructive">{hwError}</p>}
+        {hwError && (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2">
+            <p className="text-sm text-destructive">{hwError}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setHwReload((n) => n + 1)}
+            >
+              Retry
+            </Button>
+          </div>
+        )}
 
-        {!hardwareBans ? (
+        {hwError ? null : !hardwareBans ? (
           <div className="flex justify-center py-6">
             <Loader2 className="size-5 animate-spin text-muted-foreground" />
           </div>
@@ -483,10 +578,10 @@ function AdminUsers() {
               >
                 <span
                   className="inline-flex items-center gap-1.5 font-mono text-xs text-foreground"
-                  title={ban.fingerprint}
+                  title={ban.fingerprint || undefined}
                 >
                   <Fingerprint className="size-3.5 text-muted-foreground" />
-                  {ban.fingerprint.slice(0, 16)}…
+                  {maskFingerprint(ban.fingerprint)}
                 </span>
                 <span
                   className={cn(
@@ -505,7 +600,9 @@ function AdminUsers() {
                   {ban.user_id ? (hwNames[ban.user_id] ?? "Unknown user") : "—"}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {new Date(ban.created_at).toLocaleDateString()}
+                  {ban.active
+                    ? `Banned ${fmtWhen(ban.created_at)}`
+                    : `Lifted ${fmtWhen(ban.unbanned_at) || fmtWhen(ban.created_at)}`}
                 </span>
                 {ban.reason && (
                   <span className="w-full text-xs text-muted-foreground">{ban.reason}</span>
@@ -523,7 +620,7 @@ function AdminUsers() {
                     ) : (
                       <CircleCheck className="size-3.5" />
                     )}
-                    Unban device
+                    Lift ban
                   </Button>
                 )}
               </li>

@@ -110,7 +110,11 @@ function OAuthConsent() {
                 ? "This ZChat account is timed out. Try again once the timeout ends."
                 : reason === "not_admin"
                   ? `This ZChat account doesn't have access to ${appName}.`
-                  : `Could not connect to ${appName}. Please try again.`,
+                  : reason === "pending_application"
+                    ? `Your application is still being reviewed. You can use ${appName} once an admin approves your account.`
+                    : reason === "profile_unavailable"
+                      ? `Could not check your ZChat account status for ${appName}. Please try again in a moment.`
+                      : `Could not connect to ${appName}. Please try again.`,
         );
         setBusy(false);
         return;

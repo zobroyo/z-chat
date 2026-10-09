@@ -65,9 +65,33 @@ import { startRingtone, type RingtoneHandle } from "@/lib/ringtone";
  * prompt and never throws.
  */
 
-const ICE_SERVERS: RTCIceServer[] = [{ urls: ["stun:stun.l.google.com:19302"] }];
+/*
+ * ICE servers: public STUN plus the self-hosted coturn relay on the black box.
+ *
+ * TURN credentials are inherently public in a browser bundle (anyone can read
+ * them), so this uses a dedicated low-privilege `turnuser` with a random
+ * password. It only grants relay allocations. To rotate, change `user=` in
+ * /etc/turnserver.conf on the box and update VITE_TURN_CREDENTIAL at build
+ * time (the fallback below keeps working without env vars).
+ */
+const TURN_URL = import.meta.env["VITE_TURN_URL"] || "turn:94.203.142.158:3478";
+const TURN_USERNAME = import.meta.env["VITE_TURN_USERNAME"] || "turnuser";
+const TURN_CREDENTIAL =
+  import.meta.env["VITE_TURN_CREDENTIAL"] || "46a26cc4db1c704ebfd17a4b20b4d5ec";
+
+const ICE_SERVERS: RTCIceServer[] = [
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+  {
+    // UDP first (fast path), TCP as a fallback for UDP-hostile networks.
+    urls: [`${TURN_URL}?transport=udp`, `${TURN_URL}?transport=tcp`],
+    username: TURN_USERNAME,
+    credential: TURN_CREDENTIAL,
+  },
+];
 
 const CHANNEL_TIMEOUT_MS = 15_000;
+/** Give a fresh offer time to finish ICE gathering/checks before rebuilding. */
+const CONNECT_GRACE_MS = 15_000;
 /** Hard cap on a join attempt; surfaces an error instead of an endless "Joining…". */
 const JOIN_WATCHDOG_MS = 30_000;
 /** Announcements of my own join; retried in case a `join` raced the subscription. */
@@ -200,6 +224,8 @@ type Peer = {
   stream: MediaStream;
   /** Sender for the up-front video transceiver; camera tracks are swapped in here. */
   videoSender: RTCRtpSender | null;
+  /** The video transceiver those camera tracks belong to (the negotiated m-line). */
+  videoTransceiver: RTCRtpTransceiver | null;
   /** Web Audio graph used for 0-200% volume (null when unavailable). */
   gain: GainNode | null;
   source: MediaStreamAudioSourceNode | null;
@@ -288,6 +314,8 @@ export function useCall(
   const channelRef = useRef<RealtimeChannel | null>(null);
   const peersRef = useRef(new Map<string, Peer>());
   const pendingIceRef = useRef(new Map<string, RTCIceCandidateInit[]>());
+  /** Late-bound renegotiation helper (defined after `offerPeer`). */
+  const negotiatePeerRef = useRef<(peerId: string) => void>(() => {});
   const localStreamRef = useRef<MediaStream | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const pageHideRef = useRef<(() => void) | null>(null);
@@ -555,6 +583,9 @@ export function useCall(
       const usingGraph = !!peer.gain && callAudioRunning();
       peer.audioEl.muted = usingGraph || effective === 0;
       peer.audioEl.volume = Math.min(1, effective);
+      // Autoplay can be rejected before the first user gesture; retry quietly
+      // on every volume/state application (which follows gestures too).
+      if (peer.audioEl.paused) void peer.audioEl.play().catch(() => undefined);
     }
   }, []);
 
@@ -577,6 +608,7 @@ export function useCall(
         peer.pc.ontrack = null;
         peer.pc.onconnectionstatechange = null;
         peer.pc.oniceconnectionstatechange = null;
+        peer.pc.onnegotiationneeded = null;
         peer.pc.close();
       } catch {
         // Already closed.
@@ -659,6 +691,7 @@ export function useCall(
         pc,
         stream,
         videoSender: null,
+        videoTransceiver: null,
         audioEl: null,
         gain: null,
         source: null,
@@ -679,11 +712,21 @@ export function useCall(
         ...(local ? { streams: [local] } : {}),
       });
       peer.videoSender = transceiver.sender;
+      peer.videoTransceiver = transceiver;
 
       const cameraTrack = cameraStreamRef.current?.getVideoTracks()[0];
       if (cameraTrack && peer.videoSender) {
         void peer.videoSender.replaceTrack(cameraTrack).catch(() => undefined);
       }
+
+      // A late media change (e.g. a camera track swapped into a transceiver
+      // the remote never negotiated) must be re-offered, otherwise the other
+      // side never learns about it. The initial offer is sent explicitly by
+      // offerPeer, so only renegotiate once a remote description exists.
+      pc.onnegotiationneeded = () => {
+        if (!pc.remoteDescription) return;
+        negotiatePeerRef.current(peerId);
+      };
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
@@ -753,6 +796,11 @@ export function useCall(
       };
 
       peersRef.current.set(peerId, peer);
+      // Any freshly created connection (offerer *or* answerer) gets a grace
+      // window: the answerer never goes through maybeConnectPeer before its
+      // answer, so without this a duplicate join announcement could tear the
+      // just-negotiated connection down again.
+      connectAttemptsRef.current.set(peerId, Date.now());
       patchParticipant(peerId, { name: peer.name });
       return peer;
     },
@@ -786,6 +834,28 @@ export function useCall(
   );
 
   /**
+   * Renegotiates an already-connected peer: used when local media changed in a
+   * way the negotiated SDP does not cover (camera track swapped into a
+   * transceiver the remote never accepted). Follows the same polite/impolite
+   * tie-break as the initial connect so simultaneous renegotiations resolve.
+   */
+  const negotiatePeer = useCallback(
+    async (peerId: string) => {
+      const peer = peersRef.current.get(peerId);
+      if (!peer || !inCallRef.current) return;
+      if (peer.makingOffer || peer.pc.signalingState !== "stable") return;
+      if (meRef.current.id > peerId) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, POLITE_WAIT_MS));
+        if (peersRef.current.get(peerId) !== peer || !inCallRef.current) return;
+        if (peer.makingOffer || peer.pc.signalingState !== "stable") return;
+      }
+      await offerPeer(peerId, peer.name);
+    },
+    [offerPeer],
+  );
+  negotiatePeerRef.current = negotiatePeer;
+
+  /**
    * Connects to a peer if there is no healthy connection yet. Called on join,
    * on every heartbeat `state` and on presence sync, so a missed `join`
    * broadcast or a refreshed peer still converges. The higher user id waits a
@@ -801,10 +871,24 @@ export function useCall(
         const current = peersRef.current.get(peerId);
         if (!current) return false;
         const state = current.pc.connectionState;
-        return (
-          current.pc.signalingState !== "stable" || state === "connected" || state === "connecting"
-        );
+        if (current.pc.signalingState !== "stable" || state === "connected") return true;
+        if (state === "connecting") return true;
+        if (
+          state === "failed" ||
+          state === "closed" ||
+          current.pc.iceConnectionState === "failed"
+        ) {
+          return false;
+        }
+        // A brand-new connection may still be gathering candidates or running
+        // its first ICE checks. Give it a grace window instead of tearing it
+        // down and restarting from scratch (duplicate join announcements used
+        // to do exactly that, which broke camera/audio setup mid-handshake).
+        const lastAttempt = connectAttemptsRef.current.get(peerId) ?? 0;
+        return state === "new" && Date.now() - lastAttempt < CONNECT_GRACE_MS;
       };
+      // `force` only bypasses the retry throttle; it never tears down a
+      // connection that is alive or being negotiated.
       if (hasHealthyPeer()) return;
 
       const lastAttempt = connectAttemptsRef.current.get(peerId) ?? 0;
@@ -977,6 +1061,39 @@ export function useCall(
 
       try {
         await peer.pc.setRemoteDescription({ type: "offer", sdp: data.sdp });
+
+        // The remote offer is what actually negotiates the video m-line. Adopt
+        // the transceiver Chrome associated with it (the one that has a mid),
+        // so camera toggles always replaceTrack into the *negotiated* sender.
+        // A stray local transceiver the remote never accepted is stopped: it
+        // would otherwise send camera frames into the void.
+        const videoTransceivers = peer.pc
+          .getTransceivers()
+          .filter((item) => item.receiver.track?.kind === "video");
+        const negotiatedVideo =
+          videoTransceivers.find((item) => item.mid !== null) ?? videoTransceivers[0] ?? null;
+        if (negotiatedVideo) {
+          peer.videoTransceiver = negotiatedVideo;
+          peer.videoSender = negotiatedVideo.sender;
+          try {
+            negotiatedVideo.direction = "sendrecv";
+          } catch {
+            // Some browsers reject direction changes; replaceTrack still works.
+          }
+          for (const stray of videoTransceivers) {
+            if (stray === negotiatedVideo || stray.mid !== null) continue;
+            try {
+              stray.stop();
+            } catch {
+              // Already stopped.
+            }
+          }
+          const cameraTrack = cameraStreamRef.current?.getVideoTracks()[0];
+          if (cameraTrack) {
+            void negotiatedVideo.sender.replaceTrack(cameraTrack).catch(() => undefined);
+          }
+        }
+
         flushIce(data.from);
         const answer = await peer.pc.createAnswer();
         await peer.pc.setLocalDescription(answer);
@@ -1583,9 +1700,10 @@ export function useCall(
       if (track && local) local.removeTrack(track);
 
       for (const peer of peersRef.current.values()) {
-        if (!peer.videoSender) continue;
+        const sender = peer.videoTransceiver?.sender ?? peer.videoSender;
+        if (!sender) continue;
         try {
-          await peer.videoSender.replaceTrack(null);
+          await sender.replaceTrack(null);
         } catch {
           // Peer is closing; ignore.
         }
@@ -1617,17 +1735,35 @@ export function useCall(
         local.addTrack(track);
       }
 
-      for (const peer of peersRef.current.values()) {
-        if (!peer.videoSender) continue;
+      const renegotiate: string[] = [];
+      for (const [peerId, peer] of peersRef.current.entries()) {
+        const sender = peer.videoTransceiver?.sender ?? peer.videoSender;
+        if (!sender) continue;
         try {
-          await peer.videoSender.replaceTrack(track);
+          await sender.replaceTrack(track);
         } catch {
           // Peer is closing; ignore.
+        }
+        // If the peer never negotiated this video m-line (e.g. a connection
+        // that was re-created mid-call), replaceTrack alone sends nothing:
+        // the offer/answer has to be redone. That is the "turning the camera
+        // on later does nothing on the other side" bug.
+        const transceiver = peer.videoTransceiver;
+        const current = transceiver?.currentDirection ?? null;
+        if (
+          !transceiver ||
+          transceiver.mid === null ||
+          current === null ||
+          current === "inactive" ||
+          current === "recvonly"
+        ) {
+          renegotiate.push(peerId);
         }
       }
 
       setCameraOn(true);
       broadcastState();
+      for (const peerId of renegotiate) negotiatePeerRef.current(peerId);
     } catch (cause) {
       setError(mediaErrorMessage(cause, "camera"));
     }
