@@ -130,8 +130,18 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
 
   // Join/leave activity: transient banner + the tile pop-in animation.
   const [activity, setActivity] = useState<{ key: number; text: string } | null>(null);
-  const activityTimer = useRef<number | null>(null);
+  const activityKey = useRef(0);
   const knownParticipants = useRef<Map<string, string> | null>(null);
+
+  // Auto-dismiss the activity banner. This is keyed on the banner itself (not on
+  // `call.participants`) so the frequent presence/state heartbeats — which
+  // recreate the participant list and re-run that effect — can no longer cancel
+  // the timeout and leave the banner stuck on screen forever.
+  useEffect(() => {
+    if (!activity) return;
+    const timer = window.setTimeout(() => setActivity(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [activity]);
 
   useEffect(() => {
     const current = new Map(
@@ -141,9 +151,8 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
     knownParticipants.current = current;
     if (!previous) return;
     const show = (text: string) => {
-      setActivity({ key: Date.now(), text });
-      if (activityTimer.current !== null) window.clearTimeout(activityTimer.current);
-      activityTimer.current = window.setTimeout(() => setActivity(null), 3200);
+      activityKey.current += 1;
+      setActivity({ key: activityKey.current, text });
     };
     for (const [id, name] of current) {
       if (!previous.has(id)) show(`${name} joined the call`);
@@ -151,9 +160,6 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
     for (const [id, name] of previous) {
       if (!current.has(id)) show(`${name} left the call`);
     }
-    return () => {
-      if (activityTimer.current !== null) window.clearTimeout(activityTimer.current);
-    };
   }, [call.participants]);
 
   if (call.incomingCall && !call.inCall && !call.joining) {
