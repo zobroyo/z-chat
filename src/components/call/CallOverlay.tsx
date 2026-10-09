@@ -292,7 +292,7 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
             <div
               data-testid="call-grid"
               className={cn(
-                "grid h-full w-full auto-rows-fr gap-1.5 sm:gap-2.5",
+                "grid h-full w-full place-items-center auto-rows-fr gap-1.5 sm:gap-2.5",
                 participantGridClass(totalTiles),
               )}
             >

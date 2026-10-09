@@ -107,7 +107,7 @@ export function CallParticipantTile({
     <div
       data-testid="call-tile"
       className={cn(
-        "call-tile-enter group relative h-full min-h-0 w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] ring-1 ring-white/5 sm:rounded-3xl",
+        "call-tile-enter group relative aspect-video h-full max-h-full max-w-full min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] ring-1 ring-white/5 sm:rounded-3xl",
         speaking && "border-emerald-400/60 ring-2 ring-emerald-400/70",
       )}
     >
