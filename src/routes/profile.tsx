@@ -4,6 +4,7 @@ import { ArrowLeft, Camera, Check, Laptop, Loader2, LogOut, Moon, Sun } from "lu
 import { toast } from "sonner";
 
 import { AvatarCropDialog } from "@/components/AvatarCropDialog";
+import { BillingPlans } from "@/components/chat/BillingPlans";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -229,6 +230,8 @@ function ProfilePage() {
           </div>
         </div>
       </section>
+
+      <BillingPlans />
 
       {loadError && (
         <div className="mb-4 rounded-2xl border border-destructive/40 bg-destructive/10 p-4 text-sm">

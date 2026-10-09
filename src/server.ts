@@ -8,6 +8,11 @@ import { handleModerateRoute, handleSendMessageRoute } from "./lib/serverModerat
 import { handleQuickTunnelPublicRoute, handleSiteTunnelsRoute } from "./lib/serverTunnels";
 import { handleTurnCredentialsRoute } from "./lib/serverTurnCredentials";
 import {
+  handleStripeCheckoutRoute,
+  handleStripePortalRoute,
+  handleStripeWebhookRoute,
+} from "./lib/serverStripe";
+import {
   handleApprovalPushRoute,
   handlePushPublicKeyRoute,
   handleTestPushRoute,
@@ -149,6 +154,20 @@ export default {
       } catch (error) {
         console.error(error);
         return new Response(JSON.stringify({ iceServers: [] }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+
+    if (url.pathname === "/api/stripe/checkout" || url.pathname === "/api/stripe/portal" || url.pathname === "/api/stripe/webhook") {
+      try {
+        if (url.pathname === "/api/stripe/checkout") return await handleStripeCheckoutRoute(request);
+        if (url.pathname === "/api/stripe/portal") return await handleStripePortalRoute(request);
+        return await handleStripeWebhookRoute(request);
+      } catch (error) {
+        console.error(error);
+        return new Response(JSON.stringify({ error: "Internal server error" }), {
           status: 500,
           headers: { "content-type": "application/json" },
         });
