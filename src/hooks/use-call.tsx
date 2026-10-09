@@ -193,6 +193,8 @@ export type CallParticipant = {
   name: string;
   muted: boolean;
   video: boolean;
+  /** Avatar image url, when known (broadcast). */
+  avatar: string | null;
   /** True while this participant is sharing their screen (broadcast). */
   sharing: boolean;
   deafened: boolean;
@@ -307,7 +309,7 @@ type RingDeclinePayload = {
   reason?: "busy" | "declined";
 };
 type RingAcceptPayload = { conversationId?: string; userId?: string; name?: string };
-type PresenceMeta = { userId?: string; name?: string; joinedAt?: number };
+type PresenceMeta = { userId?: string; name?: string; avatar?: string | null; joinedAt?: number };
 
 type Peer = {
   pc: RTCPeerConnection;
@@ -322,6 +324,8 @@ type Peer = {
   /** Web Audio graph used for 0-200% volume (null when unavailable). */
   gain: GainNode | null;
   source: MediaStreamAudioSourceNode | null;
+  /** Pass-through analyser used for the active-speaker highlight. */
+  analyser: AnalyserNode | null;
   name: string;
   /** True while an offer is being created/sent (perfect-negotiation glare flag). */
   makingOffer: boolean;
@@ -380,6 +384,7 @@ export function useCall(
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const [muted, setMuted] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
+  const [activeSpeakerId, setActiveSpeakerId] = useState<string | null>(null);
   const [deafened, setDeafened] = useState(false);
   const [serverMuted, setServerMuted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -630,6 +635,7 @@ export function useCall(
           muted: patch.muted ?? false,
           video: patch.video ?? false,
     sharing: patch.sharing ?? false,
+    avatar: patch.avatar ?? null,
           deafened: patch.deafened ?? false,
           serverMuted: patch.serverMuted ?? false,
           localMuted: localMutedRef.current.has(id),
@@ -810,15 +816,20 @@ export function useCall(
         // Ignore a stale graph.
       }
       const source = context.createMediaStreamSource(stream);
+      const analyser = context.createAnalyser();
+      analyser.fftSize = 512;
       const gain = context.createGain();
       gain.gain.value = 0;
-      source.connect(gain);
+      source.connect(analyser);
+      analyser.connect(gain);
       gain.connect(context.destination);
       peer.source = source;
       peer.gain = gain;
+      peer.analyser = analyser;
     } catch {
       peer.source = null;
       peer.gain = null;
+      peer.analyser = null;
     }
   }, []);
 
@@ -843,6 +854,7 @@ export function useCall(
         audioEl: null,
         gain: null,
         source: null,
+        analyser: null,
         name: name ?? "Someone",
         makingOffer: false,
         disconnectTimer: null,
@@ -1076,6 +1088,7 @@ export function useCall(
     send("state", {
       userId: self.id,
       name: self.name,
+      avatar: self.avatar ?? null,
       muted: mutedRef.current || deafenedRef.current || serverMutedRef.current,
       video: cameraOnRef.current,
       sharing: screenSharingRef.current,
@@ -1166,6 +1179,7 @@ export function useCall(
       const theirRoom = assignmentsRef.current[userId] ?? null;
       patchParticipant(userId, {
         ...(data.name ? { name: data.name } : {}),
+        ...(data.avatar !== undefined ? { avatar: data.avatar ?? null } : {}),
         isGuest: data.guest === true,
         ...(typeof data.joinedAt === "number" && data.joinedAt > 0
           ? { joinedAt: data.joinedAt }
@@ -1320,6 +1334,7 @@ export function useCall(
 
       patchParticipant(data.userId, {
         ...(data.name ? { name: data.name } : {}),
+        ...(data.avatar !== undefined ? { avatar: data.avatar ?? null } : {}),
         muted: data.muted === true,
         video: data.video === true,
         sharing: data.sharing === true,
@@ -1779,7 +1794,7 @@ export function useCall(
               settled = true;
               window.clearTimeout(timer);
               void targetChannel
-                .track({ userId: self.id, name: self.name, joinedAt: myJoinedAtRef.current })
+                .track({ userId: self.id, name: self.name, avatar: self.avatar ?? null, joinedAt: myJoinedAtRef.current })
                 .catch(() => undefined);
               resolve();
             } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
@@ -1839,10 +1854,11 @@ export function useCall(
         // subscriptions, so send it a few times; the heartbeat continues after.
         const announce = () => {
           if (cancelled() || !inCallRef.current) return;
-          send("join", {
-            userId: self.id,
-            name: self.name,
-            host: isHostRef.current,
+    send("join", {
+      userId: self.id,
+      name: self.name,
+      avatar: self.avatar ?? null,
+      host: isHostRef.current,
             guest: isGuestRef.current,
             joinedAt: myJoinedAtRef.current,
             roomId: myRoomIdRef.current,
@@ -2590,6 +2606,58 @@ export function useCall(
     return () => window.removeEventListener(CALL_DEVICES_CHANGED_EVENT, applyOutput);
   }, []);
 
+  // Active-speaker highlight: poll every peer's analyser (plus our own mic)
+  // and surface the loudest participant.
+  useEffect(() => {
+    if (!inCall) {
+      setActiveSpeakerId(null);
+      return;
+    }
+    const context = getCallAudioContext();
+    let localAnalyser: AnalyserNode | null = null;
+    const localStream = localStreamRef.current;
+    if (context && localStream) {
+      try {
+        localAnalyser = context.createAnalyser();
+        localAnalyser.fftSize = 512;
+        context.createMediaStreamSource(localStream).connect(localAnalyser);
+      } catch {
+        localAnalyser = null;
+      }
+    }
+    const buffer = new Uint8Array(new ArrayBuffer(256));
+    const levelOf = (analyser: AnalyserNode): number => {
+      analyser.getByteTimeDomainData(buffer);
+      let sum = 0;
+      for (let index = 0; index < buffer.length; index += 1) {
+        const value = ((buffer[index] ?? 128) - 128) / 128;
+        sum += value * value;
+      }
+      return Math.sqrt(sum / buffer.length);
+    };
+    const timer = window.setInterval(() => {
+      let bestId: string | null = null;
+      let best = 0.045;
+      if (localAnalyser) {
+        const level = levelOf(localAnalyser);
+        if (level > best) {
+          best = level;
+          bestId = meRef.current.id;
+        }
+      }
+      for (const [peerId, peer] of peersRef.current.entries()) {
+        if (!peer.analyser) continue;
+        const level = levelOf(peer.analyser);
+        if (level > best) {
+          best = level;
+          bestId = peerId;
+        }
+      }
+      setActiveSpeakerId(bestId);
+    }, 220);
+    return () => window.clearInterval(timer);
+  }, [inCall]);
+
   return {
     inCall,
     joining,
@@ -2606,6 +2674,8 @@ export function useCall(
     isHost: hostId !== null && hostId === me.id,
     hostId,
     selfId: me.id,
+    selfAvatar: me.avatar ?? null,
+    activeSpeakerId,
     isGuest,
     conversationId: activeConversationId,
     myRoomId,

@@ -303,6 +303,8 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                 stream={call.screenSharing ? call.screenStream : call.localStream}
                 self
                 sharing={call.screenSharing}
+                speaking={call.activeSpeakerId === call.selfId}
+                avatarUrl={call.selfAvatar}
                 deafened={call.deafened}
                 serverMuted={call.serverMuted}
                 isHost={call.isHost}
@@ -315,6 +317,8 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                   muted={participant.muted || participant.serverMuted}
                   video={participant.video || participant.sharing}
                   sharing={participant.sharing}
+                  speaking={call.activeSpeakerId === participant.id}
+                  avatarUrl={participant.avatar}
                   stream={call.remoteStreams[participant.id] ?? null}
                   deafened={participant.deafened}
                   serverMuted={participant.serverMuted}

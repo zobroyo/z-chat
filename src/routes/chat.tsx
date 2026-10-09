@@ -1109,6 +1109,7 @@ function ChatPage() {
     {
       id: user?.id ?? "",
       name: me?.display_name || "You",
+      avatar: me?.avatar_url ?? null,
     },
     {
       // Accepting a call that belongs to another conversation switches the

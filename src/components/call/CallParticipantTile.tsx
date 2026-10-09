@@ -12,7 +12,7 @@ import {
   VolumeX,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
@@ -48,6 +48,10 @@ export type CallParticipantTileProps = {
   isGuest?: boolean;
   volume?: number;
   /** Current user is the host and may moderate this tile. */
+  /** Avatar image url for this participant, when known. */
+  avatarUrl?: string | null;
+  /** Highlight ring while this participant is the active speaker. */
+  speaking?: boolean;
   /** True while this participant is sharing their screen. */
   sharing?: boolean;
   canModerate?: boolean;
@@ -66,6 +70,13 @@ export type CallParticipantTileProps = {
  * status bottom-left and a hover-revealed options menu (volume, local mute,
  * host server-mute / kick / ban).
  */
+
+/** Stable pseudo-random tint for avatar squares: same name, same color. */
+function avatarTint(seed: string): string {
+  let hash = 0;
+  for (const char of seed) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return `hsl(${hash % 360} 45% 34%)`;
+}
 export function CallParticipantTile({
   name,
   muted,
@@ -79,6 +90,8 @@ export function CallParticipantTile({
   isGuest = false,
   volume = 100,
   canModerate = false,
+  avatarUrl = null,
+  speaking = false,
   sharing = false,
   onVolumeChange,
   onToggleLocalMute,
@@ -93,7 +106,10 @@ export function CallParticipantTile({
   return (
     <div
       data-testid="call-tile"
-      className="call-tile-enter group relative h-full min-h-0 w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] ring-1 ring-white/5 sm:rounded-3xl"
+      className={cn(
+        "call-tile-enter group relative h-full min-h-0 w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] ring-1 ring-white/5 sm:rounded-3xl",
+        speaking && "border-emerald-400/60 ring-2 ring-emerald-400/70",
+      )}
     >
       {showVideo ? (
         <>
@@ -103,7 +119,11 @@ export function CallParticipantTile({
       ) : (
         <div className="flex size-full items-center justify-center bg-gradient-to-br from-white/[0.07] via-transparent to-black/40">
           <Avatar className="size-16 sm:size-24">
-            <AvatarFallback className="bg-white/10 font-display text-lg font-semibold text-white/80 sm:text-2xl">
+            {avatarUrl ? <AvatarImage src={avatarUrl} alt={name} className="object-cover" /> : null}
+            <AvatarFallback
+              className="font-display text-lg font-semibold text-white/90 sm:text-2xl"
+              style={{ backgroundColor: avatarTint(name) }}
+            >
               {initialsOf(name)}
             </AvatarFallback>
           </Avatar>
