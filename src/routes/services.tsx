@@ -3,12 +3,13 @@ import {
   ArrowLeft,
   ChevronRight,
   CreditCard,
-  Download,
   Gamepad2,
   MonitorDown,
   Presentation,
   ShieldCheck,
 } from "lucide-react";
+
+import { DownloadButton } from "@/components/DownloadDialog";
 
 export const Route = createFileRoute("/services")({
   head: () => ({ meta: [{ title: "All Z services — ZChat" }] }),
@@ -40,9 +41,6 @@ export const Z_SERVICES = [
     icon: ShieldCheck,
   },
 ] as const;
-
-const DOWNLOAD_URL = "https://z-chat.men/media/downloads/ZChat-windows.zip?v=1";
-const EXE_URL = "https://z-chat.men/media/downloads/ZChat.exe?v=1";
 
 function ServicesPage() {
   return (
@@ -107,31 +105,20 @@ function ServicesPage() {
           </span>
         </Link>
 
-        <section className="surface-panel flex min-h-44 flex-col rounded-2xl p-5 shadow-lift">
+        <DownloadButton className="surface-panel group flex min-h-44 flex-col rounded-2xl p-5 text-left shadow-lift transition-transform hover:scale-[1.01]">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <MonitorDown className="size-6" />
           </span>
-          <span className="mt-4 block font-display text-lg font-bold text-foreground">Downloads</span>
+          <span className="mt-4 block font-display text-lg font-bold text-foreground">Download</span>
           <span className="mt-1 block flex-1 text-xs leading-5 text-muted-foreground">
-            ZChat for Windows — the desktop app, same chats in a native window. No installer: unzip
-            and run.
+            Get Z Chat on Windows, or install it as an app on iPhone and Android. macOS is coming
+            soon.
           </span>
-          <span className="mt-4 flex flex-wrap items-center gap-3">
-            <a
-              href={DOWNLOAD_URL}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <Download className="size-3.5" />
-              Windows ZIP
-            </a>
-            <a
-              href={EXE_URL}
-              className="text-xs underline underline-offset-2 hover:text-foreground"
-            >
-              just ZChat.exe
-            </a>
+          <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary">
+            Download
+            <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
           </span>
-        </section>
+        </DownloadButton>
       </div>
     </main>
   );
