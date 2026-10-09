@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { notifyAdmins } from "@/lib/notifyAdmins";
 
 // "Open Chat" — the ban conversation. A banned user and moderators exchange
 // messages in one thread keyed by the banned user's id. Works while banned.
@@ -54,6 +55,8 @@ export async function sendThreadMessage(
     .select("id, user_id, sender_id, is_moderator, body, created_at")
     .single();
   if (error) throw error;
+  // A user's message (not an admin reply) should ping the moderation team.
+  if (!isModerator) void notifyAdmins("appeal");
   return data as OpenChatMessage;
 }
 

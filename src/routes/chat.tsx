@@ -35,6 +35,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { useAuth } from "@/hooks/use-auth";
 import { useCall } from "@/hooks/use-call";
 import { checkIsAdmin } from "@/lib/admin";
+import { notifyAdmins } from "@/lib/notifyAdmins";
 import { supabase } from "@/integrations/supabase/client";
 import {
   createGroup,
@@ -174,8 +175,12 @@ function ChatPage() {
         reason: reason.trim(),
       })
       .then(({ error }) => {
-        if (error) toast.error(error.message);
-        else toast.success("Reported - an admin will review it.");
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        toast.success("Reported - an admin will review it.");
+        void notifyAdmins("report");
       });
   };
 

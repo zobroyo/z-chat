@@ -13,6 +13,7 @@ import {
   handleStripeWebhookRoute,
 } from "./lib/serverStripe";
 import {
+  handleAdminPushRoute,
   handleApprovalPushRoute,
   handlePushPublicKeyRoute,
   handleTestPushRoute,
@@ -110,6 +111,9 @@ export default {
         }
         if (url.pathname === "/api/push/test") {
           return await handleTestPushRoute(request);
+        }
+        if (url.pathname === "/api/push/admins") {
+          return await handleAdminPushRoute(request);
         }
         return new Response(JSON.stringify({ error: "Not found" }), {
           status: 404,

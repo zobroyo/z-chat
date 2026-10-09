@@ -4,6 +4,7 @@ import { Bell, Loader2, LogOut, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { notifyAdmins } from "@/lib/notifyAdmins";
 import { requestNotificationPermission, type NotificationState } from "@/lib/notifications";
 import { registerPushSubscription } from "@/lib/push";
 
@@ -199,6 +200,7 @@ export function ApplicationGate({ status }: Props) {
     }
     setAnswers(cleaned);
     setSubmitted(true);
+    void notifyAdmins("application");
   };
 
   // Permission is granted → registration runs automatically above, so only the

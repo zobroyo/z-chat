@@ -30,6 +30,23 @@ type LooseRpcClient = {
   rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<RpcResult>;
 };
 
+/**
+ * Minimal shape for service-role table access to tables not present in the
+ * generated Database types (e.g. push_subscriptions, which the app normally
+ * only touches through an admin RPC).
+ */
+type LooseResult = { data: unknown; error: { message?: string } | null };
+type LooseTable = {
+  select: (columns: string) => {
+    eq: (column: string, value: unknown) => PromiseLike<LooseResult>;
+    in: (column: string, values: unknown[]) => PromiseLike<LooseResult>;
+  };
+  delete: () => {
+    eq: (column: string, value: unknown) => PromiseLike<{ error: { message?: string } | null }>;
+  };
+};
+type LooseAdmin = { from: (table: string) => LooseTable };
+
 export type PushSendResult = {
   endpoint: string;
   ok: boolean;
@@ -416,5 +433,122 @@ export async function handleTestPushRoute(request: Request): Promise<Response> {
   } catch (error) {
     console.error("[push] test push failed", error);
     return json({ sent: 0, failed: 0, dead: 0, total: 0, error: "push_failed" }, 200, request);
+  }
+}
+
+// --- Admin notifications -----------------------------------------------------
+// Reports, applications and ban appeals originate from regular users, so this
+// route is callable by any signed-in user. To keep it from being an open spam
+// channel, the copy is authored here (the caller only picks a category and an
+// optional short detail) and the route is rate limited. Failures are swallowed
+// so the underlying action (reporting, applying, appealing) never breaks.
+
+type AdminNotifyKind = "report" | "application" | "appeal" | "signup";
+
+const ADMIN_NOTIFY: Record<
+  AdminNotifyKind,
+  { title: string; body: string; url: string; tag: string }
+> = {
+  report: {
+    title: "New message report",
+    body: "A message was reported — review it in the admin panel.",
+    url: "/admin/reports",
+    tag: "admin-report",
+  },
+  application: {
+    title: "New account application",
+    body: "Someone applied to join Z Chat.",
+    url: "/admin/applications",
+    tag: "admin-application",
+  },
+  appeal: {
+    title: "New Open Chat message",
+    body: "A ban appeal has a new message.",
+    url: "/admin/appeals",
+    tag: "admin-appeal",
+  },
+  signup: {
+    title: "New sign-up",
+    body: "A new Z Chat account was created.",
+    url: "/admin",
+    tag: "admin-signup",
+  },
+};
+
+function isAdminNotifyKind(value: unknown): value is AdminNotifyKind {
+  return typeof value === "string" && value in ADMIN_NOTIFY;
+}
+
+/**
+ * POST /api/push/admins { kind, detail? } — pushes a moderation alert to every
+ * admin's devices (excluding the caller). Returns send counts; never fails hard.
+ */
+export async function handleAdminPushRoute(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") return corsPreflight(request);
+  if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, request);
+  if (isRateLimited(request)) return json({ error: "Too many requests" }, 429, request);
+
+  try {
+    const auth = await authenticate(request);
+    if (!auth.ok) return auth.response;
+
+    let body: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = await request.json();
+      if (parsed && typeof parsed === "object") body = parsed as Record<string, unknown>;
+    } catch {
+      /* use defaults */
+    }
+
+    const kind = body["kind"];
+    if (!isAdminNotifyKind(kind)) {
+      return json({ error: "Unknown notification kind" }, 400, request);
+    }
+    const copy = ADMIN_NOTIFY[kind];
+    const detail =
+      typeof body["detail"] === "string" ? body["detail"].trim().slice(0, 140) : "";
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as unknown as LooseAdmin;
+
+    const adminLookup = await db.from("profiles").select("id").eq("is_admin", true);
+    if (adminLookup.error) throw adminLookup.error;
+    const adminIds = (Array.isArray(adminLookup.data) ? (adminLookup.data as { id: string }[]) : [])
+      .map((row) => row.id)
+      .filter((id) => id && id !== auth.user.id);
+    if (adminIds.length === 0) return json({ sent: 0, failed: 0, total: 0 }, 200, request);
+
+    const subsLookup = await db
+      .from("push_subscriptions")
+      .select("id, endpoint, p256dh, auth")
+      .in("user_id", adminIds);
+    if (subsLookup.error) throw subsLookup.error;
+    const subs = Array.isArray(subsLookup.data) ? (subsLookup.data as SubscriptionRow[]) : [];
+
+    const payload = {
+      title: copy.title,
+      body: detail ? `${copy.body} (${detail})` : copy.body,
+      url: copy.url,
+      tag: copy.tag,
+    };
+
+    let sent = 0;
+    let failed = 0;
+    for (const sub of subs) {
+      const result = await sendWebPush(sub, payload);
+      if (result.ok) {
+        sent += 1;
+      } else {
+        failed += 1;
+        if (result.dead) {
+          await db.from("push_subscriptions").delete().eq("id", sub.id);
+        }
+      }
+    }
+
+    return json({ sent, failed, total: subs.length }, 200, request);
+  } catch (error) {
+    console.error("[push] admin notification failed", error);
+    return json({ sent: 0, failed: 0, total: 0, error: "push_failed" }, 200, request);
   }
 }
