@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Camera, Check, Laptop, Loader2, LogOut, Moon, Sun } from "lucide-react";
 import { toast } from "sonner";
 
+import { AvatarCropDialog } from "@/components/AvatarCropDialog";
 import { UserAvatar } from "@/components/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,8 @@ function ProfilePage() {
   const [uploading, setUploading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const { mode, accent, setMode, setAccent } = useTheme();
 
@@ -125,10 +128,11 @@ function ProfilePage() {
     toast.success("Profile updated");
   };
 
-  const pickPhoto = async (file: File | null) => {
-    if (!file || !user) return;
+  const applyCroppedPhoto = async (blob: Blob) => {
+    if (!user) return;
     setUploading(true);
     try {
+      const file = new File([blob], "avatar.png", { type: blob.type || "image/png" });
       const path = await uploadAvatar(user.id, file);
       const { error } = await supabase
         .from("profiles")
@@ -137,11 +141,12 @@ function ProfilePage() {
       if (error) throw error;
       setProfile((current) => (current ? { ...current, avatar_url: path } : current));
       toast.success("Photo updated");
+      setCropOpen(false);
+      setCropFile(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not upload that photo");
     } finally {
       setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   };
 
@@ -260,7 +265,14 @@ function ProfilePage() {
               type="file"
               accept={IMAGE_ACCEPT}
               className="hidden"
-              onChange={(event) => void pickPhoto(event.target.files?.[0] ?? null)}
+              onChange={(event) => {
+                const picked = event.target.files?.[0] ?? null;
+                if (fileRef.current) fileRef.current.value = "";
+                if (picked) {
+                  setCropFile(picked);
+                  setCropOpen(true);
+                }
+              }}
             />
 
           </div>
@@ -336,6 +348,17 @@ function ProfilePage() {
         <LogOut className="mr-2 size-4" />
         Sign out
       </Button>
+
+      <AvatarCropDialog
+        file={cropFile}
+        open={cropOpen}
+        onOpenChange={(next) => {
+          setCropOpen(next);
+          if (!next) setCropFile(null);
+        }}
+        onApply={applyCroppedPhoto}
+        applying={uploading}
+      />
     </main>
   );
 }
