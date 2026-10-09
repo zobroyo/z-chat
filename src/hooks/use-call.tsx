@@ -2426,21 +2426,6 @@ export function useCall(
     };
   }, [leaveCall]);
 
-  // Switching conversations or accounts hangs up the current call — unless the
-  // call was accepted from an incoming ring while another conversation was
-  // open, in which case it keeps running in the background.
-  useEffect(() => {
-    if (!inCallRef.current) return;
-    if (callConversationRef.current === conversationId) {
-      // The UI caught up with a remotely accepted call; switching away again
-      // should hang up as usual.
-      remoteAcceptedRef.current = false;
-      if (joinedAsRef.current === me.id) return;
-    }
-    if (remoteAcceptedRef.current) return;
-    void leaveCall();
-  }, [me.id, conversationId, leaveCall]);
-
   // ---- Global ring channel (`call-ring:{userId}`) -----------------------------
 
   const handleRing = useCallback(

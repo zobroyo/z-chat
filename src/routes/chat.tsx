@@ -19,7 +19,6 @@ import {
 import { toast } from "sonner";
 import { OpenChatDialog } from "@/components/chat/OpenChatDialog";
 import { CallButton } from "@/components/call/CallButton";
-import { CallOverlay } from "@/components/call/CallOverlay";
 import { Composer } from "@/components/chat/Composer";
 import { ConversationMuteButton } from "@/components/chat/ConversationMuteButton";
 import { GamesAnnouncementDialog } from "@/components/chat/GamesAnnouncementDialog";
@@ -33,7 +32,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
-import { useCall } from "@/hooks/use-call";
+import { useCallContext } from "@/components/call/CallProvider";
 import { useCallPresence } from "@/hooks/use-call-presence";
 import { checkIsAdmin } from "@/lib/admin";
 import { notifyAdmins } from "@/lib/notifyAdmins";
@@ -650,11 +649,39 @@ function ChatPage() {
       return;
     }
 
+    // No ?c= in the URL (e.g. coming back from the admin panel or a Z service):
+    // reopen the last conversation this device had open instead of dropping to
+    // General.
+    let rememberedId: string | null = null;
+    try {
+      rememberedId = localStorage.getItem("zchat:last-conversation");
+    } catch {
+      rememberedId = null;
+    }
+    const remembered = rememberedId
+      ? conversations.find((item) => item.id === rememberedId)
+      : undefined;
+    if (remembered) {
+      setActiveId(remembered.id);
+      conversationInitializedRef.current = true;
+      return;
+    }
+
     if (generalRoom) {
       setActiveId(generalRoom.id);
       conversationInitializedRef.current = true;
     }
   }, [user, conversations, generalRoom]);
+
+  // Remember the open conversation so leaving and returning restores it.
+  useEffect(() => {
+    if (!activeId) return;
+    try {
+      localStorage.setItem("zchat:last-conversation", activeId);
+    } catch {
+      // Storage unavailable (private mode): the in-app default still applies.
+    }
+  }, [activeId]);
 
   // Load messages only after a real conversation ID has been resolved.
   useEffect(() => {
@@ -1115,24 +1142,13 @@ function ChatPage() {
 
   const me = user ? profileMap.get(user.id) : undefined;
 
-  const call = useCall(
-    activeId || null,
-    {
-      id: user?.id ?? "",
-      name: me?.display_name || "You",
-      avatar: me?.avatar_url ?? null,
-    },
-    {
-      // Admins keep host-level moderation powers in every call.
-      isAdmin,
-      // Accepting a call that belongs to another conversation switches the
-      // chat UI to it (the call overlay itself shows either way).
-      onSwitchConversation: (conversationId) => {
-        conversationInitializedRef.current = true;
-        openConversation(conversationId);
-      },
-    },
-  );
+  // The call lives globally (CallProvider) so it survives navigation between
+  // screens; here we read it and tell it which conversation the open chat is.
+  const { call, setContextConversation } = useCallContext();
+
+  useEffect(() => {
+    setContextConversation(activeId || null);
+  }, [activeId, setContextConversation]);
 
   // How many people are in this conversation's call right now (even if we're
   // not in it), so the header can offer a one-tap Join.
@@ -1628,8 +1644,6 @@ function ChatPage() {
           onCancelReply={() => setReplyingTo(null)}
         />
       </main>
-
-      <CallOverlay call={call} conversationTitle={activeTitle} />
     </div>
   );
 }

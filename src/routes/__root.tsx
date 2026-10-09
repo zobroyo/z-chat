@@ -18,7 +18,7 @@ import {
   QUICK_TUNNEL_BOOT_SCRIPT,
 } from "@/hooks/use-quick-tunnel-handoff";
 import { Toaster } from "@/components/ui/sonner";
-import { GlobalCallRinger } from "@/components/call/GlobalCallRinger";
+import { CallProvider } from "@/components/call/CallProvider";
 import { ThemeProvider, themeBootScript } from "@/components/theme/ThemeProvider";
 
 function NotFoundComponent() {
@@ -173,10 +173,11 @@ function RootComponent() {
         <QuickTunnelHandoff />
         <QuickTunnelGate>
           <AuthProvider>
-            {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-            <Outlet />
-            <GlobalCallRinger />
-            <Toaster position="top-center" />
+            <CallProvider>
+              {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+              <Outlet />
+              <Toaster position="top-center" />
+            </CallProvider>
           </AuthProvider>
         </QuickTunnelGate>
       </ThemeProvider>
