@@ -200,9 +200,14 @@ function ChatPage() {
   const [query, setQuery] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [banAppealOpen, setBanAppealOpen] = useState(false);
+  const [isDesktopApp, setIsDesktopApp] = useState(false);
   const isNearBottomRef = useRef(true);
   const messageEntryTimersRef = useRef(new Map<string, number>());
   const conversationSwitchTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    setIsDesktopApp(navigator.userAgent.includes("ZChatDesktop"));
+  }, []);
 
   const handleSelectConversation = useCallback(
     (id: string) => {
@@ -1244,13 +1249,15 @@ function ChatPage() {
       </div>
 
       <div className="mx-3 mb-2 space-y-2">
-        <a
-          href="https://z-chat.men/media/downloads/ZChat-windows.zip?v=1"
-          className="flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <Download className="size-4" />
-          Download for Windows
-        </a>
+        {!isDesktopApp && (
+          <a
+            href="https://z-chat.men/media/downloads/ZChat-windows.zip?v=1"
+            className="flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Download className="size-4" />
+            Download for Windows
+          </a>
+        )}
 
         <div className="flex items-center justify-center gap-3 text-xs text-muted-foreground">
           <Link to="/services" className="transition-colors hover:text-foreground">
