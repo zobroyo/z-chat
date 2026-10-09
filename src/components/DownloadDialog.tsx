@@ -12,6 +12,12 @@ import { cn } from "@/lib/utils";
 
 const WINDOWS_ZIP = "https://z-chat.men/media/downloads/ZChat-windows.zip?v=1";
 const WINDOWS_EXE = "https://z-chat.men/media/downloads/ZChat.exe?v=1";
+const ANDROID_APK = "https://z-chat.men/media/downloads/ZChat.apk";
+
+/** True inside the Windows desktop app (its WebView UA carries ZChatDesktop). */
+function isDesktopApp(): boolean {
+  return typeof navigator !== "undefined" && navigator.userAgent.includes("ZChatDesktop");
+}
 
 type Platform = "windows" | "macos" | "ios" | "android";
 type Browser = "safari" | "chrome" | "firefox" | "samsung" | "edge" | "other";
@@ -25,7 +31,7 @@ const PLATFORMS: {
   { id: "windows", name: "Windows", hint: "Desktop app (zip / .exe)", icon: Monitor },
   { id: "macos", name: "macOS", hint: "Coming soon", icon: Apple },
   { id: "ios", name: "iPhone / iPad", hint: "Install as an app (PWA)", icon: Smartphone },
-  { id: "android", name: "Android", hint: "Install as an app (PWA)", icon: Tablet },
+  { id: "android", name: "Android", hint: "Download the APK or install as an app", icon: Tablet },
 ];
 
 function detectPlatform(): Platform | null {
@@ -179,7 +185,14 @@ function PlatformDetail({
   return (
     <div>
       {back}
-      <p className="mt-1 text-sm font-semibold text-foreground">Install Z Chat on Android</p>
+      <a
+        href={ANDROID_APK}
+        className="mt-1 flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-105"
+      >
+        <Download className="size-4" />
+        Download Android APK
+      </a>
+      <p className="mt-3 text-sm font-semibold text-foreground">Or install it as an app</p>
       <p className="mt-1 text-xs leading-5 text-muted-foreground">
         {browser === "samsung"
           ? "Samsung Internet"
@@ -229,7 +242,7 @@ export function DownloadDialog({
 
         {platform === null ? (
           <div className="grid gap-2">
-            {PLATFORMS.map((entry) => {
+            {PLATFORMS.filter((entry) => !(isDesktopApp() && entry.id === "windows")).map((entry) => {
               const Icon = entry.icon;
               const isThisDevice = entry.id === detected;
               return (
