@@ -316,6 +316,8 @@ export function useCall(
   const [myRoomId, setMyRoomId] = useState<string | null>(null);
   const [breakoutRooms, setBreakoutRooms] = useState<BreakoutRoom[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  /** Moderation notice ("You were removed…" / "You are banned…"). */
+  const [notice, setNotice] = useState<string | null>(null);
 
   const isGuest = options?.guest === true;
   const listenForIncoming = options?.listenForIncoming !== false && !isGuest;
@@ -380,6 +382,14 @@ export function useCall(
   const assignmentsRef = useRef<Record<string, string | null>>({});
   const myRoomIdRef = useRef<string | null>(null);
   const lastSoundAtRef = useRef(0);
+  /** Ids banned for the lifetime of the current call session. */
+  const bannedRef = useRef(new Set<string>());
+  /** Local block for rejoining a call this client was banned from (same page). */
+  const selfBanRef = useRef<{ conversationId: string; message: string } | null>(null);
+  const ringOnJoinRef = useRef(options?.ringOnJoin !== false);
+  ringOnJoinRef.current = options?.ringOnJoin !== false;
+  /** Late-bound `leaveCall` so moderation handlers can tear the call down. */
+  const leaveCallRef = useRef<() => void>(() => {});
 
   const send = useCallback((event: string, payload: Record<string, unknown>) => {
     const channel = channelRef.current;
@@ -390,6 +400,16 @@ export function useCall(
       // `_push` throws when the channel has not finished joining; drop the event.
     }
   }, []);
+
+  /**
+   * Host: re-broadcast the full ban list. Sent to every participant on join
+   * (so late joiners learn the bans) and whenever host election picks a new
+   * host, so moderation state survives the previous host leaving.
+   */
+  const broadcastBans = useCallback(() => {
+    if (!isHostRef.current) return;
+    send("bans", { ids: [...bannedRef.current], by: meRef.current.id });
+  }, [send]);
 
   /**
    * Broadcasts an event to another user's personal ring channel. Channels are
@@ -561,8 +581,12 @@ export function useCall(
       hostIdRef.current = nextHost;
       isHostRef.current = nextHost === self.id;
       setHostId(nextHost);
+      // A newly elected host inherits the ban list every client kept; publish
+      // it so participants that joined late (or missed the original ban)
+      // converge on the same moderation state.
+      if (isHostRef.current) broadcastBans();
     }
-  }, []);
+  }, [broadcastBans]);
 
   const removeParticipant = useCallback(
     (id: string) => {
@@ -645,6 +669,31 @@ export function useCall(
       removeParticipant(peerId);
     },
     [removeParticipant, removeRemoteStream],
+  );
+
+  /** Forgets a participant and tears down its connection (kick / ban / leave). */
+  const dropParticipant = useCallback(
+    (participantId: string) => {
+      if (!participantId) return;
+      volumesRef.current.delete(participantId);
+      localMutedRef.current.delete(participantId);
+      if (peersRef.current.has(participantId)) closePeer(participantId);
+      if (knownRef.current.delete(participantId)) commitParticipants();
+      recomputeHost();
+    },
+    [closePeer, commitParticipants, recomputeHost],
+  );
+
+  /** Adds an id to the session ban list and drops it from the call. */
+  const applyBan = useCallback(
+    (participantId: string) => {
+      if (!participantId) return;
+      const wasKnown = bannedRef.current.has(participantId);
+      bannedRef.current.add(participantId);
+      dropParticipant(participantId);
+      if (!wasKnown && hostIdRef.current) broadcastBans();
+    },
+    [broadcastBans, dropParticipant],
   );
 
   const addIce = useCallback((peerId: string, candidate: RTCIceCandidateInit) => {
@@ -1012,10 +1061,19 @@ export function useCall(
       const userId = data?.userId;
       if (!inCallRef.current || !userId || userId === self.id) return;
 
-      if (data.guest === true) {
+      // Banned participants are never re-admitted. The host reminds the
+      // banned client (which may have reloaded and lost its local ban list),
+      // so it leaves the UI with the ban notice instead of hanging.
+      if (bannedRef.current.has(userId)) {
+        if (isHostRef.current) send("ban", { target: userId, by: self.id });
+        return;
+      }
+
+      if (data.guest === true || data.key) {
         const expected = guestKeyRef.current;
-        // A guest who does not carry the invite key for this call is ignored,
-        // so a leaked conversation id alone does not let strangers in.
+        // A joiner that carries a link key (guest, or a signed-in user who
+        // opened /call/<id>?k=...) must present the exact invite key once any
+        // participant knows it.
         if (expected && data.key !== expected) return;
       }
 
@@ -1037,9 +1095,10 @@ export function useCall(
       recomputeHost();
 
       if (isHostRef.current) {
-        // Bring the newcomer up to date on breakouts and the guest invite key.
+        // Bring the newcomer up to date on breakouts, invites and bans.
         broadcastRooms(roomsRef.current, assignmentsRef.current);
         if (guestKeyRef.current) broadcastState();
+        if (bannedRef.current.size > 0) broadcastBans();
       }
 
       // Peers in other breakout rooms stay disconnected.
@@ -1050,7 +1109,15 @@ export function useCall(
       // / still-negotiating checks live in maybeConnectPeer).
       await maybeConnectPeer(userId, data.name, { force: true });
     },
-    [broadcastRooms, broadcastState, maybeConnectPeer, patchParticipant, recomputeHost],
+    [
+      broadcastBans,
+      broadcastRooms,
+      broadcastState,
+      maybeConnectPeer,
+      patchParticipant,
+      recomputeHost,
+      send,
+    ],
   );
 
   const handleOffer = useCallback(
@@ -1059,6 +1126,7 @@ export function useCall(
       if (!data?.from || !data.sdp || !inCallRef.current) return;
       if (data.to && data.to !== self.id) return;
       if (data.from === self.id) return;
+      if (bannedRef.current.has(data.from)) return;
       if ((assignmentsRef.current[data.from] ?? null) !== myRoomIdRef.current) return;
 
       const peer = createPeer(data.from, data.name);
@@ -1278,6 +1346,77 @@ export function useCall(
     [applyServerMute],
   );
 
+  /** Host kicked a participant: everyone drops it, the target leaves. */
+  const handleKick = useCallback(
+    (data: KickPayload | null) => {
+      if (!data?.target || !data.by) return;
+      if (data.by === meRef.current.id) return;
+      // Only the current host's kick is honored.
+      if (hostIdRef.current && data.by !== hostIdRef.current) return;
+
+      if (data.target === meRef.current.id) {
+        const message = "You were removed from this call";
+        setNotice(message);
+        setError(null);
+        toast.error(message);
+        leaveCallRef.current();
+        return;
+      }
+      dropParticipant(data.target);
+    },
+    [dropParticipant],
+  );
+
+  /** Host banned a participant for the rest of the call session. */
+  const handleBan = useCallback(
+    (data: BanPayload | null) => {
+      if (!data?.target || !data.by) return;
+      if (data.by === meRef.current.id) return;
+      if (hostIdRef.current && data.by !== hostIdRef.current) return;
+
+      if (data.target === meRef.current.id) {
+        const message = "You are banned from this call";
+        bannedRef.current.add(meRef.current.id);
+        const conversation = callConversationRef.current;
+        if (conversation) selfBanRef.current = { conversationId: conversation, message };
+        setNotice(message);
+        setError(null);
+        toast.error(message);
+        leaveCallRef.current();
+        return;
+      }
+      applyBan(data.target);
+    },
+    [applyBan],
+  );
+
+  /** Host re-broadcast of the full ban list (on join / host election). */
+  const handleBans = useCallback(
+    (data: BansPayload | null) => {
+      if (!data?.by || !Array.isArray(data.ids)) return;
+      if (data.by === meRef.current.id) return;
+      if (hostIdRef.current && data.by !== hostIdRef.current) return;
+
+      for (const id of data.ids) {
+        if (typeof id !== "string" || !id || bannedRef.current.has(id)) continue;
+        if (id === meRef.current.id) {
+          const message = "You are banned from this call";
+          bannedRef.current.add(id);
+          const conversation = callConversationRef.current;
+          if (conversation) selfBanRef.current = { conversationId: conversation, message };
+          setNotice(message);
+          toast.error(message);
+          leaveCallRef.current();
+          continue;
+        }
+        applyBan(id);
+      }
+    },
+    [applyBan],
+  );
+
+  const clearNotice = useCallback(() => setNotice(null), []);
+
   const handleSound = useCallback((data: SoundPayload | null) => {
     if (!data?.soundId || data.userId === meRef.current.id) return;
     playCallSound(data.soundId);
@@ -1357,6 +1496,10 @@ export function useCall(
     knownRef.current.clear();
     volumesRef.current.clear();
     localMutedRef.current.clear();
+    // Session bans only live for one call; the local block against rejoining a
+    // call this client was banned from (selfBanRef) intentionally survives so
+    // the rejoin attempt is declined immediately.
+    bannedRef.current.clear();
 
     setParticipants([]);
     setRemoteStreams({});
@@ -1379,6 +1522,15 @@ export function useCall(
       const targetConversation = targetConversationOverride ?? conversationIdRef.current;
       if (!targetConversation || !self.id || inCallRef.current || joiningRef.current) return;
 
+      // A client banned from this call stays banned for the page session; the
+      // link/rejoin path is declined immediately with the same notice. (A full
+      // reload loses this local block and the host re-bans on the next join.)
+      if (selfBanRef.current && selfBanRef.current.conversationId === targetConversation) {
+        setError(null);
+        setNotice(selfBanRef.current.message);
+        return;
+      }
+
       if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
         setError("This browser does not support calls.");
         return;
@@ -1390,6 +1542,7 @@ export function useCall(
       joiningRef.current = true;
       setJoining(true);
       setError(null);
+      setNotice(null);
       myJoinedAtRef.current = Date.now();
 
       // Watchdog: never leave the UI stuck on "Joining…".
@@ -1452,6 +1605,15 @@ export function useCall(
           })
           .on("broadcast", { event: "mod" }, (message) => {
             handleMod(asPayload<ModPayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "kick" }, (message) => {
+            handleKick(asPayload<KickPayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "ban" }, (message) => {
+            handleBan(asPayload<BanPayload>(message["payload"]));
+          })
+          .on("broadcast", { event: "bans" }, (message) => {
+            handleBans(asPayload<BansPayload>(message["payload"]));
           })
           .on("broadcast", { event: "sound" }, (message) => {
             handleSound(asPayload<SoundPayload>(message["payload"]));
@@ -1582,7 +1744,7 @@ export function useCall(
             guest: isGuestRef.current,
             joinedAt: myJoinedAtRef.current,
             roomId: myRoomIdRef.current,
-            ...(isGuestRef.current && guestKeyRef.current ? { key: guestKeyRef.current } : {}),
+            ...(guestKeyRef.current ? { key: guestKeyRef.current } : {}),
           });
           broadcastState();
         };
@@ -1593,8 +1755,11 @@ export function useCall(
         startHeartbeat();
 
         if (isHostRef.current) ensureGuestKey();
-        // Tell the members of this conversation on their personal ring channel.
-        if (!isGuestRef.current) void ringConversationMembers(targetConversation);
+        // Tell the members of this conversation on their personal ring channel
+        // (skipped for link joins, who were already told by the link).
+        if (!isGuestRef.current && ringOnJoinRef.current) {
+          void ringConversationMembers(targetConversation);
+        }
       } catch (cause) {
         if (cancelled()) {
           // The watchdog or teardown already cleaned up and set the error.
@@ -1641,8 +1806,11 @@ export function useCall(
       commitParticipants,
       ensureGuestKey,
       handleAnswer,
+      handleBan,
+      handleBans,
       handleIce,
       handleJoin,
+      handleKick,
       handleLeave,
       handleMod,
       handleOffer,
@@ -1680,6 +1848,9 @@ export function useCall(
 
     teardown();
   }, [sendRing, teardown]);
+  leaveCallRef.current = () => {
+    void leaveCall();
+  };
 
   const toggleMute = useCallback(() => {
     if (!inCallRef.current) return;
@@ -1818,6 +1989,29 @@ export function useCall(
       applyServerMute(participantId, value);
     },
     [applyServerMute, send],
+  );
+
+  /** Host action: remove a participant from the call. They may rejoin. */
+  const kickParticipant = useCallback(
+    (participantId: string) => {
+      if (!isHostRef.current || !participantId || participantId === meRef.current.id) return;
+      send("kick", { target: participantId, by: meRef.current.id });
+      dropParticipant(participantId);
+      toast.success("Participant removed from the call");
+    },
+    [dropParticipant, send],
+  );
+
+  /** Host action: ban a participant for the rest of the call session. */
+  const banParticipant = useCallback(
+    (participantId: string) => {
+      if (!isHostRef.current || !participantId || participantId === meRef.current.id) return;
+      send("ban", { target: participantId, by: meRef.current.id });
+      applyBan(participantId);
+      broadcastBans();
+      toast.success("Participant banned from this call");
+    },
+    [applyBan, broadcastBans, send],
   );
 
   // ---- Soundboard ------------------------------------------------------------
@@ -2176,6 +2370,7 @@ export function useCall(
     deafened,
     serverMuted,
     error,
+    notice,
     incomingCall,
     isHost: hostId !== null && hostId === me.id,
     hostId,
@@ -2197,6 +2392,9 @@ export function useCall(
     setParticipantVolume,
     toggleParticipantLocalMute,
     setParticipantServerMute,
+    kickParticipant,
+    banParticipant,
+    clearNotice,
     playSound,
     createBreakoutRoom,
     moveParticipantToRoom,
