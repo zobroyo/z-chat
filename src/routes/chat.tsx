@@ -1319,12 +1319,6 @@ function ChatPage() {
           <span aria-hidden="true" className="text-border">
             ·
           </span>
-          <Link to="/lunch-card" className="transition-colors hover:text-foreground">
-            Lunch card
-          </Link>
-          <span aria-hidden="true" className="text-border">
-            ·
-          </span>
           <a
             href="https://forms.gle/FdvZyi4nLM92i1yaA"
             target="_blank"

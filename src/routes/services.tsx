@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ChevronRight,
+  CreditCard,
   Download,
   Gamepad2,
   MonitorDown,
@@ -85,6 +86,26 @@ function ServicesPage() {
             </span>
           </Link>
         ))}
+
+        <Link
+          to="/lunch-card"
+          className="surface-panel group flex min-h-44 flex-col rounded-2xl p-5 shadow-lift transition-transform hover:scale-[1.01]"
+        >
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <CreditCard className="size-6" />
+          </span>
+          <span className="mt-4 block font-display text-lg font-bold text-foreground">
+            Custom lunch card
+          </span>
+          <span className="mt-1 block flex-1 text-xs leading-5 text-muted-foreground">
+            Your two photos on a card — 35 AED, 2 month warranty. Pick, crop, preview and pay right
+            here.
+          </span>
+          <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary">
+            Order
+            <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </Link>
 
         <section className="surface-panel flex min-h-44 flex-col rounded-2xl p-5 shadow-lift">
           <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
