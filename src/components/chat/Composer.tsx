@@ -4,6 +4,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { exactEmoji, searchEmoji, type EmojiMatch } from "@/lib/emoji";
 import { IMAGE_ACCEPT, MAX_IMAGE_BYTES, validateImage } from "@/lib/media";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +46,8 @@ export function Composer({
   const [replyClosing, setReplyClosing] = useState(false);
   const [mention, setMention] = useState<{ query: string; start: number } | null>(null);
   const [mentionIndex, setMentionIndex] = useState(0);
+  const [emoji, setEmoji] = useState<{ query: string; start: number } | null>(null);
+  const [emojiIndex, setEmojiIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewUrlRef = useRef<string | null>(null);
@@ -65,12 +68,40 @@ export function Composer({
     return [...people, ...time];
   }, [mentionCandidates, mention]);
 
+  const emojiOptions = useMemo<EmojiMatch[]>(
+    () => (emoji ? searchEmoji(emoji.query) : []),
+    [emoji],
+  );
+
   const detectMention = (text: string, caret: number) => {
     const before = text.slice(0, caret);
     const match = /(^|\s)@([^\s@]{0,32})$/.exec(before);
     if (!match) return null;
     const query = match[2] ?? "";
     return { query, start: caret - query.length - 1 };
+  };
+
+  const detectEmoji = (text: string, caret: number) => {
+    const before = text.slice(0, caret).toLowerCase();
+    const match = /(^|\s):([a-z0-9_+-]{1,32})$/.exec(before);
+    if (!match) return null;
+    const query = match[2] ?? "";
+    return { query, start: caret - query.length - 1 };
+  };
+
+  const insertEmoji = (option: EmojiMatch) => {
+    const textarea = textareaRef.current;
+    if (!textarea || !emoji) return;
+    const caret = textarea.selectionStart ?? value.length;
+    const insert = `${option.emoji} `;
+    const next = `${value.slice(0, emoji.start)}${insert}${value.slice(caret)}`;
+    setValue(next);
+    setEmoji(null);
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const position = emoji.start + insert.length;
+      textarea.setSelectionRange(position, position);
+    });
   };
 
   const insertMention = (option: MentionOption) => {
@@ -130,6 +161,7 @@ export function Composer({
     // and copies a shareable guest link instead of sending a message.
     if (value.trim().toLowerCase() === "/call" && onCallCommand) {
       setMention(null);
+      setEmoji(null);
       setValue("");
       clearFile();
       onTypingChange?.(false);
@@ -144,6 +176,7 @@ export function Composer({
 
     if (!value.trim() && !file) return;
     setMention(null);
+    setEmoji(null);
 
     const body = value;
     const pickedFile = file;
@@ -243,6 +276,31 @@ export function Composer({
         </div>
       )}
 
+      {emoji && emojiOptions.length > 0 && (
+        <div className="absolute bottom-full left-3 z-20 mb-2 w-64 overflow-hidden rounded-xl border border-border bg-surface-2 shadow-xl">
+          <p className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">
+            Emoji · Tab to insert
+          </p>
+          {emojiOptions.map((option, index) => (
+            <button
+              key={option.name}
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => insertEmoji(option)}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm",
+                index === emojiIndex
+                  ? "bg-primary/15 text-foreground"
+                  : "text-muted-foreground hover:bg-surface",
+              )}
+            >
+              <span className="text-base leading-none">{option.emoji}</span>
+              <span className="truncate">:{option.name}:</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       <form
         className="flex items-end gap-2"
         onSubmit={(event) => {
@@ -292,8 +350,56 @@ export function Composer({
             const caret = event.target.selectionStart ?? nextValue.length;
             setMention(detectMention(nextValue, caret));
             setMentionIndex(0);
+            setEmoji(detectEmoji(nextValue, caret));
+            setEmojiIndex(0);
           }}
           onKeyDown={(event) => {
+            if (emoji && emojiOptions.length > 0) {
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setEmojiIndex((index) => (index + 1) % emojiOptions.length);
+                return;
+              }
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setEmojiIndex((index) => (index - 1 + emojiOptions.length) % emojiOptions.length);
+                return;
+              }
+              if (event.key === "Enter" || event.key === "Tab") {
+                event.preventDefault();
+                insertEmoji(emojiOptions[emojiIndex] ?? emojiOptions[0]!);
+                return;
+              }
+              if (event.key === "Escape") {
+                event.preventDefault();
+                setEmoji(null);
+                return;
+              }
+            }
+            if (event.key === "Tab") {
+              // Full shortcode already typed (":sob:") -> Tab turns it into 😭.
+              const caret = textareaRef.current?.selectionStart ?? value.length;
+              const complete = /(^|\s):([a-z0-9_+-]{1,32}):$/.exec(value.slice(0, caret).toLowerCase());
+              const name = complete?.[2];
+              if (name) {
+                const found = exactEmoji(name);
+                if (found) {
+                  event.preventDefault();
+                  const start = caret - name.length - 2;
+                  const next = `${value.slice(0, start)}${found} ${value.slice(caret)}`;
+                  setValue(next);
+                  setEmoji(null);
+                  requestAnimationFrame(() => {
+                    const textarea = textareaRef.current;
+                    if (!textarea) return;
+                    textarea.focus();
+                    const position = start + found.length + 1;
+                    textarea.setSelectionRange(position, position);
+                  });
+                  return;
+                }
+              }
+            }
             if (mention && mentionOptions.length > 0) {
               if (event.key === "ArrowDown") {
                 event.preventDefault();
@@ -323,7 +429,10 @@ export function Composer({
               void submit();
             }
           }}
-          onBlur={() => setMention(null)}
+          onBlur={() => {
+            setMention(null);
+            setEmoji(null);
+          }}
           rows={1}
           maxLength={2000}
           placeholder={placeholder ?? "Write a message"}

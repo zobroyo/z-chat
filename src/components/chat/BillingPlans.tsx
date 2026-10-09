@@ -125,7 +125,7 @@ export function BillingPlans() {
   };
 
   return (
-    <section className="mb-5" aria-labelledby="billing-title">
+    <section id="plans" className="mb-5" aria-labelledby="billing-title">
       <h2 id="billing-title" className="mb-3 px-1 text-sm font-semibold text-muted-foreground">
         Plans
       </h2>

@@ -1266,6 +1266,12 @@ function ChatPage() {
           <span aria-hidden="true" className="text-border">
             ·
           </span>
+          <Link to="/profile" hash="plans" className="transition-colors hover:text-foreground">
+            Plans
+          </Link>
+          <span aria-hidden="true" className="text-border">
+            ·
+          </span>
           <a
             href="https://forms.gle/FdvZyi4nLM92i1yaA"
             target="_blank"
