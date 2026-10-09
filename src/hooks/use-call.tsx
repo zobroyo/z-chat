@@ -99,6 +99,44 @@ const ICE_SERVERS: RTCIceServer[] = [
   },
 ];
 
+/*
+ * Cloudflare global TURN (minted at call time from /api/turn-credentials).
+ * This is what makes international calls work without any router port
+ * forwarding: Cloudflare relays over plain TURN ports plus TLS 443, which
+ * passes through virtually every home and mobile network. The self-hosted
+ * coturn stays as a fallback for the cases it can serve.
+ */
+let dynamicIceCache: { servers: RTCIceServer[]; at: number } | null = null;
+
+async function loadIceServers(): Promise<RTCIceServer[]> {
+  if (dynamicIceCache && Date.now() - dynamicIceCache.at < 15 * 60_000) {
+    return dynamicIceCache.servers;
+  }
+  try {
+    const response = await fetch("/api/turn-credentials", {
+      headers: { accept: "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(6000),
+    });
+    if (!response.ok) return ICE_SERVERS;
+    const data: unknown = await response.json();
+    const rawList =
+      data && typeof data === "object"
+        ? (data as { iceServers?: unknown }).iceServers
+        : undefined;
+    const list = Array.isArray(rawList) ? (rawList as RTCIceServer[]) : [];
+    const usable = list.filter(
+      (entry) => entry && (typeof entry.urls === "string" || Array.isArray(entry.urls)),
+    );
+    if (!usable.length) return ICE_SERVERS;
+    const servers = [...usable, ...ICE_SERVERS];
+    dynamicIceCache = { servers, at: Date.now() };
+    return servers;
+  } catch {
+    return ICE_SERVERS;
+  }
+}
+
 const CHANNEL_TIMEOUT_MS = 15_000;
 /** Give a fresh offer time to finish ICE gathering/checks before rebuilding. */
 const CONNECT_GRACE_MS = 15_000;
@@ -375,6 +413,7 @@ export function useCall(
   const screenStreamRef = useRef<MediaStream | null>(null);
   const [screenSharing, setScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
+  const iceServersRef = useRef<RTCIceServer[]>(ICE_SERVERS);
   const deafenedRef = useRef(false);
   const serverMutedRef = useRef(false);
   const isGuestRef = useRef(isGuest);
@@ -761,7 +800,7 @@ export function useCall(
         return existing;
       }
 
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
       const stream = new MediaStream();
       const peer: Peer = {
         pc,
@@ -1581,7 +1620,9 @@ export function useCall(
         // the soundboard work immediately.
         void resumeCallAudio();
 
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        // Refresh the relay configuration for this call before any peer exists.
+      iceServersRef.current = await loadIceServers();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         if (cancelled()) {
           stream.getTracks().forEach((track) => track.stop());
           return;

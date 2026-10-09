@@ -6,6 +6,7 @@ import { handleDeployHookRoute } from "./lib/serverDeployHook";
 import { handleLinkPreviewRoute } from "./lib/serverLinkPreview";
 import { handleModerateRoute, handleSendMessageRoute } from "./lib/serverModeration";
 import { handleQuickTunnelPublicRoute, handleSiteTunnelsRoute } from "./lib/serverTunnels";
+import { handleTurnCredentialsRoute } from "./lib/serverTurnCredentials";
 import {
   handleApprovalPushRoute,
   handlePushPublicKeyRoute,
@@ -136,6 +137,18 @@ export default {
       } catch (error) {
         console.error(error);
         return new Response(JSON.stringify({ zchat: { enabled: false, url: "" } }), {
+          status: 500,
+          headers: { "content-type": "application/json" },
+        });
+      }
+    }
+
+    if (url.pathname === "/api/turn-credentials") {
+      try {
+        return await handleTurnCredentialsRoute(request);
+      } catch (error) {
+        console.error(error);
+        return new Response(JSON.stringify({ iceServers: [] }), {
           status: 500,
           headers: { "content-type": "application/json" },
         });
