@@ -15,6 +15,7 @@ import {
 import {
   handleAdminPushRoute,
   handleApprovalPushRoute,
+  handleCallPushRoute,
   handlePushPublicKeyRoute,
   handleTestPushRoute,
 } from "./lib/serverPush";
@@ -114,6 +115,9 @@ export default {
         }
         if (url.pathname === "/api/push/admins") {
           return await handleAdminPushRoute(request);
+        }
+        if (url.pathname === "/api/push/call") {
+          return await handleCallPushRoute(request);
         }
         return new Response(JSON.stringify({ error: "Not found" }), {
           status: 404,

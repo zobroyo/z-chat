@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { callAudioRunning, getCallAudioContext, resumeCallAudio } from "@/lib/call-audio";
 import { buildGuestCallLink } from "@/lib/call-guest";
+import { notifyIncomingCall } from "@/lib/callNotify";
 import { CALL_SOUNDS, playCallSound } from "@/lib/call-sounds";
 import { startRingtone, type RingtoneHandle } from "@/lib/ringtone";
 
@@ -618,6 +619,10 @@ export function useCall(
       }
 
       ringTargetsRef.current = ids;
+      // The in-app ring only reaches online clients; also fire a device push so
+      // offline / backgrounded members still see the call. Only the person who
+      // started the call pushes, so joiners don't spam "X is calling".
+      if (isHostRef.current && ids.length > 0) void notifyIncomingCall(targetConversation);
       const payload = {
         conversationId: targetConversation,
         callerId: self.id,

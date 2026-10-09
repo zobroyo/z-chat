@@ -552,3 +552,95 @@ export async function handleAdminPushRoute(request: Request): Promise<Response> 
     return json({ sent: 0, failed: 0, total: 0, error: "push_failed" }, 200, request);
   }
 }
+
+/**
+ * POST /api/push/call { conversation_id } — rings the other members of a
+ * conversation on their devices. The caller must belong to the conversation, so
+ * it doubles as the membership check. Used alongside the in-app ring so an
+ * offline / backgrounded member still sees that someone is calling.
+ */
+export async function handleCallPushRoute(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") return corsPreflight(request);
+  if (request.method !== "POST") return json({ error: "Method not allowed" }, 405, request);
+  if (isRateLimited(request)) return json({ error: "Too many requests" }, 429, request);
+
+  try {
+    const auth = await authenticate(request);
+    if (!auth.ok) return auth.response;
+
+    let body: Record<string, unknown> = {};
+    try {
+      const parsed: unknown = await request.json();
+      if (parsed && typeof parsed === "object") body = parsed as Record<string, unknown>;
+    } catch {
+      /* use defaults */
+    }
+
+    const conversationId =
+      typeof body["conversation_id"] === "string" ? body["conversation_id"].trim() : "";
+    if (!UUID_RE.test(conversationId)) {
+      return json({ error: "conversation_id is required" }, 400, request);
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as unknown as LooseAdmin;
+
+    const membership = await db
+      .from("conversation_members")
+      .select("user_id")
+      .eq("conversation_id", conversationId);
+    if (membership.error) throw membership.error;
+    const memberIds = Array.isArray(membership.data)
+      ? (membership.data as { user_id: string }[]).map((row) => row.user_id)
+      : [];
+    if (!memberIds.includes(auth.user.id)) {
+      return json({ error: "Not a member of this call" }, 403, request);
+    }
+
+    const recipients = memberIds.filter((id) => id && id !== auth.user.id);
+    if (recipients.length === 0) return json({ sent: 0, failed: 0, total: 0 }, 200, request);
+
+    const callerLookup = await db.from("profiles").select("display_name").eq("id", auth.user.id);
+    const callerName = Array.isArray(callerLookup.data)
+      ? ((callerLookup.data[0] as { display_name?: string } | undefined)?.display_name ?? "Someone")
+      : "Someone";
+    const convLookup = await db.from("conversations").select("name").eq("id", conversationId);
+    const convName = Array.isArray(convLookup.data)
+      ? ((convLookup.data[0] as { name?: string | null } | undefined)?.name ?? null)
+      : null;
+
+    const subsLookup = await db
+      .from("push_subscriptions")
+      .select("id, endpoint, p256dh, auth")
+      .in("user_id", recipients);
+    if (subsLookup.error) throw subsLookup.error;
+    const subs = Array.isArray(subsLookup.data) ? (subsLookup.data as SubscriptionRow[]) : [];
+
+    const payload = {
+      title: `${callerName} is calling`,
+      body: convName ? `Tap to join the call in ${convName}` : "Tap to join the call",
+      url: `/call/${conversationId}`,
+      conversation_id: conversationId,
+      tag: `call-${conversationId}`,
+    };
+
+    let sent = 0;
+    let failed = 0;
+    for (const sub of subs) {
+      const result = await sendWebPush(sub, payload);
+      if (result.ok) {
+        sent += 1;
+      } else {
+        failed += 1;
+        if (result.dead) {
+          await db.from("push_subscriptions").delete().eq("id", sub.id);
+        }
+      }
+    }
+
+    return json({ sent, failed, total: subs.length }, 200, request);
+  } catch (error) {
+    console.error("[push] call notification failed", error);
+    return json({ sent: 0, failed: 0, total: 0, error: "push_failed" }, 200, request);
+  }
+}
