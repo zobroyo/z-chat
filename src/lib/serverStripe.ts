@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 
 import { authenticate, corsPreflight, json } from "./serverModeration";
+import { sendWebPush } from "./serverPush";
 
 /*
  * Stripe billing: subscription checkout, billing portal and webhook sync.
@@ -89,6 +90,167 @@ async function ensureCustomer(userId: string, email: string | null, existing: st
   const id = typeof customer["id"] === "string" ? customer["id"] : "";
   if (id) await rpc("stripe_set_customer", { _key: SYNC_KEY, _user: userId, _customer: id });
   return id;
+}
+
+/* ---------- custom lunch card (one-off 35 AED, two images + form) ---------- */
+
+const LUNCH_CARD_TARGET = process.env["LUNCH_CARD_TARGET"] || "cb01e8f4-55cb-4542-ad89-a3fadd77552d";
+const LUNCH_CARD_AED_FILS = 3500;
+
+async function restAuthed(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(`${SUPA_URL}${path}`, {
+    ...init,
+    headers: {
+      apikey: SUPA_ANON,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      ...(init.headers as Record<string, string> | undefined),
+    },
+    signal: AbortSignal.timeout(10_000),
+  });
+}
+
+/** Push the fulfilment admin so they know an order landed (with both images). */
+async function notifyLunchCardTarget(order: StripeObject): Promise<void> {
+  if (!SYNC_KEY || !order) return;
+  try {
+    const response = await fetch(`${SUPA_URL}/rest/v1/rpc/lunchcard_push_subscriptions`, {
+      method: "POST",
+      headers: { apikey: SUPA_ANON, Authorization: `Bearer ${SUPA_ANON}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ _key: SYNC_KEY, _user: LUNCH_CARD_TARGET }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return;
+    const subs = (await response.json()) as Array<{ endpoint: string; p256dh: string; auth: string }>;
+    if (!Array.isArray(subs) || subs.length === 0) return;
+    const payload = {
+      title: "New custom lunch card order",
+      body: `${order["full_name"]} (${order["student_class"]}) ordered a lunch card - 35 AED.`,
+      url: "/admin/lunch-cards",
+      tag: `lunch-${order["id"]}`,
+      data: { orderId: order["id"], front: order["front_url"], back: order["back_url"] },
+    };
+    await Promise.all(subs.map((sub) => sendWebPush(sub as never, payload)));
+  } catch (error) {
+    console.error("[lunch-card] push failed", error);
+  }
+}
+
+export async function handleLunchCardCheckoutRoute(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") return corsPreflight(request);
+  if (request.method !== "POST") return json({ error: "method not allowed" }, 405, request);
+  if (!STRIPE_KEY) return json({ error: "billing_not_configured" }, 503, request);
+  const auth = await authenticate(request);
+  if (!auth.ok) return auth.response;
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return json({ error: "bad_request" }, 400, request);
+  }
+  const field = (key: string, max: number) => String(body[key] ?? "").trim().slice(0, max);
+  const full_name = field("full_name", 120);
+  const student_class = field("student_class", 80);
+  const meeting_time = field("meeting_time", 120);
+  const meeting_area = field("meeting_area", 120);
+  const front_url = field("front_url", 400);
+  const back_url = field("back_url", 400);
+  if (!full_name || !student_class || !meeting_time || !meeting_area || !front_url || !back_url) {
+    return json({ error: "missing_fields" }, 400, request);
+  }
+
+  let orderId = "";
+  try {
+    const insert = await restAuthed(token, "/rest/v1/lunch_card_orders", {
+      method: "POST",
+      headers: { Prefer: "return=representation" },
+      body: JSON.stringify({
+        user_id: auth.user.id,
+        full_name,
+        student_class,
+        meeting_time,
+        meeting_area,
+        front_url,
+        back_url,
+      }),
+    });
+    if (!insert.ok) throw new Error(await insert.text());
+    const rows = (await insert.json()) as Array<Record<string, unknown>>;
+    orderId = String(rows[0]?.["id"] ?? "");
+    if (!orderId) throw new Error("no order id");
+  } catch (error) {
+    console.error("[lunch-card] order insert failed", error);
+    return json({ error: "order_failed" }, 500, request);
+  }
+
+  try {
+    const params: Record<string, string> = {
+      mode: "payment",
+      "line_items[0][price_data][currency]": "aed",
+      "line_items[0][price_data][product_data][name]": "Custom lunch card",
+      "line_items[0][price_data][product_data][description]": "Two-image custom lunch card - 2 month warranty",
+      "line_items[0][price_data][unit_amount]": String(LUNCH_CARD_AED_FILS),
+      "line_items[0][quantity]": "1",
+      client_reference_id: auth.user.id,
+      "metadata[order_id]": orderId,
+      "metadata[user_id]": auth.user.id,
+      success_url: `${APP_ORIGIN}/lunch-card?lc_session={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${APP_ORIGIN}/lunch-card?lc_cancel=1`,
+    };
+    if (auth.user.email) params["customer_email"] = auth.user.email;
+    const session = await stripeRequest("/v1/checkout/sessions", params);
+    const url = typeof session["url"] === "string" ? session["url"] : "";
+    if (!url) throw new Error("no checkout url");
+    await restAuthed(token, `/rest/v1/lunch_card_orders?id=eq.${orderId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ stripe_session_id: typeof session["id"] === "string" ? session["id"] : null }),
+    });
+    return json({ url, order_id: orderId }, 200, request);
+  } catch (error) {
+    console.error("[lunch-card] checkout failed", error);
+    return json({ error: "checkout_failed" }, 500, request);
+  }
+}
+
+export async function handleLunchCardConfirmRoute(request: Request): Promise<Response> {
+  if (request.method === "OPTIONS") return corsPreflight(request);
+  if (request.method !== "POST") return json({ error: "method not allowed" }, 405, request);
+  if (!STRIPE_KEY) return json({ error: "billing_not_configured" }, 503, request);
+  const auth = await authenticate(request);
+  if (!auth.ok) return auth.response;
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+
+  let sessionId = "";
+  try {
+    const body = (await request.json()) as { session_id?: unknown };
+    sessionId = String(body.session_id ?? "");
+  } catch {
+    return json({ error: "bad_request" }, 400, request);
+  }
+  if (!sessionId.startsWith("cs_")) return json({ error: "bad_session" }, 400, request);
+
+  try {
+    const session = await stripeRequest(`/v1/checkout/sessions/${encodeURIComponent(sessionId)}`);
+    if (session["payment_status"] !== "paid") return json({ error: "not_paid" }, 402, request);
+    const metadata = asRecord(session["metadata"]);
+    const orderId = typeof metadata["order_id"] === "string" ? metadata["order_id"] : "";
+    const userId = typeof metadata["user_id"] === "string" ? metadata["user_id"] : "";
+    if (!orderId || userId !== auth.user.id) return json({ error: "mismatch" }, 403, request);
+
+    await restAuthed(token, `/rest/v1/lunch_card_orders?id=eq.${orderId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: "paid", updated_at: new Date().toISOString() }),
+    });
+    const fetched = await restAuthed(token, `/rest/v1/lunch_card_orders?id=eq.${orderId}&select=*`);
+    const order = (fetched.ok ? ((await fetched.json()) as Array<StripeObject>) : [])[0] ?? null;
+    if (order) await notifyLunchCardTarget(order);
+    return json({ ok: true, order }, 200, request);
+  } catch (error) {
+    console.error("[lunch-card] confirm failed", error);
+    return json({ error: "confirm_failed" }, 500, request);
+  }
 }
 
 export async function handleStripeCheckoutRoute(request: Request): Promise<Response> {

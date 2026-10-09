@@ -8,6 +8,8 @@ import { handleModerateRoute, handleSendMessageRoute } from "./lib/serverModerat
 import { handleQuickTunnelPublicRoute, handleSiteTunnelsRoute } from "./lib/serverTunnels";
 import { handleTurnCredentialsRoute } from "./lib/serverTurnCredentials";
 import {
+  handleLunchCardCheckoutRoute,
+  handleLunchCardConfirmRoute,
   handleStripeCheckoutRoute,
   handleStripePortalRoute,
   handleStripeWebhookRoute,
@@ -166,6 +168,14 @@ export default {
           headers: { "content-type": "application/json" },
         });
       }
+    }
+
+    if (url.pathname === "/api/lunch-card/checkout") {
+      return await handleLunchCardCheckoutRoute(request);
+    }
+
+    if (url.pathname === "/api/lunch-card/confirm") {
+      return await handleLunchCardConfirmRoute(request);
     }
 
     if (url.pathname === "/api/stripe/checkout" || url.pathname === "/api/stripe/portal" || url.pathname === "/api/stripe/webhook") {

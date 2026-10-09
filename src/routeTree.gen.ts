@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ChatRouteImport } from './routes/chat'
+import { Route as LunchCardRouteImport } from './routes/lunch-card'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RecoveryRouteImport } from './routes/recovery'
 import { Route as ServicesRouteImport } from './routes/services'
@@ -19,6 +20,7 @@ import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAppealsRouteImport } from './routes/admin.appeals'
 import { Route as AdminApplicationsRouteImport } from './routes/admin.applications'
 import { Route as AdminConversationsRouteImport } from './routes/admin.conversations'
+import { Route as AdminLunchCardsRouteImport } from './routes/admin.lunch-cards'
 import { Route as AdminMessagesRouteImport } from './routes/admin.messages'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
@@ -42,6 +44,11 @@ const AdminRoute = AdminRouteImport.update({
 const ChatRoute = ChatRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LunchCardRoute = LunchCardRouteImport.update({
+  id: '/lunch-card',
+  path: '/lunch-card',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProfileRoute = ProfileRouteImport.update({
@@ -77,6 +84,11 @@ const AdminApplicationsRoute = AdminApplicationsRouteImport.update({
 const AdminConversationsRoute = AdminConversationsRouteImport.update({
   id: '/conversations',
   path: '/conversations',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminLunchCardsRoute = AdminLunchCardsRouteImport.update({
+  id: '/lunch-cards',
+  path: '/lunch-cards',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminMessagesRoute = AdminMessagesRouteImport.update({
@@ -129,12 +141,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/chat': typeof ChatRoute
+  '/lunch-card': typeof LunchCardRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
   '/services': typeof ServicesRoute
   '/admin/appeals': typeof AdminAppealsRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/conversations': typeof AdminConversationsRouteWithChildren
+  '/admin/lunch-cards': typeof AdminLunchCardsRoute
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -149,11 +163,13 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/chat': typeof ChatRoute
+  '/lunch-card': typeof LunchCardRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
   '/services': typeof ServicesRoute
   '/admin/appeals': typeof AdminAppealsRoute
   '/admin/applications': typeof AdminApplicationsRoute
+  '/admin/lunch-cards': typeof AdminLunchCardsRoute
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -170,12 +186,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/chat': typeof ChatRoute
+  '/lunch-card': typeof LunchCardRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
   '/services': typeof ServicesRoute
   '/admin/appeals': typeof AdminAppealsRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/conversations': typeof AdminConversationsRouteWithChildren
+  '/admin/lunch-cards': typeof AdminLunchCardsRoute
   '/admin/messages': typeof AdminMessagesRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/settings': typeof AdminSettingsRoute
@@ -193,12 +211,14 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/chat'
+    | '/lunch-card'
     | '/profile'
     | '/recovery'
     | '/services'
     | '/admin/appeals'
     | '/admin/applications'
     | '/admin/conversations'
+    | '/admin/lunch-cards'
     | '/admin/messages'
     | '/admin/reports'
     | '/admin/settings'
@@ -213,11 +233,13 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/chat'
+    | '/lunch-card'
     | '/profile'
     | '/recovery'
     | '/services'
     | '/admin/appeals'
     | '/admin/applications'
+    | '/admin/lunch-cards'
     | '/admin/messages'
     | '/admin/reports'
     | '/admin/settings'
@@ -233,12 +255,14 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/chat'
+    | '/lunch-card'
     | '/profile'
     | '/recovery'
     | '/services'
     | '/admin/appeals'
     | '/admin/applications'
     | '/admin/conversations'
+    | '/admin/lunch-cards'
     | '/admin/messages'
     | '/admin/reports'
     | '/admin/settings'
@@ -255,6 +279,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   ChatRoute: typeof ChatRoute
+  LunchCardRoute: typeof LunchCardRoute
   ProfileRoute: typeof ProfileRoute
   RecoveryRoute: typeof RecoveryRoute
   ServicesRoute: typeof ServicesRoute
@@ -284,6 +309,13 @@ declare module '@tanstack/react-router' {
       path: '/chat'
       fullPath: '/chat'
       preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/lunch-card': {
+      id: '/lunch-card'
+      path: '/lunch-card'
+      fullPath: '/lunch-card'
+      preLoaderRoute: typeof LunchCardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/profile': {
@@ -333,6 +365,13 @@ declare module '@tanstack/react-router' {
       path: '/conversations'
       fullPath: '/admin/conversations'
       preLoaderRoute: typeof AdminConversationsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/lunch-cards': {
+      id: '/admin/lunch-cards'
+      path: '/lunch-cards'
+      fullPath: '/admin/lunch-cards'
+      preLoaderRoute: typeof AdminLunchCardsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/messages': {
@@ -418,6 +457,7 @@ interface AdminRouteChildren {
   AdminAppealsRoute: typeof AdminAppealsRoute
   AdminApplicationsRoute: typeof AdminApplicationsRoute
   AdminConversationsRoute: typeof AdminConversationsRouteWithChildren
+  AdminLunchCardsRoute: typeof AdminLunchCardsRoute
   AdminMessagesRoute: typeof AdminMessagesRoute
   AdminReportsRoute: typeof AdminReportsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
@@ -429,6 +469,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAppealsRoute: AdminAppealsRoute,
   AdminApplicationsRoute: AdminApplicationsRoute,
   AdminConversationsRoute: AdminConversationsRouteWithChildren,
+  AdminLunchCardsRoute: AdminLunchCardsRoute,
   AdminMessagesRoute: AdminMessagesRoute,
   AdminReportsRoute: AdminReportsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
@@ -442,6 +483,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   ChatRoute: ChatRoute,
+  LunchCardRoute: LunchCardRoute,
   ProfileRoute: ProfileRoute,
   RecoveryRoute: RecoveryRoute,
   ServicesRoute: ServicesRoute,

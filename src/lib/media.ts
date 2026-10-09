@@ -111,3 +111,10 @@ export async function uploadChatImage(conversationId: string, file: File) {
   const path = `${conversationId}/${crypto.randomUUID()}.${extensionFor(file)}`;
   return uploadToBox(CHAT_BUCKET, path, file);
 }
+
+/** Custom lunch card front/back images live in the chat-media bucket. */
+export async function uploadLunchCardImage(userId: string, side: "front" | "back", file: File) {
+  validate(file, MAX_IMAGE_BYTES);
+  const path = `lunch-cards/${userId}/${side}-${crypto.randomUUID()}.${extensionFor(file)}`;
+  return uploadToBox(CHAT_BUCKET, path, file);
+}
