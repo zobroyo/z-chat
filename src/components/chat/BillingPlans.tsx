@@ -22,15 +22,23 @@ const PLANS: Array<{
     price: "0 AED",
     tagline: "Everything Z Chat has today.",
     icon: <Sparkles className="size-4" />,
-    perks: ["Chats, groups and calls", "Games, slides and all services", "Standard call quality"],
+    perks: [
+      "Unlimited chats, groups and calls",
+      "Games, slides and every Z service",
+      "3 AI presentations a month",
+    ],
   },
   {
     id: "pro",
     name: "Pro",
     price: "10 AED / month",
-    tagline: "For regulars who want to give back.",
+    tagline: "For regulars who want more.",
     icon: <BadgeCheck className="size-4" />,
-    perks: ["Everything in Free", "Pro supporter badge on your profile", "Priority for new features"],
+    perks: [
+      "Everything in Free",
+      "10 AI presentations a month",
+      "Pro badge on your profile",
+    ],
   },
   {
     id: "max",
@@ -38,7 +46,11 @@ const PLANS: Array<{
     price: "15 AED / month",
     tagline: "Maximum support for the black box.",
     icon: <Crown className="size-4" />,
-    perks: ["Everything in Pro", "Max supporter badge", "First in line for experiments"],
+    perks: [
+      "Everything in Pro",
+      "Unlimited AI presentations",
+      "Max badge on your profile",
+    ],
   },
 ];
 

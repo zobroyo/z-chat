@@ -19,6 +19,7 @@ type CardProfile = {
   avatar_url: string | null;
   created_at: string;
   r6_profile: string | null;
+  plan: string | null;
 };
 
 /** Small profile card shown when a name/avatar is clicked in chat. */
@@ -43,7 +44,7 @@ export function ProfileDialog({
     let cancelled = false;
     void supabase
       .from("profiles")
-      .select("id, display_name, username, bio, avatar_url, created_at, r6_profile")
+      .select("id, display_name, username, bio, avatar_url, created_at, r6_profile, plan")
       .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
@@ -79,7 +80,19 @@ export function ProfileDialog({
               path={profile.avatar_url}
               className="size-20 text-2xl"
             />
-            <p className="mt-3 text-lg font-bold">{profile.display_name}</p>
+            <p className="mt-3 flex items-center justify-center gap-2 text-lg font-bold">
+              {profile.display_name}
+              {profile.plan === "max" && (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-amber-500 uppercase">
+                  Max
+                </span>
+              )}
+              {profile.plan === "pro" && (
+                <span className="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-bold tracking-wide text-primary uppercase">
+                  Pro
+                </span>
+              )}
+            </p>
             <p className="text-sm text-muted-foreground">@{profile.username ?? "unknown"}</p>
             {profile.bio ? (
               <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-foreground/90">
