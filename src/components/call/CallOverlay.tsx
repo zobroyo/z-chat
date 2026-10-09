@@ -132,6 +132,96 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   /** Minimised ("picture-in-picture") mode: keep the call alive but out of the way. */
   const [minimized, setMinimized] = useState(false);
 
+  // Draggable picture-in-picture position (null = default bottom-right corner).
+  const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null);
+  const pipRef = useRef<HTMLDivElement | null>(null);
+  const pipDragRef = useRef<{
+    id: number;
+    dx: number;
+    dy: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  } | null>(null);
+  const pipMovedRef = useRef(false);
+
+  const onPipPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const el = pipRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    pipDragRef.current = {
+      id: event.pointerId,
+      dx: event.clientX - rect.left,
+      dy: event.clientY - rect.top,
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    };
+    // Freeze the current spot so the pill doesn't jump when it starts moving.
+    setPipPos({ x: rect.left, y: rect.top });
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* pointer capture is best-effort */
+    }
+    event.preventDefault();
+  };
+
+  const onPipPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = pipDragRef.current;
+    const el = pipRef.current;
+    if (!drag || drag.id !== event.pointerId || !el) return;
+    if (!drag.moved) {
+      // Ignore tiny jitters so a plain click still restores the call.
+      if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5) return;
+      drag.moved = true;
+    }
+    const maxX = Math.max(0, window.innerWidth - el.offsetWidth);
+    const maxY = Math.max(0, window.innerHeight - el.offsetHeight);
+    setPipPos({
+      x: Math.min(maxX, Math.max(0, event.clientX - drag.dx)),
+      y: Math.min(maxY, Math.max(0, event.clientY - drag.dy)),
+    });
+  };
+
+  const onPipPointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = pipDragRef.current;
+    if (!drag || drag.id !== event.pointerId) return;
+    pipMovedRef.current = drag.moved;
+    pipDragRef.current = null;
+    try {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    } catch {
+      /* already released */
+    }
+  };
+
+  const onPipClick = () => {
+    if (pipMovedRef.current) {
+      pipMovedRef.current = false;
+      return;
+    }
+    setMinimized(false);
+  };
+
+  // Keep the pill on screen when the window shrinks.
+  useEffect(() => {
+    const onResize = () => {
+      const el = pipRef.current;
+      if (!el) return;
+      setPipPos((pos) =>
+        pos
+          ? {
+              x: Math.max(0, Math.min(pos.x, window.innerWidth - el.offsetWidth)),
+              y: Math.max(0, Math.min(pos.y, window.innerHeight - el.offsetHeight)),
+            }
+          : pos,
+      );
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   // Join/leave activity: transient banner + the tile pop-in animation.
   const [activity, setActivity] = useState<{ key: number; text: string } | null>(null);
   const activityKey = useRef(0);
@@ -244,15 +334,24 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   if (minimized) {
     return (
       <div
+        ref={pipRef}
         data-testid="call-minimized"
-        className="fixed right-3 bottom-24 z-40 flex max-w-[calc(100vw-1.5rem)] items-center gap-1.5 rounded-full border border-white/10 bg-[#0a0c11]/95 p-1.5 pl-3 text-white shadow-2xl backdrop-blur-xl sm:right-4 sm:bottom-24"
+        style={pipPos ? { left: pipPos.x, top: pipPos.y } : undefined}
+        className={cn(
+          "fixed z-40 flex max-w-[calc(100vw-1.5rem)] items-center gap-1.5 rounded-full border border-white/10 bg-[#0a0c11]/95 p-1.5 pl-3 text-white shadow-2xl backdrop-blur-xl",
+          !pipPos && "right-3 bottom-24 sm:right-4 sm:bottom-24",
+        )}
       >
         <button
           type="button"
-          onClick={() => setMinimized(false)}
-          className="flex min-w-0 items-center gap-2 rounded-full pr-2 text-left transition-opacity hover:opacity-90"
-          aria-label="Expand call"
-          title="Back to call"
+          onPointerDown={onPipPointerDown}
+          onPointerMove={onPipPointerMove}
+          onPointerUp={onPipPointerUp}
+          onPointerCancel={onPipPointerUp}
+          onClick={onPipClick}
+          className="flex min-w-0 cursor-grab touch-none items-center gap-2 rounded-full pr-2 text-left active:cursor-grabbing"
+          aria-label="Drag to move · tap to expand the call"
+          title="Drag to move · tap to return to the call"
         >
           <span className="relative flex size-7 shrink-0 items-center justify-center rounded-full bg-green-600/20 text-green-400">
             <PhoneCall className="size-3.5" />
