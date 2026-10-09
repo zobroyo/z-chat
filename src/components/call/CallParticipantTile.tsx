@@ -1,5 +1,15 @@
-import { useEffect, useRef } from "react";
-import { Crown, HeadphoneOff, MicOff, Volume2, VolumeX } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Ban,
+  Crown,
+  HeadphoneOff,
+  Mic,
+  MicOff,
+  MoreHorizontal,
+  UserMinus,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -41,11 +51,17 @@ export type CallParticipantTileProps = {
   onVolumeChange?: (volume: number) => void;
   onToggleLocalMute?: () => void;
   onToggleServerMute?: () => void;
+  /** Host only: remove the participant (they may rejoin). */
+  onKick?: () => void;
+  /** Host only: ban the participant for the call session. */
+  onBan?: () => void;
 };
 
 /**
- * One participant tile: avatar/video plus, for remote participants, a compact
- * popover with the 0-200% volume slider, local mute and (host only) server mute.
+ * One large "floating island" participant tile: video fills the tile
+ * (object-cover), avatar/initials when the camera is off, a name pill with mic
+ * status bottom-left and a hover-revealed options menu (volume, local mute,
+ * host server-mute / kick / ban).
  */
 export function CallParticipantTile({
   name,
@@ -63,107 +79,201 @@ export function CallParticipantTile({
   onVolumeChange,
   onToggleLocalMute,
   onToggleServerMute,
+  onKick,
+  onBan,
 }: CallParticipantTileProps) {
+  const [confirm, setConfirm] = useState<null | "kick" | "ban">(null);
   const showVideo = video && stream instanceof MediaStream;
-  const showControls = !self && !!onVolumeChange;
+  const showOptions = !self && (!!onVolumeChange || (canModerate && (!!onKick || !!onBan)));
 
   return (
-    <div className="relative flex aspect-video items-center justify-center overflow-hidden rounded-2xl border border-border bg-surface">
+    <div
+      data-testid="call-tile"
+      className="group relative h-full min-h-0 w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] ring-1 ring-white/5 sm:rounded-3xl"
+    >
       {showVideo ? (
-        <StreamVideo stream={stream} />
+        <>
+          <StreamVideo stream={stream} />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+        </>
       ) : (
-        <Avatar className="size-16">
-          <AvatarFallback className="bg-surface-2 font-display text-lg font-semibold text-muted-foreground">
-            {initialsOf(name)}
-          </AvatarFallback>
-        </Avatar>
+        <div className="flex size-full items-center justify-center bg-gradient-to-br from-white/[0.07] via-transparent to-black/40">
+          <Avatar className="size-16 sm:size-24">
+            <AvatarFallback className="bg-white/10 font-display text-lg font-semibold text-white/80 sm:text-2xl">
+              {initialsOf(name)}
+            </AvatarFallback>
+          </Avatar>
+        </div>
       )}
 
-      <div className="absolute inset-x-2 bottom-2 flex items-center gap-1.5">
-        <span className="flex min-w-0 items-center gap-1.5 rounded-lg bg-background/70 px-2 py-1 text-xs font-medium text-foreground backdrop-blur">
-          {(serverMuted || muted) && <MicOff className="size-3.5 shrink-0 text-destructive" />}
+      <div className="absolute right-2 bottom-2 left-2 flex items-end justify-between gap-2 sm:right-3 sm:bottom-3 sm:left-3">
+        <span className="flex min-w-0 items-center gap-1.5 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white shadow-lg backdrop-blur">
+          {muted ? (
+            <MicOff className="size-3.5 shrink-0 text-red-400" />
+          ) : (
+            <Mic className="size-3.5 shrink-0 text-white/70" />
+          )}
           {deafened && <HeadphoneOff className="size-3.5 shrink-0 text-amber-400" />}
           {localMuted && <VolumeX className="size-3.5 shrink-0 text-amber-400" />}
           {isHost && <Crown className="size-3.5 shrink-0 text-primary" aria-label="Call host" />}
-          <span className="max-w-40 truncate">{self ? "You" : name}</span>
+          <span className="max-w-40 truncate sm:max-w-56">{self ? "You" : name}</span>
           {isGuest && !self && (
-            <span className="rounded bg-surface-2 px-1 text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
+            <span className="rounded bg-white/15 px-1 text-[10px] font-semibold tracking-wide text-white/70 uppercase">
               guest
             </span>
           )}
           {serverMuted && !self && (
-            <span className="text-[10px] font-semibold text-destructive">muted by host</span>
+            <span className="shrink-0 text-[10px] font-semibold text-red-400">muted by host</span>
           )}
         </span>
 
-        {showControls && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "ml-auto size-8 shrink-0 rounded-lg border border-border bg-background/70 text-foreground backdrop-blur hover:bg-surface",
-                  localMuted && "border-amber-400/50 text-amber-400",
+        {showOptions && (
+          <div className="flex shrink-0 items-center gap-1.5 opacity-100 transition-opacity duration-150 sm:opacity-0 sm:group-focus-within:opacity-100 sm:group-hover:opacity-100">
+            <Popover
+              onOpenChange={(open) => {
+                if (!open) setConfirm(null);
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    "size-8 rounded-full border border-white/15 bg-black/60 text-white backdrop-blur hover:bg-black/80 hover:text-white",
+                    localMuted && "border-amber-400/60 text-amber-300",
+                  )}
+                  aria-label={`Participant options for ${name}`}
+                  title={`Participant options for ${name}`}
+                >
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </PopoverTrigger>
+
+              <PopoverContent align="end" className="w-64 space-y-3">
+                <div>
+                  <div className="flex items-center justify-between text-xs font-medium">
+                    <span className="truncate">{name}</span>
+                    <span className="text-muted-foreground">{volume}%</span>
+                  </div>
+                  {onVolumeChange && (
+                    <>
+                      <Slider
+                        className="mt-2"
+                        value={[volume]}
+                        min={0}
+                        max={200}
+                        step={5}
+                        onValueChange={(values) => {
+                          const next = values[0];
+                          if (typeof next === "number") onVolumeChange(next);
+                        }}
+                        aria-label={`Volume for ${name}`}
+                      />
+                      <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
+                        <span>0%</span>
+                        <span>100%</span>
+                        <span>200%</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {onToggleLocalMute && (
+                  <Button
+                    type="button"
+                    variant={localMuted ? "secondary" : "outline"}
+                    size="sm"
+                    className="w-full"
+                    onClick={onToggleLocalMute}
+                  >
+                    {localMuted ? <Volume2 className="mr-2 size-4" /> : <VolumeX className="mr-2 size-4" />}
+                    {localMuted ? "Unmute for me" : "Mute for me only"}
+                  </Button>
                 )}
-                aria-label={`Audio options for ${name}`}
-                title={`Audio options for ${name}`}
-              >
-                {localMuted ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-              </Button>
-            </PopoverTrigger>
 
-            <PopoverContent align="end" className="w-64 space-y-3">
-              <div>
-                <div className="flex items-center justify-between text-xs font-medium">
-                  <span className="truncate">{name}</span>
-                  <span className="text-muted-foreground">{volume}%</span>
-                </div>
-                <Slider
-                  className="mt-2"
-                  value={[volume]}
-                  min={0}
-                  max={200}
-                  step={5}
-                  onValueChange={(values) => {
-                    const next = values[0];
-                    if (typeof next === "number") onVolumeChange?.(next);
-                  }}
-                  aria-label={`Volume for ${name}`}
-                />
-                <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-                  <span>0%</span>
-                  <span>100%</span>
-                  <span>200%</span>
-                </div>
-              </div>
+                {canModerate && onToggleServerMute && (
+                  <Button
+                    type="button"
+                    variant={serverMuted ? "secondary" : "destructive"}
+                    size="sm"
+                    className="w-full"
+                    onClick={onToggleServerMute}
+                  >
+                    {serverMuted ? "Remove server mute" : "Server mute (everyone)"}
+                  </Button>
+                )}
 
-              {onToggleLocalMute && (
-                <Button
-                  type="button"
-                  variant={localMuted ? "secondary" : "outline"}
-                  size="sm"
-                  className="w-full"
-                  onClick={onToggleLocalMute}
-                >
-                  {localMuted ? "Unmute for me" : "Mute for me only"}
-                </Button>
-              )}
-
-              {canModerate && onToggleServerMute && (
-                <Button
-                  type="button"
-                  variant={serverMuted ? "secondary" : "destructive"}
-                  size="sm"
-                  className="w-full"
-                  onClick={onToggleServerMute}
-                >
-                  {serverMuted ? "Remove server mute" : "Server mute (everyone)"}
-                </Button>
-              )}
-            </PopoverContent>
-          </Popover>
+                {canModerate && (onKick || onBan) && (
+                  <div className="space-y-2 border-t border-border pt-3">
+                    {confirm === null ? (
+                      <>
+                        {onKick && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full justify-start"
+                            onClick={() => setConfirm("kick")}
+                            aria-label={`Kick ${name} from call`}
+                          >
+                            <UserMinus className="mr-2 size-4" />
+                            Kick {name} from call
+                          </Button>
+                        )}
+                        {onBan && (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="w-full justify-start"
+                            onClick={() => setConfirm("ban")}
+                            aria-label={`Ban ${name} from call`}
+                          >
+                            <Ban className="mr-2 size-4" />
+                            Ban {name} from call
+                          </Button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground">
+                          {confirm === "kick"
+                            ? `Remove ${name} from the call? They can rejoin.`
+                            : `Ban ${name}? They cannot rejoin this call.`}
+                        </p>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={confirm === "ban" ? "destructive" : "default"}
+                            onClick={() => {
+                              if (confirm === "kick") onKick?.();
+                              else onBan?.();
+                              setConfirm(null);
+                            }}
+                            aria-label={
+                              confirm === "kick" ? `Confirm kick ${name}` : `Confirm ban ${name}`
+                            }
+                          >
+                            {confirm === "kick" ? "Kick" : "Ban"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setConfirm(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          </div>
         )}
       </div>
     </div>

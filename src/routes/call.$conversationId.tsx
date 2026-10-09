@@ -1,27 +1,29 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { AlertTriangle, Loader2, PhoneCall, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Loader2, PhoneCall, ShieldAlert, ShieldCheck } from "lucide-react";
 
 import { CallOverlay } from "@/components/call/CallOverlay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
 import { useCall } from "@/hooks/use-call";
 import { createCallGuestClient, randomGuestName, randomLocalGuestId } from "@/lib/call-guest";
 
 /*
- * Guest join page: https://z-chat.men/call/<conversationId>?k=<guestKey>
+ * Call link page: https://z-chat.men/call/<conversationId>?k=<guestKey>
  *
- * Guests get an isolated Supabase client (`persistSession: false`) and are
- * scoped to exactly one Realtime channel — the invited call. They never touch
- * app tables, so even with a session they cannot use any other Z Chat feature.
+ * If the browser already has a Supabase session (the normal app login), the
+ * link joins as that real user: real id/name (profile display name, then
+ * session metadata, then email), no guest name screen, normal participant
+ * semantics (can be muted / kicked / banned). The ?k= key still authorizes the
+ * entry and is checked by the call host.
  *
- * Preferred auth is Supabase anonymous sign-in; when the project has anonymous
- * sign-ins disabled the page falls back to a locally generated guest identity
- * and joins with the publishable key (the same key every browser already has).
- * To enable anonymous sign-ins: Supabase dashboard -> Authentication ->
- * Sign In / Providers -> enable "Anonymous sign-ins" (or Management API PATCH
- * /v1/projects/{ref}/config/auth with external_anonymous_users_enabled=true).
+ * Without a session the page keeps the original guest flow: an isolated
+ * Supabase client (`persistSession: false`) scoped to exactly one Realtime
+ * channel — the invited call. Preferred auth there is Supabase anonymous
+ * sign-in; when anonymous sign-ins are disabled the page falls back to a
+ * locally generated guest identity ("Guest-1234") and the publishable key.
  */
 
 export const Route = createFileRoute("/call/$conversationId")({
@@ -32,10 +34,10 @@ export const Route = createFileRoute("/call/$conversationId")({
   head: () => ({
     meta: [{ title: "Join call — ZChat" }, { name: "robots", content: "noindex" }],
   }),
-  component: GuestCallPage,
+  component: CallLinkPage,
 });
 
-type GuestIdentity = { id: string; name: string };
+type CallIdentity = { id: string; name: string };
 
 function GuestShell({ children }: { children: React.ReactNode }) {
   return (
@@ -45,21 +47,69 @@ function GuestShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function GuestCallPage() {
+/** Display name for a signed-in user: profile row, then auth metadata, then email. */
+async function resolveAccountName(user: {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown> | null;
+}): Promise<string> {
+  const meta = user.user_metadata ?? {};
+  const fromMeta = String(meta["display_name"] ?? meta["full_name"] ?? meta["name"] ?? "").trim();
+  if (fromMeta) return fromMeta;
+
+  try {
+    const { data } = await supabase
+      .from("profiles")
+      .select("display_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    const fromProfile = String(
+      (data as { display_name?: string | null } | null)?.display_name ?? "",
+    ).trim();
+    if (fromProfile) return fromProfile;
+  } catch {
+    // Profile lookup is best-effort; metadata / email below still work.
+  }
+
+  return user.email?.split("@")[0]?.trim() || "You";
+}
+
+function CallLinkPage() {
   const { conversationId } = Route.useParams();
   const { k } = Route.useSearch();
 
   const [client, setClient] = useState<SupabaseClient | null>(null);
-  const [identity, setIdentity] = useState<GuestIdentity | null>(null);
+  const [identity, setIdentity] = useState<CallIdentity | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
+  const [isGuest, setIsGuest] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
 
     const setup = async () => {
+      // 1) Existing app session: join the link as the real user. This is the
+      // same client/identity the chat app uses, so id/name stay consistent.
+      try {
+        const { data } = await supabase.auth.getSession();
+        const user = data.session?.user;
+        if (user?.id) {
+          const name = await resolveAccountName(user);
+          if (cancelled) return;
+          setClient(supabase);
+          setIdentity({ id: user.id, name });
+          setIsGuest(false);
+          setBusy(false);
+          setJoined(true);
+          return;
+        }
+      } catch {
+        // Fall through to the guest flow.
+      }
+
+      // 2) No session: original guest flow, unchanged.
       const guestClient = createCallGuestClient();
       if (!guestClient) {
         if (!cancelled) {
@@ -85,6 +135,7 @@ function GuestCallPage() {
       setClient(guestClient);
       setIdentity({ id, name });
       setDisplayName(name);
+      setIsGuest(true);
       setBusy(false);
     };
 
@@ -99,7 +150,7 @@ function GuestCallPage() {
       <GuestShell>
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Loader2 className="size-6 animate-spin" />
-          <p className="text-sm">Preparing guest access…</p>
+          <p className="text-sm">Preparing call access…</p>
         </div>
       </GuestShell>
     );
@@ -119,6 +170,7 @@ function GuestCallPage() {
   }
 
   if (!joined) {
+    // Guest-only name screen. Signed-in users skip it entirely.
     const finalName = displayName.trim() || identity.name;
     return (
       <GuestShell>
@@ -170,34 +222,42 @@ function GuestCallPage() {
   }
 
   return (
-    <GuestCallRoom
+    <CallLinkRoom
       client={client}
       conversationId={conversationId}
       guestKey={k ?? null}
       identity={identity}
-      onExit={() => setJoined(false)}
+      isGuest={isGuest}
+      onExit={() => {
+        if (isGuest) setJoined(false);
+        else window.location.assign("/chat");
+      }}
     />
   );
 }
 
-function GuestCallRoom({
+function CallLinkRoom({
   client,
   conversationId,
   guestKey,
   identity,
+  isGuest,
   onExit,
 }: {
   client: SupabaseClient;
   conversationId: string;
   guestKey: string | null;
-  identity: GuestIdentity;
+  identity: CallIdentity;
+  isGuest: boolean;
   onExit: () => void;
 }) {
   const call = useCall(conversationId, identity, {
     client,
-    guest: true,
+    guest: isGuest,
     guestKey,
     listenForIncoming: false,
+    // The link already told this client about the call; don't re-ring members.
+    ringOnJoin: false,
   });
 
   const [ended, setEnded] = useState(false);
@@ -215,6 +275,7 @@ function GuestCallRoom({
   }, [call.inCall, call.joining]);
 
   const failed = !call.inCall && !call.joining && !!call.error;
+  const moderated = !call.inCall && !call.joining && !!call.notice;
 
   if (failed) {
     return (
@@ -235,6 +296,43 @@ function GuestCallRoom({
     );
   }
 
+  // Kicked / banned: the hook tears the call down and sets a notice; show that
+  // instead of the generic "Call ended" screen so the reason is unmistakable.
+  if (moderated) {
+    const banned = (call.notice ?? "").toLowerCase().includes("banned");
+    return (
+      <GuestShell>
+        <div className="rounded-3xl border border-border bg-surface p-6 text-center">
+          {banned ? (
+            <ShieldAlert className="mx-auto size-8 text-destructive" />
+          ) : (
+            <AlertTriangle className="mx-auto size-8 text-amber-400" />
+          )}
+          <p className="mt-3 font-display text-base font-semibold text-foreground">
+            {banned ? "Banned from this call" : "Removed from this call"}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{call.notice}</p>
+          <div className="mt-4 flex justify-center gap-2">
+            <Button type="button" variant="outline" onClick={onExit}>
+              {isGuest ? "Back" : "Back to chat"}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                call.clearNotice();
+                wasActiveRef.current = false;
+                setEnded(false);
+                void call.joinCall();
+              }}
+            >
+              Rejoin
+            </Button>
+          </div>
+        </div>
+      </GuestShell>
+    );
+  }
+
   if (ended) {
     return (
       <GuestShell>
@@ -246,7 +344,7 @@ function GuestCallRoom({
           </p>
           <div className="mt-4 flex justify-center gap-2">
             <Button type="button" variant="outline" onClick={onExit}>
-              Change name
+              {isGuest ? "Change name" : "Back to chat"}
             </Button>
             <Button
               type="button"
@@ -264,5 +362,5 @@ function GuestCallRoom({
     );
   }
 
-  return <CallOverlay call={call} conversationTitle="Guest call" />;
+  return <CallOverlay call={call} conversationTitle={isGuest ? "Guest call" : "Call"} />;
 }

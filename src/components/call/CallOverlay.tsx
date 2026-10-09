@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   AlertTriangle,
   Copy,
@@ -45,6 +46,18 @@ function roomName(roomId: string | null, rooms: BreakoutRoom[]): string {
   return rooms.find((room) => room.id === roomId)?.name ?? "Breakout room";
 }
 
+/**
+ * Google-Meet-style auto-sizing grid:
+ * 1 → one tile, 2-4 → up to 2 columns (2x2), 5-6 → 3 columns (3x2),
+ * 7+ → up to 4 columns. Tiles always stretch to fill their cell.
+ */
+function participantGridClass(count: number): string {
+  if (count <= 1) return "grid-cols-1";
+  if (count <= 4) return "grid-cols-1 sm:grid-cols-2";
+  if (count <= 6) return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+  return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+}
+
 function ControlButton({
   label,
   active = false,
@@ -60,11 +73,10 @@ function ControlButton({
           variant={danger ? "destructive" : "ghost"}
           size="icon"
           className={cn(
-            "size-12 rounded-full border border-border",
-            !danger && "bg-surface-2 text-foreground hover:bg-surface",
+            "size-11 shrink-0 rounded-full border border-white/10 text-white sm:size-12",
             !danger &&
-              active &&
-              "border-primary/60 bg-primary text-primary-foreground hover:bg-primary/90",
+              "bg-white/10 hover:bg-white/20 hover:text-white focus-visible:bg-white/20",
+            !danger && active && "border-primary/70 bg-primary text-primary-foreground",
           )}
           onClick={onClick}
           aria-label={label}
@@ -78,11 +90,43 @@ function ControlButton({
   );
 }
 
+/** Round ghost button used as a popover trigger inside the controls pill. */
+function BarPopoverButton({
+  label,
+  children,
+  className,
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className={cn(
+        "size-11 shrink-0 rounded-full border border-white/10 bg-white/10 text-white hover:bg-white/20 hover:text-white sm:size-12",
+        className,
+      )}
+      aria-label={label}
+      title={label}
+    >
+      {children}
+    </Button>
+  );
+}
+
 /**
- * Full-screen call surface: incoming ring, participant grid, breakout rooms,
- * soundboard, guest invite link and the mic / camera / deafen / leave controls.
+ * Full-screen call surface: incoming ring, a Google-Meet-style participant
+ * grid that fills the viewport, and a floating dynamic-island controls pill
+ * (mic / camera / deafen / soundboard / breakouts / guest link / leave).
  */
 export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
+  const [breakoutOpen, setBreakoutOpen] = useState(false);
+  const [soundboardOpen, setSoundboardOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+
   if (call.incomingCall && !call.inCall && !call.joining) {
     return (
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 p-4 backdrop-blur-xl sm:items-center">
@@ -147,119 +191,73 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
     (participant) => (participant.roomId ?? null) !== myRoomId,
   );
   const inBreakout = myRoomId !== null;
+  const totalTiles = roomParticipants.length + 1;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-background/95 backdrop-blur-xl">
-      <header className="ios-safe-top flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
-        <span className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <PhoneCall className="size-4" />
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <p className="truncate font-display text-sm font-semibold">{conversationTitle}</p>
-          <p className="truncate text-xs text-muted-foreground">
-            {showJoining
-              ? "Connecting…"
-              : call.participants.length === 0
-                ? "Ringing…"
-                : inBreakout
-                  ? `${roomParticipants.length + 1} in ${roomName(myRoomId, call.breakoutRooms)}`
-                  : `${roomParticipants.length + 1} in call`}
-          </p>
-        </div>
-
-        {!call.isGuest && (
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground hover:text-foreground"
-                aria-label="Guest join link"
-                title="Guest join link"
-              >
-                <Link2 className="size-5" />
-              </Button>
-            </PopoverTrigger>
-            <CallGuestInvitePanel
-              isHost={call.isHost}
-              guestKey={call.guestKey}
-              conversationId={call.conversationId}
-              onEnsureKey={call.ensureGuestKey}
-            />
-          </Popover>
-        )}
-
-        {!call.isGuest && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Copy call link"
-            title="Copy call link"
-            onClick={() => void call.copyCallInviteLink()}
-          >
-            <Copy className="size-5" />
-          </Button>
-        )}
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className={cn(
-                "text-muted-foreground hover:text-foreground",
-                inBreakout && "text-amber-400 hover:text-amber-300",
-              )}
-              aria-label="Breakout rooms"
-              title="Breakout rooms"
-            >
-              <DoorOpen className="size-5" />
-            </Button>
-          </PopoverTrigger>
-          <CallBreakoutPanel
-            rooms={call.breakoutRooms}
-            participants={call.participants}
-            selfId={call.selfId}
-            myRoomId={myRoomId}
-            isHost={call.isHost}
-            onCreateRoom={call.createBreakoutRoom}
-            onMove={call.moveParticipantToRoom}
-            onCloseAll={call.closeBreakoutRooms}
-          />
-        </Popover>
-      </header>
-
-      {call.error && (
-        <div className="mx-4 mt-3 flex items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          <AlertTriangle className="size-4 shrink-0" />
-          <span className="min-w-0">{call.error}</span>
-        </div>
-      )}
-
-      {!showJoining && inBreakout && (
-        <div className="mx-4 mt-3 flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-300">
-          <DoorOpen className="size-4 shrink-0" />
-          <span className="min-w-0">
-            You&apos;re in {roomName(myRoomId, call.breakoutRooms)} — only people in this room can
-            hear you.
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-1.5 backdrop-blur-2xl sm:p-3">
+      <div
+        data-testid="call-overlay"
+        className="relative flex h-[96vh] w-[98vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0a0c11]/95 text-white shadow-2xl sm:rounded-3xl"
+      >
+        <header className="flex shrink-0 items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-3">
+          <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <PhoneCall className="size-4" />
           </span>
-        </div>
-      )}
 
-      <div className="scroll-slim min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
-        {showJoining ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-            <Loader2 className="size-6 animate-spin" />
-            <p className="text-sm">Joining call…</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-display text-sm font-semibold">{conversationTitle}</p>
+            <p className="truncate text-xs text-white/60">
+              {showJoining
+                ? "Connecting…"
+                : call.participants.length === 0
+                  ? "Ringing…"
+                  : inBreakout
+                    ? `${roomParticipants.length + 1} in ${roomName(myRoomId, call.breakoutRooms)}`
+                    : `${roomParticipants.length + 1} in call`}
+              {!showJoining && otherRoomParticipants.length > 0
+                ? ` · ${otherRoomParticipants.length} in other rooms`
+                : ""}
+            </p>
           </div>
-        ) : (
-          <>
-            <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+
+          {call.isHost && (
+            <span className="hidden rounded-full border border-primary/40 bg-primary/15 px-2.5 py-0.5 text-[10px] font-semibold tracking-wide text-primary uppercase sm:inline">
+              Host
+            </span>
+          )}
+        </header>
+
+        {call.error && (
+          <div className="mx-3 mt-2 flex shrink-0 items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/15 px-3 py-2 text-xs text-red-300 sm:mx-4">
+            <AlertTriangle className="size-4 shrink-0" />
+            <span className="min-w-0">{call.error}</span>
+          </div>
+        )}
+
+        {!showJoining && inBreakout && (
+          <div className="mx-3 mt-2 flex shrink-0 items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs text-amber-300 sm:mx-4">
+            <DoorOpen className="size-4 shrink-0" />
+            <span className="min-w-0">
+              You&apos;re in {roomName(myRoomId, call.breakoutRooms)} — only people in this room
+              can hear you.
+            </span>
+          </div>
+        )}
+
+        <div className="min-h-0 flex-1 overflow-hidden px-2 pt-2 pb-24 sm:px-3 sm:pb-28">
+          {showJoining ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-white/60">
+              <Loader2 className="size-6 animate-spin" />
+              <p className="text-sm">Joining call…</p>
+            </div>
+          ) : (
+            <div
+              data-testid="call-grid"
+              className={cn(
+                "grid h-full w-full auto-rows-fr gap-1.5 sm:gap-2.5",
+                participantGridClass(totalTiles),
+              )}
+            >
               <CallParticipantTile
                 name="You"
                 muted={call.muted || call.deafened || call.serverMuted}
@@ -290,87 +288,114 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                   onToggleServerMute={() =>
                     call.setParticipantServerMute(participant.id, !participant.serverMuted)
                   }
+                  onKick={() => call.kickParticipant(participant.id)}
+                  onBan={() => call.banParticipant(participant.id)}
                 />
               ))}
             </div>
+          )}
+        </div>
 
-            {call.participants.length === 0 && (
-              <p className="mt-4 text-center text-xs text-muted-foreground">Ringing…</p>
-            )}
-
-            {otherRoomParticipants.length > 0 && (
-              <div className="mx-auto mt-4 w-full max-w-5xl rounded-xl border border-border bg-surface/60 px-3 py-2">
-                <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
-                  In other rooms
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {otherRoomParticipants
-                    .map(
-                      (participant) =>
-                        `${participant.name} · ${roomName(participant.roomId, call.breakoutRooms)}`,
-                    )
-                    .join("   ")}
-                </p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      <div className="ios-safe-bottom flex shrink-0 items-center justify-center gap-3 border-t border-border bg-surface/70 px-4 py-4 backdrop-blur">
-        <TooltipProvider delayDuration={200}>
-          <ControlButton
-            label={call.muted ? "Unmute" : "Mute"}
-            active={call.muted || call.serverMuted}
-            onClick={call.toggleMute}
-          >
-            {call.muted || call.serverMuted ? (
-              <MicOff className="size-5" />
-            ) : (
-              <Mic className="size-5" />
-            )}
-          </ControlButton>
-
-          <ControlButton
-            label={call.cameraOn ? "Turn camera off" : "Turn camera on"}
-            active={call.cameraOn}
-            onClick={() => void call.toggleCamera()}
-          >
-            {call.cameraOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}
-          </ControlButton>
-
-          <ControlButton
-            label={call.deafened ? "Undeafen" : "Deafen"}
-            active={call.deafened}
-            onClick={call.toggleDeafen}
-          >
-            {call.deafened ? (
-              <HeadphoneOff className="size-5" />
-            ) : (
-              <Headphones className="size-5" />
-            )}
-          </ControlButton>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="size-12 rounded-full border border-border bg-surface-2 text-foreground hover:bg-surface"
-                aria-label="Soundboard"
-                title="Soundboard"
+        {/* Floating dynamic-island controls pill, bottom center. */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center px-2 pb-2.5 sm:pb-3.5">
+          <TooltipProvider delayDuration={200}>
+            <div
+              data-testid="call-controls"
+              className="pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-1.5 rounded-[28px] border border-white/10 bg-black/70 px-2 py-2 shadow-2xl backdrop-blur-xl sm:gap-2 sm:rounded-full sm:px-3"
+            >
+              <ControlButton
+                label={call.muted ? "Unmute" : "Mute"}
+                active={call.muted || call.serverMuted}
+                onClick={call.toggleMute}
               >
-                <Music className="size-5" />
-              </Button>
-            </PopoverTrigger>
-            <CallSoundboardPanel sounds={call.sounds} onPlay={call.playSound} />
-          </Popover>
+                {call.muted || call.serverMuted ? (
+                  <MicOff className="size-5" />
+                ) : (
+                  <Mic className="size-5" />
+                )}
+              </ControlButton>
 
-          <ControlButton label="Leave call" danger onClick={() => void call.leaveCall()}>
-            <PhoneOff className="size-5" />
-          </ControlButton>
-        </TooltipProvider>
+              <ControlButton
+                label={call.cameraOn ? "Turn camera off" : "Turn camera on"}
+                active={call.cameraOn}
+                onClick={() => void call.toggleCamera()}
+              >
+                {call.cameraOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}
+              </ControlButton>
+
+              <ControlButton
+                label={call.deafened ? "Undeafen" : "Deafen"}
+                active={call.deafened}
+                onClick={call.toggleDeafen}
+              >
+                {call.deafened ? (
+                  <HeadphoneOff className="size-5" />
+                ) : (
+                  <Headphones className="size-5" />
+                )}
+              </ControlButton>
+
+              <Popover open={soundboardOpen} onOpenChange={setSoundboardOpen}>
+                <PopoverTrigger asChild>
+                  <BarPopoverButton label="Soundboard">
+                    <Music className="size-5" />
+                  </BarPopoverButton>
+                </PopoverTrigger>
+                <CallSoundboardPanel sounds={call.sounds} onPlay={call.playSound} />
+              </Popover>
+
+              <Popover open={breakoutOpen} onOpenChange={setBreakoutOpen}>
+                <PopoverTrigger asChild>
+                  <BarPopoverButton
+                    label="Breakout rooms"
+                    className={cn(inBreakout && "border-amber-400/50 text-amber-300")}
+                  >
+                    <DoorOpen className="size-5" />
+                  </BarPopoverButton>
+                </PopoverTrigger>
+                <CallBreakoutPanel
+                  rooms={call.breakoutRooms}
+                  participants={call.participants}
+                  selfId={call.selfId}
+                  myRoomId={myRoomId}
+                  isHost={call.isHost}
+                  onCreateRoom={call.createBreakoutRoom}
+                  onMove={call.moveParticipantToRoom}
+                  onCloseAll={call.closeBreakoutRooms}
+                />
+              </Popover>
+
+              {!call.isGuest && (
+                <Popover open={inviteOpen} onOpenChange={setInviteOpen}>
+                  <PopoverTrigger asChild>
+                    <BarPopoverButton label="Guest join link">
+                      <Link2 className="size-5" />
+                    </BarPopoverButton>
+                  </PopoverTrigger>
+                  <CallGuestInvitePanel
+                    isHost={call.isHost}
+                    guestKey={call.guestKey}
+                    conversationId={call.conversationId}
+                    onEnsureKey={call.ensureGuestKey}
+                  />
+                </Popover>
+              )}
+
+              {!call.isGuest && (
+                <ControlButton
+                  label="Copy call link"
+                  onClick={() => void call.copyCallInviteLink()}
+                >
+                  <Copy className="size-5" />
+                </ControlButton>
+              )}
+
+              <ControlButton label="Leave call" danger onClick={() => void call.leaveCall()}>
+                <PhoneOff className="size-5" />
+              </ControlButton>
+            </div>
+          </TooltipProvider>
+        </div>
       </div>
     </div>
   );
