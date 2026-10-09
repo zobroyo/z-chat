@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Mic, Speaker, Video } from "lucide-react";
+import { Activity, Check, ChevronDown, Mic, Speaker, Video } from "lucide-react";
 
 import { PopoverContent } from "@/components/ui/popover";
 import { CALL_DEVICES_CHANGED_EVENT } from "@/hooks/use-call";
@@ -123,6 +123,85 @@ function DeviceDropdown({ label, icon, items, value, onSelect }: DeviceDropdownP
 }
 
 /**
+ * Live level for the selected microphone, so you can instantly tell whether the
+ * bar reacts to your voice — and confirm the app is really using the headset
+ * mic you picked (a flat bar means it is not).
+ */
+function MicLevel({ deviceId }: { deviceId: string }) {
+  const [level, setLevel] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    let stream: MediaStream | null = null;
+    let context: AudioContext | null = null;
+    let frame = 0;
+    let analyser: AnalyserNode | null = null;
+
+    const start = async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+          video: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        context = new AudioContext();
+        await context.resume().catch(() => undefined);
+        const source = context.createMediaStreamSource(stream);
+        analyser = context.createAnalyser();
+        analyser.fftSize = 512;
+        source.connect(analyser);
+        const buffer = new Uint8Array(new ArrayBuffer(analyser.fftSize));
+
+        const tick = () => {
+          if (cancelled || !analyser) return;
+          analyser.getByteTimeDomainData(buffer);
+          let sum = 0;
+          for (let index = 0; index < buffer.length; index += 1) {
+            const value = ((buffer[index] ?? 128) - 128) / 128;
+            sum += value * value;
+          }
+          setLevel(Math.min(1, Math.sqrt(sum / buffer.length) * 3.5));
+          frame = window.requestAnimationFrame(tick);
+        };
+        tick();
+      } catch {
+        if (!cancelled) setLevel(0);
+      }
+    };
+
+    void start();
+
+    return () => {
+      cancelled = true;
+      if (frame) window.cancelAnimationFrame(frame);
+      stream?.getTracks().forEach((track) => track.stop());
+      void context?.close().catch(() => undefined);
+    };
+  }, [deviceId]);
+
+  return (
+    <div className="space-y-1.5">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-white/80">
+        <Activity className="size-3.5" />
+        Mic level
+      </span>
+      <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full rounded-full bg-green-500"
+          style={{ width: `${Math.round(level * 100)}%` }}
+        />
+      </div>
+      <p className="text-[10px] leading-4 text-white/50">
+        Speak — this bar should move. If it stays flat, the selected mic isn&apos;t picking you up.
+      </p>
+    </div>
+  );
+}
+
+/**
  * In-call device picker: microphone input, camera input and speaker output.
  * Selections persist per browser; output changes apply immediately, while
  * mic/camera picks are picked up the next time each is enabled.
@@ -184,6 +263,7 @@ export function CallDeviceSettings() {
         value={picked.mic}
         onSelect={(deviceId) => update("mic", deviceId)}
       />
+      <MicLevel deviceId={picked.mic} />
       <DeviceDropdown
         label="Camera"
         icon={<Video className="size-3.5" />}
@@ -199,8 +279,8 @@ export function CallDeviceSettings() {
         onSelect={(deviceId) => update("spk", deviceId)}
       />
       <p className="text-[10px] leading-4 text-white/50">
-        Output changes apply immediately. Microphone and camera changes apply the next time you
-        enable them.
+        Microphone and output changes apply immediately. Camera changes apply the next time you
+        enable the camera.
       </p>
     </PopoverContent>
   );

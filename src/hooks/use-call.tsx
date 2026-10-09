@@ -150,6 +150,33 @@ function storedDevice(key: string): string {
   }
 }
 
+/**
+ * Acquires the microphone, honouring the saved device pick with an EXACT match
+ * so the browser cannot silently fall back to a different input (e.g. the
+ * laptop's built-in mic when a headset is selected). It only falls back to the
+ * system default when the saved device is genuinely unavailable.
+ */
+async function acquireMicStream(deviceId: string): Promise<MediaStream> {
+  const base: MediaTrackConstraints = {
+    // Echo cancellation + noise suppression on; auto gain stays OFF because it
+    // pumps up room hiss into audible white noise.
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: false,
+  };
+  if (deviceId) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: { ...base, deviceId: { exact: deviceId } },
+        video: false,
+      });
+    } catch {
+      // Saved device is gone (unplugged / id rotated): fall back to default.
+    }
+  }
+  return navigator.mediaDevices.getUserMedia({ audio: base, video: false });
+}
+
 type SinkAudio = HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
 
 /** Caps outgoing video at 1080p-class 2.5 Mbps / 30 fps to bound relay cost. */
@@ -468,6 +495,8 @@ export function useCall(
   const iceServersRef = useRef<RTCIceServer[]>(ICE_SERVERS);
   const deafenedRef = useRef(false);
   const serverMutedRef = useRef(false);
+  /** Last microphone device applied, so device-change events don't re-acquire. */
+  const lastMicRef = useRef(storedDevice(DEVICE_KEYS.mic));
   const isGuestRef = useRef(isGuest);
   const isHostRef = useRef(false);
   const isAdminRef = useRef(isAdmin);
@@ -1736,19 +1765,7 @@ export function useCall(
 
         // Refresh the relay configuration for this call before any peer exists.
       iceServersRef.current = await loadIceServers();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          // Echo cancellation + noise suppression on; auto gain staying OFF
-          // because it pumps up room hiss into audible white noise.
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: false,
-          ...(storedDevice(DEVICE_KEYS.mic)
-            ? { deviceId: { ideal: storedDevice(DEVICE_KEYS.mic) } }
-            : {}),
-        },
-        video: false,
-      });
+      const stream = await acquireMicStream(storedDevice(DEVICE_KEYS.mic));
         if (cancelled()) {
           stream.getTracks().forEach((track) => track.stop());
           return;
@@ -2654,6 +2671,58 @@ export function useCall(
     window.addEventListener(CALL_DEVICES_CHANGED_EVENT, applyOutput);
     return () => window.removeEventListener(CALL_DEVICES_CHANGED_EVENT, applyOutput);
   }, []);
+
+  /**
+   * Microphone picks apply immediately: re-acquire the chosen input and swap the
+   * live audio track on every peer connection, so picking the right headset (or
+   * a headset whose hardware mute actually silences it) takes effect mid-call
+   * instead of only after rejoining.
+   */
+  const applyMicDevice = useCallback(async () => {
+    if (!inCallRef.current) return;
+
+    let next: MediaStream;
+    try {
+      next = await acquireMicStream(storedDevice(DEVICE_KEYS.mic));
+    } catch {
+      toast.error("Couldn't switch microphone");
+      return;
+    }
+    const newTrack = next.getAudioTracks()[0];
+    if (!newTrack) {
+      next.getTracks().forEach((track) => track.stop());
+      return;
+    }
+
+    const local = localStreamRef.current;
+    if (local) {
+      for (const oldTrack of local.getAudioTracks()) {
+        local.removeTrack(oldTrack);
+        oldTrack.stop();
+      }
+      local.addTrack(newTrack);
+    } else {
+      localStreamRef.current = next;
+    }
+
+    newTrack.enabled = !mutedRef.current && !deafenedRef.current && !serverMutedRef.current;
+
+    for (const peer of peersRef.current.values()) {
+      const sender = peer.pc.getSenders().find((item) => item.track?.kind === "audio");
+      if (sender) void sender.replaceTrack(newTrack).catch(() => undefined);
+    }
+  }, []);
+
+  useEffect(() => {
+    const onDevicesChanged = () => {
+      const next = storedDevice(DEVICE_KEYS.mic);
+      if (next === lastMicRef.current) return;
+      lastMicRef.current = next;
+      void applyMicDevice();
+    };
+    window.addEventListener(CALL_DEVICES_CHANGED_EVENT, onDevicesChanged);
+    return () => window.removeEventListener(CALL_DEVICES_CHANGED_EVENT, onDevicesChanged);
+  }, [applyMicDevice]);
 
   // Active-speaker highlight: poll every peer's analyser (plus our own mic)
   // and surface the loudest participant.
