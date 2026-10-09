@@ -124,6 +124,8 @@ export type CallParticipant = {
   name: string;
   muted: boolean;
   video: boolean;
+  /** True while this participant is sharing their screen (broadcast). */
+  sharing: boolean;
   deafened: boolean;
   /** Muted by the host for everyone. */
   serverMuted: boolean;
@@ -196,6 +198,7 @@ type StatePayload = {
   name?: string;
   muted?: boolean;
   video?: boolean;
+  sharing?: boolean;
   deafened?: boolean;
   serverMuted?: boolean;
   guest?: boolean;
@@ -368,6 +371,10 @@ export function useCall(
   const joiningRef = useRef(false);
   const mutedRef = useRef(false);
   const cameraOnRef = useRef(false);
+  const screenSharingRef = useRef(false);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const [screenSharing, setScreenSharing] = useState(false);
+  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
   const deafenedRef = useRef(false);
   const serverMutedRef = useRef(false);
   const isGuestRef = useRef(isGuest);
@@ -550,6 +557,7 @@ export function useCall(
           name: patch.name ?? "Someone",
           muted: patch.muted ?? false,
           video: patch.video ?? false,
+    sharing: patch.sharing ?? false,
           deafened: patch.deafened ?? false,
           serverMuted: patch.serverMuted ?? false,
           localMuted: localMutedRef.current.has(id),
@@ -993,6 +1001,7 @@ export function useCall(
       name: self.name,
       muted: mutedRef.current || deafenedRef.current || serverMutedRef.current,
       video: cameraOnRef.current,
+      sharing: screenSharingRef.current,
       deafened: deafenedRef.current,
       serverMuted: serverMutedRef.current,
       guest: isGuestRef.current,
@@ -1235,6 +1244,7 @@ export function useCall(
         ...(data.name ? { name: data.name } : {}),
         muted: data.muted === true,
         video: data.video === true,
+        sharing: data.sharing === true,
         deafened: data.deafened === true,
         serverMuted: data.serverMuted === true,
         isGuest: data.guest === true,
@@ -1878,6 +1888,10 @@ export function useCall(
 
   const toggleCamera = useCallback(async () => {
     if (!inCallRef.current) return;
+    if (screenSharingRef.current) {
+      toast.info("Stop screen sharing first to use the camera");
+      return;
+    }
 
     if (cameraOnRef.current) {
       cameraOnRef.current = false;
@@ -1958,6 +1972,97 @@ export function useCall(
       setError(mediaErrorMessage(cause, "camera"));
     }
   }, [broadcastState]);
+
+  /** Stops an active screen share and hands the video track back to the camera. */
+  const stopScreenShare = useCallback(() => {
+    if (!screenSharingRef.current) return;
+    screenSharingRef.current = false;
+    setScreenSharing(false);
+
+    const display = screenStreamRef.current;
+    screenStreamRef.current = null;
+    setScreenStream(null);
+    display?.getTracks().forEach((item) => item.stop());
+
+    const restore =
+      (cameraOnRef.current ? cameraStreamRef.current?.getVideoTracks()[0] : null) ?? null;
+    for (const peer of peersRef.current.values()) {
+      const sender = peer.videoTransceiver?.sender ?? peer.videoSender;
+      if (!sender) continue;
+      void sender.replaceTrack(restore).catch(() => undefined);
+    }
+    broadcastState();
+  }, [broadcastState]);
+
+  const toggleScreenShare = useCallback(async () => {
+    if (!inCallRef.current) return;
+
+    if (screenSharingRef.current) {
+      stopScreenShare();
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getDisplayMedia) {
+      toast.error("Screen sharing is not supported in this browser");
+      return;
+    }
+
+    try {
+      const display = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+      if (!inCallRef.current) {
+        display.getTracks().forEach((item) => item.stop());
+        return;
+      }
+      const track = display.getVideoTracks()[0];
+      if (!track) {
+        display.getTracks().forEach((item) => item.stop());
+        throw new Error("No screen was selected");
+      }
+
+      // Stopping from the browser's own "Stop sharing" bar ends the track.
+      track.addEventListener("ended", () => {
+        if (screenSharingRef.current) stopScreenShare();
+      });
+
+      screenStreamRef.current = display;
+      screenSharingRef.current = true;
+
+      const renegotiate: string[] = [];
+      for (const [peerId, peer] of peersRef.current.entries()) {
+        const sender = peer.videoTransceiver?.sender ?? peer.videoSender;
+        if (!sender) continue;
+        try {
+          await sender.replaceTrack(track);
+        } catch {
+          // Peer is closing; ignore.
+        }
+        // Same rule as the camera path: a peer that never negotiated this
+        // video m-line needs a fresh offer before frames flow.
+        const transceiver = peer.videoTransceiver;
+        const current = transceiver?.currentDirection ?? null;
+        if (
+          !transceiver ||
+          transceiver.mid === null ||
+          current === null ||
+          current === "inactive" ||
+          current === "recvonly"
+        ) {
+          renegotiate.push(peerId);
+        }
+      }
+
+      setScreenSharing(true);
+      setScreenStream(display);
+      broadcastState();
+      for (const peerId of renegotiate) negotiatePeerRef.current(peerId);
+    } catch (cause) {
+      // User cancelled the picker, or the browser blocked it.
+      const name = cause instanceof DOMException ? cause.name : "";
+      if (name !== "NotAllowedError" && name !== "AbortError") {
+        toast.error("Could not start screen sharing");
+      }
+    }
+  }, [broadcastState, stopScreenShare]);
 
   // ---- Per-user audio controls ----------------------------------------------
 
@@ -2388,6 +2493,9 @@ export function useCall(
     declineIncomingCall,
     toggleMute,
     toggleCamera,
+    toggleScreenShare,
+    screenSharing,
+    screenStream,
     toggleDeafen,
     setParticipantVolume,
     toggleParticipantLocalMute,

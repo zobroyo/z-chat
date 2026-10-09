@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Ban,
+  ScreenShare,
   Crown,
   HeadphoneOff,
   Mic,
@@ -47,6 +48,8 @@ export type CallParticipantTileProps = {
   isGuest?: boolean;
   volume?: number;
   /** Current user is the host and may moderate this tile. */
+  /** True while this participant is sharing their screen. */
+  sharing?: boolean;
   canModerate?: boolean;
   onVolumeChange?: (volume: number) => void;
   onToggleLocalMute?: () => void;
@@ -76,6 +79,7 @@ export function CallParticipantTile({
   isGuest = false,
   volume = 100,
   canModerate = false,
+  sharing = false,
   onVolumeChange,
   onToggleLocalMute,
   onToggleServerMute,
@@ -120,6 +124,12 @@ export function CallParticipantTile({
           {isGuest && !self && (
             <span className="rounded bg-white/15 px-1 text-[10px] font-semibold tracking-wide text-white/70 uppercase">
               guest
+            </span>
+          )}
+          {sharing && (
+            <span className="flex shrink-0 items-center gap-1 rounded bg-primary px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-primary-foreground uppercase">
+              <ScreenShare className="size-3" />
+              screen
             </span>
           )}
           {serverMuted && !self && (

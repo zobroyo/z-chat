@@ -12,6 +12,8 @@ import {
   Music,
   PhoneCall,
   PhoneOff,
+  ScreenShare,
+  ScreenShareOff,
   Video,
   VideoOff,
 } from "lucide-react";
@@ -258,9 +260,10 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
               <CallParticipantTile
                 name="You"
                 muted={call.muted || call.deafened || call.serverMuted}
-                video={call.cameraOn}
-                stream={call.localStream}
+                video={call.cameraOn || call.screenSharing}
+                stream={call.screenSharing ? call.screenStream : call.localStream}
                 self
+                sharing={call.screenSharing}
                 deafened={call.deafened}
                 serverMuted={call.serverMuted}
                 isHost={call.isHost}
@@ -271,7 +274,8 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                   key={participant.id}
                   name={participant.name}
                   muted={participant.muted || participant.serverMuted}
-                  video={participant.video}
+                  video={participant.video || participant.sharing}
+                  sharing={participant.sharing}
                   stream={call.remoteStreams[participant.id] ?? null}
                   deafened={participant.deafened}
                   serverMuted={participant.serverMuted}
@@ -318,6 +322,18 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                 onClick={() => void call.toggleCamera()}
               >
                 {call.cameraOn ? <Video className="size-5" /> : <VideoOff className="size-5" />}
+              </ControlButton>
+
+              <ControlButton
+                label={call.screenSharing ? "Stop sharing screen" : "Share screen"}
+                active={call.screenSharing}
+                onClick={() => void call.toggleScreenShare()}
+              >
+                {call.screenSharing ? (
+                  <ScreenShareOff className="size-5" />
+                ) : (
+                  <ScreenShare className="size-5" />
+                )}
               </ControlButton>
 
               <ControlButton
