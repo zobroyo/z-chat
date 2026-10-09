@@ -151,6 +151,23 @@ function storedDevice(key: string): string {
 
 type SinkAudio = HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
 
+/** Caps outgoing video at 1080p-class 2.5 Mbps / 30 fps to bound relay cost. */
+function capVideoSender(sender: RTCRtpSender): void {
+  try {
+    const parameters = sender.getParameters();
+    if (!parameters.encodings || parameters.encodings.length === 0) {
+      parameters.encodings = [{}];
+    }
+    for (const encoding of parameters.encodings) {
+      encoding.maxBitrate = 2_500_000;
+      encoding.maxFramerate = 30;
+    }
+    void sender.setParameters(parameters).catch(() => undefined);
+  } catch {
+    // Older browser without full sender parameters: skip the cap.
+  }
+}
+
 const CHANNEL_TIMEOUT_MS = 15_000;
 /** Give a fresh offer time to finish ICE gathering/checks before rebuilding. */
 const CONNECT_GRACE_MS = 15_000;
@@ -846,6 +863,7 @@ export function useCall(
       const cameraTrack = cameraStreamRef.current?.getVideoTracks()[0];
       if (cameraTrack && peer.videoSender) {
         void peer.videoSender.replaceTrack(cameraTrack).catch(() => undefined);
+        capVideoSender(peer.videoSender);
       }
 
       // A late media change (e.g. a camera track swapped into a transceiver
@@ -1244,6 +1262,7 @@ export function useCall(
           const cameraTrack = cameraStreamRef.current?.getVideoTracks()[0];
           if (cameraTrack) {
             void negotiatedVideo.sender.replaceTrack(cameraTrack).catch(() => undefined);
+      capVideoSender(negotiatedVideo.sender);
           }
         }
 
@@ -1991,9 +2010,15 @@ export function useCall(
 
     try {
       const camera = await navigator.mediaDevices.getUserMedia({
-        video: storedDevice(DEVICE_KEYS.cam)
-          ? { deviceId: { exact: storedDevice(DEVICE_KEYS.cam) } }
-          : true,
+        video: {
+          ...(storedDevice(DEVICE_KEYS.cam)
+            ? { deviceId: { exact: storedDevice(DEVICE_KEYS.cam) } }
+            : {}),
+          // 1080p cap: crisp enough for talking heads, bounded relay traffic.
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          frameRate: { ideal: 30, max: 30 },
+        },
       });
       if (!inCallRef.current) {
         camera.getTracks().forEach((item) => item.stop());
@@ -2040,6 +2065,10 @@ export function useCall(
         }
       }
 
+      for (const peer of peersRef.current.values()) {
+        const sender = peer.videoTransceiver?.sender ?? peer.videoSender;
+        if (sender) capVideoSender(sender);
+      }
       setCameraOn(true);
       broadcastState();
       for (const peerId of renegotiate) negotiatePeerRef.current(peerId);
@@ -2126,6 +2155,10 @@ export function useCall(
         }
       }
 
+      for (const peer of peersRef.current.values()) {
+        const sender = peer.videoTransceiver?.sender ?? peer.videoSender;
+        if (sender) capVideoSender(sender);
+      }
       setScreenSharing(true);
       setScreenStream(display);
       broadcastState();
