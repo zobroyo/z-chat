@@ -1,6 +1,6 @@
 {
-  "name": "ZChat",
-  "short_name": "ZChat",
+  "name": "Z Chat",
+  "short_name": "Z Chat",
   "description": "Fast, private messaging with friends and groups.",
   "start_url": "/chat",
   "scope": "/",
@@ -8,6 +8,12 @@
   "background_color": "#0b0b0d",
   "theme_color": "#0b0b0d",
   "icons": [
+    {
+      "src": "/icons/z-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/icons/z-512.png",
       "sizes": "512x512",
