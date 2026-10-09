@@ -1117,6 +1117,8 @@ function ChatPage() {
       avatar: me?.avatar_url ?? null,
     },
     {
+      // Admins keep host-level moderation powers in every call.
+      isAdmin,
       // Accepting a call that belongs to another conversation switches the
       // chat UI to it (the call overlay itself shows either way).
       onSwitchConversation: (conversationId) => {

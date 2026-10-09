@@ -7,6 +7,7 @@ import {
   Mic,
   MicOff,
   MoreHorizontal,
+  Shield,
   UserMinus,
   Volume2,
   VolumeX,
@@ -45,6 +46,7 @@ export type CallParticipantTileProps = {
   serverMuted?: boolean;
   localMuted?: boolean;
   isHost?: boolean;
+  isAdmin?: boolean;
   isGuest?: boolean;
   volume?: number;
   /** Current user is the host and may moderate this tile. */
@@ -87,6 +89,7 @@ export function CallParticipantTile({
   serverMuted = false,
   localMuted = false,
   isHost = false,
+  isAdmin = false,
   isGuest = false,
   volume = 100,
   canModerate = false,
@@ -140,6 +143,9 @@ export function CallParticipantTile({
           {deafened && <HeadphoneOff className="size-3.5 shrink-0 text-amber-400" />}
           {localMuted && <VolumeX className="size-3.5 shrink-0 text-amber-400" />}
           {isHost && <Crown className="size-3.5 shrink-0 text-primary" aria-label="Call host" />}
+          {isAdmin && !isHost && (
+            <Shield className="size-3.5 shrink-0 text-amber-400" aria-label="Z Chat admin" />
+          )}
           <span className="max-w-40 truncate sm:max-w-56">{self ? "You" : name}</span>
           {isGuest && !self && (
             <span className="rounded bg-white/15 px-1 text-[10px] font-semibold tracking-wide text-white/70 uppercase">
@@ -153,7 +159,7 @@ export function CallParticipantTile({
             </span>
           )}
           {serverMuted && !self && (
-            <span className="shrink-0 text-[10px] font-semibold text-red-400">muted by host</span>
+            <span className="shrink-0 text-[10px] font-semibold text-red-400">muted by moderator</span>
           )}
         </span>
 

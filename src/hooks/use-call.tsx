@@ -205,6 +205,8 @@ export type CallParticipant = {
   /** Local playback volume 0-200 (never broadcast). */
   volume: number;
   isGuest: boolean;
+  /** True when this participant is a Z Chat admin (host-level call powers). */
+  isAdmin: boolean;
   /** Breakout room id, or null for the main room. */
   roomId: string | null;
   /** Sender clock at join, used for host election. */
@@ -221,6 +223,12 @@ export type UseCallOptions = {
   client?: SupabaseClient;
   /** Guest link mode: throwaway identity, no incoming-ring listener. */
   guest?: boolean;
+  /**
+   * Local user is a Z Chat admin. Admins get host-level powers in every call
+   * (server mute / kick / ban, breakout rooms, guest invites) regardless of
+   * join order, in addition to the elected session host.
+   */
+  isAdmin?: boolean;
   /** Shared secret embedded in the guest link. */
   guestKey?: string | null;
   /** Set false on the guest page so joins are never treated as incoming calls. */
@@ -257,6 +265,8 @@ type JoinPayload = {
   name?: string;
   avatar?: string | null;
   host?: boolean;
+  /** True when the joiner is a Z Chat admin (host-level call powers). */
+  admin?: boolean;
   guest?: boolean;
   key?: string;
   joinedAt?: number;
@@ -278,6 +288,8 @@ type StatePayload = {
   joinedAt?: number;
   roomId?: string | null;
   host?: boolean;
+  /** True when this participant is a Z Chat admin (host-level call powers). */
+  admin?: boolean;
   guestKey?: string | null;
 };
 type LeavePayload = { userId?: string };
@@ -399,6 +411,7 @@ export function useCall(
   const [notice, setNotice] = useState<string | null>(null);
 
   const isGuest = options?.guest === true;
+  const isAdmin = options?.isAdmin === true;
   const listenForIncoming = options?.listenForIncoming !== false && !isGuest;
 
   // Keep the latest props/state available to stable callbacks without
@@ -456,6 +469,10 @@ export function useCall(
   const serverMutedRef = useRef(false);
   const isGuestRef = useRef(isGuest);
   const isHostRef = useRef(false);
+  const isAdminRef = useRef(isAdmin);
+  isAdminRef.current = isAdmin;
+  /** Remote participants known to be admins (from their join/state broadcasts). */
+  const adminIdsRef = useRef(new Set<string>());
   const hostIdRef = useRef<string | null>(null);
   const myJoinedAtRef = useRef(0);
   const guestKeyRef = useRef<string | null>(options?.guestKey ?? null);
@@ -486,12 +503,21 @@ export function useCall(
   }, []);
 
   /**
+   * Whether a remote sender may moderate this call: the currently elected host
+   * or any participant we know to be an admin (from their join/state frames).
+   */
+  const isModeratorId = useCallback((id: string | null | undefined): boolean => {
+    if (!id) return false;
+    return id === hostIdRef.current || adminIdsRef.current.has(id);
+  }, []);
+
+  /**
    * Host: re-broadcast the full ban list. Sent to every participant on join
    * (so late joiners learn the bans) and whenever host election picks a new
    * host, so moderation state survives the previous host leaving.
    */
   const broadcastBans = useCallback(() => {
-    if (!isHostRef.current) return;
+    if (!isHostRef.current && !isAdminRef.current) return;
     send("bans", { ids: [...bannedRef.current], by: meRef.current.id });
   }, [send]);
 
@@ -641,6 +667,7 @@ export function useCall(
           localMuted: localMutedRef.current.has(id),
           volume: volumesRef.current.get(id) ?? patch.volume ?? 100,
           isGuest: patch.isGuest ?? false,
+          isAdmin: patch.isAdmin ?? false,
           roomId: patch.roomId ?? null,
           joinedAt: patch.joinedAt ?? Date.now(),
         });
@@ -777,7 +804,7 @@ export function useCall(
       const wasKnown = bannedRef.current.has(participantId);
       bannedRef.current.add(participantId);
       dropParticipant(participantId);
-      if (!wasKnown && hostIdRef.current) broadcastBans();
+      if (!wasKnown) broadcastBans();
     },
     [broadcastBans, dropParticipant],
   );
@@ -1100,7 +1127,10 @@ export function useCall(
       joinedAt: myJoinedAtRef.current,
       roomId: myRoomIdRef.current,
       host: isHostRef.current,
-      ...(isHostRef.current && guestKeyRef.current ? { guestKey: guestKeyRef.current } : {}),
+      admin: isAdminRef.current,
+      ...((isHostRef.current || isAdminRef.current) && guestKeyRef.current
+        ? { guestKey: guestKeyRef.current }
+        : {}),
     });
   }, [send]);
 
@@ -1130,7 +1160,7 @@ export function useCall(
 
   const broadcastRooms = useCallback(
     (rooms: BreakoutRoom[], assignments: Record<string, string | null>) => {
-      if (!isHostRef.current) return;
+      if (!isHostRef.current && !isAdminRef.current) return;
       send("rooms", {
         rooms,
         assignments,
@@ -1143,7 +1173,7 @@ export function useCall(
 
   const ensureGuestKey = useCallback((): string | null => {
     if (guestKeyRef.current) return guestKeyRef.current;
-    if (!isHostRef.current) return null;
+    if (!isHostRef.current && !isAdminRef.current) return null;
     const key = randomGuestKey();
     guestKeyRef.current = key;
     setGuestKey(key);
@@ -1166,7 +1196,7 @@ export function useCall(
       // banned client (which may have reloaded and lost its local ban list),
       // so it leaves the UI with the ban notice instead of hanging.
       if (bannedRef.current.has(userId)) {
-        if (isHostRef.current) send("ban", { target: userId, by: self.id });
+        if (isHostRef.current || isAdminRef.current) send("ban", { target: userId, by: self.id });
         return;
       }
 
@@ -1178,11 +1208,14 @@ export function useCall(
         if (expected && data.key !== expected) return;
       }
 
+      if (data.admin === true) adminIdsRef.current.add(userId);
+
       const theirRoom = assignmentsRef.current[userId] ?? null;
       patchParticipant(userId, {
         ...(data.name ? { name: data.name } : {}),
         ...(data.avatar !== undefined ? { avatar: data.avatar ?? null } : {}),
         isGuest: data.guest === true,
+        ...(typeof data.admin === "boolean" ? { isAdmin: data.admin } : {}),
         ...(typeof data.joinedAt === "number" && data.joinedAt > 0
           ? { joinedAt: data.joinedAt }
           : {}),
@@ -1336,6 +1369,11 @@ export function useCall(
       const self = meRef.current;
       if (!data?.userId || data.userId === self.id) return;
 
+      if (typeof data.admin === "boolean") {
+        if (data.admin) adminIdsRef.current.add(data.userId);
+        else adminIdsRef.current.delete(data.userId);
+      }
+
       patchParticipant(data.userId, {
         ...(data.name ? { name: data.name } : {}),
         ...(data.avatar !== undefined ? { avatar: data.avatar ?? null } : {}),
@@ -1345,6 +1383,7 @@ export function useCall(
         deafened: data.deafened === true,
         serverMuted: data.serverMuted === true,
         isGuest: data.guest === true,
+        ...(typeof data.admin === "boolean" ? { isAdmin: data.admin } : {}),
         ...(typeof data.joinedAt === "number" && data.joinedAt > 0
           ? { joinedAt: data.joinedAt }
           : {}),
@@ -1374,6 +1413,7 @@ export function useCall(
       if (!data?.userId) return;
       volumesRef.current.delete(data.userId);
       localMutedRef.current.delete(data.userId);
+      adminIdsRef.current.delete(data.userId);
       closePeer(data.userId);
       // Recompute even when no peer existed (e.g. a room-mate that never connected).
       knownRef.current.delete(data.userId);
@@ -1411,7 +1451,7 @@ export function useCall(
   const handleRooms = useCallback(
     (data: RoomsPayload | null) => {
       if (!data) return;
-      if (data.by && hostIdRef.current && data.by !== hostIdRef.current) return;
+      if (data.by && !isModeratorId(data.by)) return;
 
       if (data.guestKey && !isGuestRef.current) {
         guestKeyRef.current = data.guestKey;
@@ -1423,7 +1463,7 @@ export function useCall(
       );
       applyRooms(rooms, data.assignments ?? {});
     },
-    [applyRooms],
+    [applyRooms, isModeratorId],
   );
 
   const applyServerMute = useCallback(
@@ -1433,7 +1473,7 @@ export function useCall(
         applyLocalAudio();
         setServerMuted(muted);
         broadcastState();
-        if (muted) toast.error("You were muted by the call host");
+        if (muted) toast.error("You were muted by a call moderator");
         return;
       }
       patchParticipant(target, { serverMuted: muted });
@@ -1446,11 +1486,11 @@ export function useCall(
     (data: ModPayload | null) => {
       if (!data?.target || data.muted === undefined || !data.by) return;
       if (data.by === meRef.current.id) return;
-      // Only the elected host may moderate.
-      if (hostIdRef.current && data.by !== hostIdRef.current) return;
+      // Only the elected host or an admin may moderate.
+      if (!isModeratorId(data.by)) return;
       applyServerMute(data.target, data.muted === true);
     },
-    [applyServerMute],
+    [applyServerMute, isModeratorId],
   );
 
   /** Host kicked a participant: everyone drops it, the target leaves. */
@@ -1458,8 +1498,8 @@ export function useCall(
     (data: KickPayload | null) => {
       if (!data?.target || !data.by) return;
       if (data.by === meRef.current.id) return;
-      // Only the current host's kick is honored.
-      if (hostIdRef.current && data.by !== hostIdRef.current) return;
+      // Only the current host's or an admin's kick is honored.
+      if (!isModeratorId(data.by)) return;
 
       if (data.target === meRef.current.id) {
         const message = "You were removed from this call";
@@ -1471,7 +1511,7 @@ export function useCall(
       }
       dropParticipant(data.target);
     },
-    [dropParticipant],
+    [dropParticipant, isModeratorId],
   );
 
   /** Host banned a participant for the rest of the call session. */
@@ -1479,7 +1519,7 @@ export function useCall(
     (data: BanPayload | null) => {
       if (!data?.target || !data.by) return;
       if (data.by === meRef.current.id) return;
-      if (hostIdRef.current && data.by !== hostIdRef.current) return;
+      if (!isModeratorId(data.by)) return;
 
       if (data.target === meRef.current.id) {
         const message = "You are banned from this call";
@@ -1494,7 +1534,7 @@ export function useCall(
       }
       applyBan(data.target);
     },
-    [applyBan],
+    [applyBan, isModeratorId],
   );
 
   /** Host re-broadcast of the full ban list (on join / host election). */
@@ -1502,7 +1542,7 @@ export function useCall(
     (data: BansPayload | null) => {
       if (!data?.by || !Array.isArray(data.ids)) return;
       if (data.by === meRef.current.id) return;
-      if (hostIdRef.current && data.by !== hostIdRef.current) return;
+      if (!isModeratorId(data.by)) return;
 
       for (const id of data.ids) {
         if (typeof id !== "string" || !id || bannedRef.current.has(id)) continue;
@@ -1519,7 +1559,7 @@ export function useCall(
         applyBan(id);
       }
     },
-    [applyBan],
+    [applyBan, isModeratorId],
   );
 
   const clearNotice = useCallback(() => setNotice(null), []);
@@ -1788,6 +1828,7 @@ export function useCall(
               if (!peerId || peerId === self.id) continue;
               volumesRef.current.delete(peerId);
               localMutedRef.current.delete(peerId);
+              adminIdsRef.current.delete(peerId);
               closePeer(peerId);
               knownRef.current.delete(peerId);
               commitParticipants();
@@ -1869,11 +1910,12 @@ export function useCall(
         // subscriptions, so send it a few times; the heartbeat continues after.
         const announce = () => {
           if (cancelled() || !inCallRef.current) return;
-    send("join", {
-      userId: self.id,
-      name: self.name,
-      avatar: self.avatar ?? null,
-      host: isHostRef.current,
+          send("join", {
+            userId: self.id,
+            name: self.name,
+            avatar: self.avatar ?? null,
+            host: isHostRef.current,
+            admin: isAdminRef.current,
             guest: isGuestRef.current,
             joinedAt: myJoinedAtRef.current,
             roomId: myRoomIdRef.current,
@@ -2230,17 +2272,18 @@ export function useCall(
 
   const setParticipantServerMute = useCallback(
     (participantId: string, value: boolean) => {
-      if (!isHostRef.current) return;
+      if (!isHostRef.current && !isAdminRef.current) return;
       send("mod", { target: participantId, muted: value, by: meRef.current.id });
       applyServerMute(participantId, value);
     },
     [applyServerMute, send],
   );
 
-  /** Host action: remove a participant from the call. They may rejoin. */
+  /** Host/admin action: remove a participant from the call. They may rejoin. */
   const kickParticipant = useCallback(
     (participantId: string) => {
-      if (!isHostRef.current || !participantId || participantId === meRef.current.id) return;
+      if ((!isHostRef.current && !isAdminRef.current) || !participantId || participantId === meRef.current.id)
+        return;
       send("kick", { target: participantId, by: meRef.current.id });
       dropParticipant(participantId);
       toast.success("Participant removed from the call");
@@ -2248,10 +2291,11 @@ export function useCall(
     [dropParticipant, send],
   );
 
-  /** Host action: ban a participant for the rest of the call session. */
+  /** Host/admin action: ban a participant for the rest of the call session. */
   const banParticipant = useCallback(
     (participantId: string) => {
-      if (!isHostRef.current || !participantId || participantId === meRef.current.id) return;
+      if ((!isHostRef.current && !isAdminRef.current) || !participantId || participantId === meRef.current.id)
+        return;
       send("ban", { target: participantId, by: meRef.current.id });
       applyBan(participantId);
       broadcastBans();
@@ -2277,7 +2321,7 @@ export function useCall(
   // ---- Breakout rooms (host authoritative) -----------------------------------
 
   const createBreakoutRoom = useCallback(() => {
-    if (!isHostRef.current) return;
+    if (!isHostRef.current && !isAdminRef.current) return;
     const room: BreakoutRoom = {
       id: randomGuestKey(),
       name: `Room ${roomsRef.current.length + 1}`,
@@ -2289,7 +2333,7 @@ export function useCall(
 
   const moveParticipantToRoom = useCallback(
     (participantId: string, roomId: string | null) => {
-      if (!isHostRef.current) return;
+      if (!isHostRef.current && !isAdminRef.current) return;
       const nextAssignments: Record<string, string | null> = {
         ...assignmentsRef.current,
         [participantId]: roomId,
@@ -2301,7 +2345,7 @@ export function useCall(
   );
 
   const closeBreakoutRooms = useCallback(() => {
-    if (!isHostRef.current) return;
+    if (!isHostRef.current && !isAdminRef.current) return;
     broadcastRooms([], {});
     applyRooms([], {});
   }, [applyRooms, broadcastRooms]);
@@ -2687,6 +2731,10 @@ export function useCall(
     notice,
     incomingCall,
     isHost: hostId !== null && hostId === me.id,
+    /** Local user is an admin (host-level call powers). */
+    isAdmin,
+    /** Local user may moderate this call: elected host or admin. */
+    canModerate: isAdmin || (hostId !== null && hostId === me.id),
     hostId,
     selfId: me.id,
     selfAvatar: me.avatar ?? null,

@@ -254,6 +254,11 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
               Host
             </span>
           )}
+          {call.isAdmin && !call.isHost && (
+            <span className="hidden rounded-full border border-amber-400/40 bg-amber-400/15 px-2.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-300 uppercase sm:inline">
+              Admin
+            </span>
+          )}
         </header>
 
         {activity && (
@@ -324,9 +329,10 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                   serverMuted={participant.serverMuted}
                   localMuted={participant.localMuted}
                   isHost={participant.id === call.hostId}
+                  isAdmin={participant.isAdmin}
                   isGuest={participant.isGuest}
                   volume={participant.volume}
-                  canModerate={call.isHost}
+                  canModerate={call.canModerate}
                   onVolumeChange={(volume) => call.setParticipantVolume(participant.id, volume)}
                   onToggleLocalMute={() => call.toggleParticipantLocalMute(participant.id)}
                   onToggleServerMute={() =>
@@ -414,7 +420,7 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                   participants={call.participants}
                   selfId={call.selfId}
                   myRoomId={myRoomId}
-                  isHost={call.isHost}
+                  isHost={call.canModerate}
                   onCreateRoom={call.createBreakoutRoom}
                   onMove={call.moveParticipantToRoom}
                   onCloseAll={call.closeBreakoutRooms}
@@ -438,7 +444,7 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                     </BarPopoverButton>
                   </PopoverTrigger>
                   <CallGuestInvitePanel
-                    isHost={call.isHost}
+                    isHost={call.canModerate}
                     guestKey={call.guestKey}
                     conversationId={call.conversationId}
                     onEnsureKey={call.ensureGuestKey}

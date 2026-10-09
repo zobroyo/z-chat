@@ -7,6 +7,7 @@ import { CallOverlay } from "@/components/call/CallOverlay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { checkIsAdmin } from "@/lib/admin";
 import { useCall } from "@/hooks/use-call";
 import { createCallGuestClient, randomGuestName, randomLocalGuestId } from "@/lib/call-guest";
 
@@ -85,6 +86,7 @@ function CallLinkPage() {
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
   const [isGuest, setIsGuest] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -97,10 +99,12 @@ function CallLinkPage() {
         const user = data.session?.user;
         if (user?.id) {
           const name = await resolveAccountName(user);
+          const admin = await checkIsAdmin(user.id);
           if (cancelled) return;
           setClient(supabase);
           setIdentity({ id: user.id, name });
           setIsGuest(false);
+          setIsAdmin(admin);
           setBusy(false);
           setJoined(true);
           return;
@@ -228,6 +232,7 @@ function CallLinkPage() {
       guestKey={k ?? null}
       identity={identity}
       isGuest={isGuest}
+      isAdmin={isAdmin}
       onExit={() => {
         if (isGuest) setJoined(false);
         else window.location.assign("/chat");
@@ -242,6 +247,7 @@ function CallLinkRoom({
   guestKey,
   identity,
   isGuest,
+  isAdmin,
   onExit,
 }: {
   client: SupabaseClient;
@@ -249,11 +255,13 @@ function CallLinkRoom({
   guestKey: string | null;
   identity: CallIdentity;
   isGuest: boolean;
+  isAdmin: boolean;
   onExit: () => void;
 }) {
   const call = useCall(conversationId, identity, {
     client,
     guest: isGuest,
+    isAdmin,
     guestKey,
     listenForIncoming: false,
     // The link already told this client about the call; don't re-ring members.
