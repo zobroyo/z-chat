@@ -253,6 +253,7 @@ export type IncomingCall = {
 type JoinPayload = {
   userId?: string;
   name?: string;
+  avatar?: string | null;
   host?: boolean;
   guest?: boolean;
   key?: string;
@@ -265,6 +266,7 @@ type IcePayload = { to?: string; from?: string; candidate?: RTCIceCandidateInit 
 type StatePayload = {
   userId?: string;
   name?: string;
+  avatar?: string | null;
   muted?: boolean;
   video?: boolean;
   sharing?: boolean;
@@ -368,7 +370,7 @@ function randomGuestKey(): string {
 
 export function useCall(
   conversationId: string | null,
-  me: { id: string; name: string },
+  me: { id: string; name: string; avatar?: string | null },
   options?: UseCallOptions,
 ) {
   const [inCall, setInCall] = useState(false);
