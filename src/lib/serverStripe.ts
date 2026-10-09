@@ -196,6 +196,7 @@ export async function handleLunchCardCheckoutRoute(request: Request): Promise<Re
       client_reference_id: auth.user.id,
       "metadata[order_id]": orderId,
       "metadata[user_id]": auth.user.id,
+      "wallet_options[link][display]": "never",
       success_url: `${APP_ORIGIN}/lunch-card?lc_session={CHECKOUT_SESSION_ID}`,
       cancel_url: `${APP_ORIGIN}/lunch-card?lc_cancel=1`,
     };
@@ -290,6 +291,7 @@ export async function handleStripeCheckoutRoute(request: Request): Promise<Respo
       "line_items[0][quantity]": "1",
       client_reference_id: auth.user.id,
       "subscription_data[metadata][zchat_user]": auth.user.id,
+      "wallet_options[link][display]": "never",
       success_url: `${APP_ORIGIN}/profile?billing=success`,
       cancel_url: `${APP_ORIGIN}/profile?billing=cancelled`,
     });
