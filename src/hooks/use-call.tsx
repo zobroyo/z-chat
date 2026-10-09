@@ -8,7 +8,6 @@ import { buildGuestCallLink } from "@/lib/call-guest";
 import { notifyIncomingCall } from "@/lib/callNotify";
 import { CALL_SOUNDS, playCallSound } from "@/lib/call-sounds";
 import { startRingtone, type RingtoneHandle } from "@/lib/ringtone";
-import { notifyIncomingCall } from "@/lib/native";
 
 /*
  * Discord-style mesh voice/video calls on top of Supabase Realtime + WebRTC.
@@ -2396,7 +2395,6 @@ export function useCall(
 
     const handle = startRingtone((blocked) => setRingAudioBlocked(blocked));
     ringtoneHandleRef.current = handle;
-    void notifyIncomingCall(incomingCallRef.current?.name || "Someone");
 
     if (handle.isBlocked()) {
       setRingAudioBlocked(true);
