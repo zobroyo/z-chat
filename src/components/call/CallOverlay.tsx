@@ -1,4 +1,4 @@
-import { forwardRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Copy,
@@ -14,6 +14,7 @@ import {
   PhoneOff,
   ScreenShare,
   ScreenShareOff,
+  Settings,
   Video,
   VideoOff,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { CallBreakoutPanel } from "@/components/call/CallBreakoutPanel";
+import { CallDeviceSettings } from "@/components/call/CallDeviceSettings";
 import { CallGuestInvitePanel } from "@/components/call/CallGuestInvitePanel";
 import { CallParticipantTile } from "@/components/call/CallParticipantTile";
 import { CallSoundboardPanel } from "@/components/call/CallSoundboardPanel";
@@ -126,6 +128,34 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   const [soundboardOpen, setSoundboardOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
 
+  // Join/leave activity: transient banner + the tile pop-in animation.
+  const [activity, setActivity] = useState<{ key: number; text: string } | null>(null);
+  const activityTimer = useRef<number | null>(null);
+  const knownParticipants = useRef<Map<string, string> | null>(null);
+
+  useEffect(() => {
+    const current = new Map(
+      call.participants.map((participant) => [participant.id, participant.name] as const),
+    );
+    const previous = knownParticipants.current;
+    knownParticipants.current = current;
+    if (!previous) return;
+    const show = (text: string) => {
+      setActivity({ key: Date.now(), text });
+      if (activityTimer.current !== null) window.clearTimeout(activityTimer.current);
+      activityTimer.current = window.setTimeout(() => setActivity(null), 3200);
+    };
+    for (const [id, name] of current) {
+      if (!previous.has(id)) show(`${name} joined the call`);
+    }
+    for (const [id, name] of previous) {
+      if (!current.has(id)) show(`${name} left the call`);
+    }
+    return () => {
+      if (activityTimer.current !== null) window.clearTimeout(activityTimer.current);
+    };
+  }, [call.participants]);
+
   if (call.incomingCall && !call.inCall && !call.joining) {
     return (
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 p-4 backdrop-blur-xl sm:items-center">
@@ -225,6 +255,15 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
             </span>
           )}
         </header>
+
+        {activity && (
+          <div
+            key={activity.key}
+            className="call-banner pointer-events-none absolute left-1/2 top-14 z-20 -translate-x-1/2 rounded-full border border-white/10 bg-black/75 px-4 py-1.5 text-xs font-medium text-white shadow-2xl backdrop-blur"
+          >
+            {activity.text}
+          </div>
+        )}
 
         {call.error && (
           <div className="mx-3 mt-2 flex shrink-0 items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/15 px-3 py-2 text-xs text-red-300 sm:mx-4">
@@ -376,6 +415,15 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                   onMove={call.moveParticipantToRoom}
                   onCloseAll={call.closeBreakoutRooms}
                 />
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <BarPopoverButton label="Audio & camera settings">
+                    <Settings className="size-5" />
+                  </BarPopoverButton>
+                </PopoverTrigger>
+                <CallDeviceSettings />
               </Popover>
 
               {!call.isGuest && (

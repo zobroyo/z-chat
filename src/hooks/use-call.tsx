@@ -137,6 +137,20 @@ async function loadIceServers(): Promise<RTCIceServer[]> {
   }
 }
 
+/** Device picks from the in-call settings panel (persisted per browser). */
+const DEVICE_KEYS = { mic: "zcall:mic", cam: "zcall:cam", spk: "zcall:spk" } as const;
+export const CALL_DEVICES_CHANGED_EVENT = "zcall-devices-changed";
+
+function storedDevice(key: string): string {
+  try {
+    return localStorage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+type SinkAudio = HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+
 const CHANNEL_TIMEOUT_MS = 15_000;
 /** Give a fresh offer time to finish ICE gathering/checks before rebuilding. */
 const CONNECT_GRACE_MS = 15_000;
@@ -865,6 +879,10 @@ export function useCall(
           audio.style.display = "none";
           document.body.appendChild(audio);
           peer.audioEl = audio;
+          const sink = storedDevice(DEVICE_KEYS.spk);
+          if (sink && typeof (audio as SinkAudio).setSinkId === "function") {
+            void (audio as SinkAudio).setSinkId?.(sink).catch(() => undefined);
+          }
         }
 
         ensurePeerGraph(peer, stream);
@@ -1629,6 +1647,9 @@ export function useCall(
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          ...(storedDevice(DEVICE_KEYS.mic)
+            ? { deviceId: { exact: storedDevice(DEVICE_KEYS.mic) } }
+            : {}),
         },
         video: false,
       });
@@ -1969,7 +1990,11 @@ export function useCall(
     }
 
     try {
-      const camera = await navigator.mediaDevices.getUserMedia({ video: true });
+      const camera = await navigator.mediaDevices.getUserMedia({
+        video: storedDevice(DEVICE_KEYS.cam)
+          ? { deviceId: { exact: storedDevice(DEVICE_KEYS.cam) } }
+          : true,
+      });
       if (!inCallRef.current) {
         camera.getTracks().forEach((item) => item.stop());
         return;
@@ -2513,6 +2538,22 @@ export function useCall(
     if (!target || !key) return null;
     return buildGuestCallLink(target, key);
   }, [copyCallInviteLink]);
+
+  // Output-device picks apply immediately to every live peer audio element.
+  useEffect(() => {
+    const applyOutput = () => {
+      const sink = storedDevice(DEVICE_KEYS.spk);
+      if (!sink) return;
+      for (const peer of peersRef.current.values()) {
+        const element = peer.audioEl as SinkAudio | null;
+        if (element && typeof element.setSinkId === "function") {
+          void element.setSinkId(sink).catch(() => undefined);
+        }
+      }
+    };
+    window.addEventListener(CALL_DEVICES_CHANGED_EVENT, applyOutput);
+    return () => window.removeEventListener(CALL_DEVICES_CHANGED_EVENT, applyOutput);
+  }, []);
 
   return {
     inCall,

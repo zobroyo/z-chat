@@ -93,7 +93,7 @@ export function CallParticipantTile({
   return (
     <div
       data-testid="call-tile"
-      className="group relative h-full min-h-0 w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] ring-1 ring-white/5 sm:rounded-3xl"
+      className="call-tile-enter group relative h-full min-h-0 w-full overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] ring-1 ring-white/5 sm:rounded-3xl"
     >
       {showVideo ? (
         <>
