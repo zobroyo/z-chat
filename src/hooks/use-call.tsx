@@ -1622,7 +1622,16 @@ export function useCall(
 
         // Refresh the relay configuration for this call before any peer exists.
       iceServersRef.current = await loadIceServers();
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          // Noise suppression for mics: echo cancellation, background-noise
+          // suppression and auto gain are all on by default now.
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
         if (cancelled()) {
           stream.getTracks().forEach((track) => track.stop());
           return;

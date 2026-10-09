@@ -1,22 +1,15 @@
 /*
- * Synthesized incoming-call ringtone — Web Audio only, no audio assets.
- *
- * A classic double-tone ring pattern (440 Hz + 480 Hz burst, repeating) until
- * stopped. Browsers block AudioContext before the first user interaction, so
- * the handle reports `isBlocked()` and the UI falls back to a visual prompt;
- * `resume()` retries playback after a gesture. Nothing in here throws.
+ * Incoming-call ringtone — two audio assets: 90% of the time the "du bist
+ * gut genug" ring, 10% the "german ringtone call" ring, looped until stopped.
+ * Browsers block audio playback before the first user interaction, so the
+ * handle reports `isBlocked()` and the UI shows a visual prompt; `resume()`
+ * retries after a gesture. Nothing in here throws.
  */
 
-const CADENCE_MS = 2600;
-
-type AudioContextCtor = new () => AudioContext;
-
-function audioContextCtor(): AudioContextCtor | null {
-  if (typeof window === "undefined") return null;
-  if (typeof AudioContext !== "undefined") return AudioContext;
-  const legacy = (window as Window & { webkitAudioContext?: AudioContextCtor }).webkitAudioContext;
-  return legacy ?? null;
-}
+const RING_SOURCES = [
+  { src: "/ringtones/ring-main.mp3", probability: 0.9 },
+  { src: "/ringtones/ring-alt.mp3", probability: 0.1 },
+] as const;
 
 export type RingtoneHandle = {
   stop: () => void;
@@ -24,108 +17,72 @@ export type RingtoneHandle = {
   isBlocked: () => boolean;
 };
 
+function pickSource(): string {
+  return Math.random() < RING_SOURCES[0].probability
+    ? RING_SOURCES[0].src
+    : RING_SOURCES[1].src;
+}
+
 export function startRingtone(onBlockedChange?: (blocked: boolean) => void): RingtoneHandle {
-  let context: AudioContext | null = null;
-  let interval: number | null = null;
   let stopped = false;
-  const live = new Set<OscillatorNode>();
+  let blocked = true;
+  let audio: HTMLAudioElement | null = null;
 
-  const Ctor = audioContextCtor();
-  if (Ctor) {
+  const setBlocked = (value: boolean) => {
+    blocked = value;
+    onBlockedChange?.(value);
+  };
+
+  const attemptPlay = () => {
+    if (stopped || !audio) return;
     try {
-      context = new Ctor();
-    } catch {
-      context = null;
-    }
-  }
-
-  const playBurst = () => {
-    if (!context || context.state !== "running") return;
-    try {
-      const now = context.currentTime;
-      const master = context.createGain();
-      master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(0.16, now + 0.03);
-      master.gain.setValueAtTime(0.16, now + 0.75);
-      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
-      master.connect(context.destination);
-
-      for (const frequency of [440, 480]) {
-        const oscillator = context.createOscillator();
-        oscillator.type = "sine";
-        oscillator.frequency.value = frequency;
-        oscillator.connect(master);
-        oscillator.start(now);
-        oscillator.stop(now + 1);
-        live.add(oscillator);
-        oscillator.onended = () => live.delete(oscillator);
+      const promise = audio.play();
+      if (promise && typeof promise.then === "function") {
+        promise
+          .then(() => setBlocked(false))
+          .catch(() => setBlocked(true));
+        return;
       }
     } catch {
-      // A dying context is not worth crashing a call over.
+      /* fall through to the paused check */
     }
+    setBlocked(audio ? audio.paused : true);
   };
 
-  const resumeContext = () => {
-    if (!context) return;
+  if (typeof window !== "undefined" && typeof Audio !== "undefined") {
     try {
-      void context.resume().catch(() => undefined);
+      audio = new Audio(pickSource());
+      audio.loop = true;
+      audio.volume = 0.9;
+      audio.preload = "auto";
+      attemptPlay();
     } catch {
-      // Ignore — the visual fallback still shows.
+      audio = null;
     }
-  };
-
-  if (context) {
-    try {
-      context.onstatechange = () => onBlockedChange?.(context?.state !== "running");
-    } catch {
-      // property assignment on a hostile context implementation
-    }
-    resumeContext();
-    playBurst();
-    onBlockedChange?.(context.state !== "running");
-
-    interval = window.setInterval(() => {
-      if (stopped || !context) return;
-      if (context.state === "suspended") resumeContext();
-      playBurst();
-      onBlockedChange?.(context.state !== "running");
-    }, CADENCE_MS);
-  } else {
-    onBlockedChange?.(true);
   }
+  if (!audio) setBlocked(true);
 
   return {
     stop: () => {
       stopped = true;
-      if (interval !== null) {
-        window.clearInterval(interval);
-        interval = null;
-      }
-      for (const oscillator of live) {
+      if (audio) {
         try {
-          oscillator.stop();
+          audio.pause();
+          audio.removeAttribute("src");
+          audio.load();
         } catch {
-          // Already stopped.
+          // A dying element is not worth crashing a call over.
         }
-      }
-      live.clear();
-      if (context) {
-        try {
-          context.onstatechange = null;
-          void context.close().catch(() => undefined);
-        } catch {
-          // Ignore.
-        }
-        context = null;
+        audio = null;
       }
     },
     resume: () => {
-      if (!context) return;
-      resumeContext();
+      if (stopped || !audio) return;
+      attemptPlay();
       window.setTimeout(() => {
-        if (!stopped) onBlockedChange?.(context?.state !== "running");
-      }, 250);
+        if (!stopped && audio && !audio.paused) setBlocked(false);
+      }, 300);
     },
-    isBlocked: () => !context || context.state !== "running",
+    isBlocked: () => blocked,
   };
 }
