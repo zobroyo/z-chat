@@ -162,6 +162,14 @@ function AdminLayout() {
       </aside>
 
       <div className="ios-safe-top fixed inset-x-0 top-0 z-10 flex items-center gap-1 overflow-x-auto border-b border-border bg-surface/90 px-2 py-2 backdrop-blur md:hidden">
+        <Link
+          to="/chat"
+          className="flex shrink-0 items-center gap-1.5 rounded-md bg-surface-2 px-3 py-1.5 text-xs font-medium text-foreground"
+        >
+          <ArrowLeft className="size-3.5" />
+          Back
+        </Link>
+        <span aria-hidden="true" className="mx-1 h-5 w-px shrink-0 bg-border" />
         {NAV.map((item) => {
           const active = item.exact
             ? location.pathname === item.to
