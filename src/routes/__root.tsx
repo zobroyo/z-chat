@@ -79,10 +79,10 @@ function ErrorComponent({ error }: { error: unknown; reset: () => void }) {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
 
-  // A missing JS chunk (stale build) can't be fixed by re-rendering — reload
-  // once with a cache-busted URL to fetch the current document + assets.
+  // Stale JS chunks (after a deploy) and most transient failures both heal
+  // with a fresh document: reload once per session, then stay on this page if
+  // it keeps failing instead of loop-reloading.
   useEffect(() => {
-    if (!staleAssetError(error)) return;
     if (markStaleReloadOnce()) cacheBustReload();
   }, [error]);
 
@@ -93,8 +93,15 @@ function ErrorComponent({ error }: { error: unknown; reset: () => void }) {
           This page didn't load
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Something went wrong on our end. You can try refreshing or head back home.
+          {staleAssetError(error)
+            ? "Z Chat updated in the background - reload to get the new version."
+            : "Something went wrong on our end. You can try refreshing or head back home."}
         </p>
+        {error instanceof Error && error.message && (
+          <p className="mt-3 break-words text-xs text-muted-foreground/70">
+            Details: {error.message}
+          </p>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => cacheBustReload()}

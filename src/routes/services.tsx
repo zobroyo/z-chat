@@ -7,6 +7,7 @@ import {
   MonitorDown,
   Presentation,
   ShieldCheck,
+  Sparkles,
 } from "lucide-react";
 
 import { DownloadButton } from "@/components/DownloadDialog";
