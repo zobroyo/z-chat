@@ -7,6 +7,7 @@ import { handleLinkPreviewRoute } from "./lib/serverLinkPreview";
 import { handleModerateRoute, handleSendMessageRoute } from "./lib/serverModeration";
 import { handleQuickTunnelPublicRoute, handleSiteTunnelsRoute } from "./lib/serverTunnels";
 import { handleTurnCredentialsRoute } from "./lib/serverTurnCredentials";
+import { handleAskRoute } from "./lib/serverAsk";
 import {
   handleLunchCardCheckoutRoute,
   handleLunchCardConfirmRoute,
@@ -202,6 +203,10 @@ export default {
           headers: { "content-type": "application/json" },
         });
       }
+    }
+
+    if (url.pathname === "/api/ask") {
+      return await handleAskRoute(request);
     }
 
     if (url.pathname === "/api/lunch-card/checkout") {
