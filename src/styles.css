@@ -179,7 +179,6 @@
     -webkit-font-smoothing: antialiased;
     overscroll-behavior-y: none;
     overflow-x: hidden;
-    min-height: 100dvh;
     transition: background-color 160ms ease, color 160ms ease;
   }
 
@@ -195,13 +194,6 @@
 @utility surface-panel {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
-}
-
-/* iOS Safari (and standalone PWAs) can under-report `100vh`, leaving a dead
-   strip at the bottom. Feature pages using `min-h-screen` should fill the
-   dynamic viewport instead. Unlayered so it beats Tailwind's utility. */
-.min-h-screen {
-  min-height: 100dvh;
 }
 
 @utility scroll-slim {
@@ -225,24 +217,18 @@
 @media (display-mode: standalone), (display-mode: fullscreen) {
   html,
   body {
-    /* Stop the whole page from behaving like a scrollable webpage.
-       The chat layout (viewport-height, overflow-hidden) becomes the only
-       scroll boundary; individual panes handle their own scrolling. */
-    height: 100dvh;
-    min-height: 100dvh;
+    /* Percentage, NOT dvh/vh: iOS standalone under-reports the dynamic
+       viewport, which left the whole app short with a grey strip at the
+       bottom. 100% is the full-screen initial containing block. */
+    height: 100%;
     overflow: hidden;
     overscroll-behavior: none;
   }
 
-  /* iOS standalone can under-report `100vh`, leaving a dead strip at the
-     bottom of the screen. Pin full-height pages to the dynamic viewport. */
-  .min-h-screen {
-    min-height: 100dvh;
-  }
-
+  /* Fill the (full-screen) body exactly, independent of viewport units. */
   .standalone-scroll-page {
-    height: 100dvh;
-    min-height: 100dvh;
+    height: 100%;
+    min-height: 100%;
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-y: contain;
@@ -320,6 +306,15 @@
 .chat-app-shell {
   height: 100vh;
   height: 100dvh;
+}
+
+/* Installed PWA: fill the full-screen body by percentage rather than `dvh`,
+   which iOS standalone under-reports (leaving a grey strip at the bottom).
+   Must come after the rule above to win the cascade. */
+@media (display-mode: standalone), (display-mode: fullscreen) {
+  .chat-app-shell {
+    height: 100%;
+  }
 }
 
 @media (hover: none) and (pointer: coarse) {
