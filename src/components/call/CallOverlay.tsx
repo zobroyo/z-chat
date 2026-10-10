@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   Copy,
@@ -12,6 +12,7 @@ import {
   MicOff,
   Minimize2,
   Music,
+  PictureInPicture2,
   PhoneCall,
   PhoneOff,
   ScreenShare,
@@ -20,6 +21,7 @@ import {
   Video,
   VideoOff,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -135,6 +137,148 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   const [pinnedId, setPinnedId] = useState<string | null>(null);
   /** The screen-sharer we auto-focused, so a manual unpin isn't fought. */
   const autoSharedRef = useRef<string | null>(null);
+
+  // --- Picture-in-Picture ----------------------------------------------------
+  // iOS suspends a backgrounded PWA (mic + audio stop). A live PiP window keeps
+  // the media session going, so entering PiP before leaving the app is the only
+  // way a web call can keep flowing on iPhone.
+  const [pipActive, setPipActive] = useState(false);
+  const pipVideoRef = useRef<HTMLVideoElement | null>(null);
+  const pipCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const pipStreamRef = useRef<MediaStream | null>(null);
+  const pipRafRef = useRef<number | null>(null);
+
+  const pipSourceStream = call.screenSharing ? call.screenStream : null;
+
+  /** A canvas "in call" animation used as the PiP carrier for audio-only calls. */
+  const ensurePipStream = useCallback((): MediaStream | null => {
+    if (pipStreamRef.current) return pipStreamRef.current;
+    if (typeof document === "undefined") return null;
+    const canvas = pipCanvasRef.current ?? document.createElement("canvas");
+    pipCanvasRef.current = canvas;
+    canvas.width = 640;
+    canvas.height = 360;
+    const ctx = canvas.getContext("2d");
+    const draw = () => {
+      if (ctx) {
+        const t = performance.now() / 1000;
+        ctx.fillStyle = "#0a0c11";
+        ctx.fillRect(0, 0, 640, 360);
+        for (let i = 0; i < 5; i += 1) {
+          const h = 28 + Math.abs(Math.sin(t * 2 + i)) * 96;
+          ctx.fillStyle = "rgba(99,102,241,0.85)";
+          ctx.fillRect(140 + i * 76, 240 - h, 40, h);
+        }
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "600 30px system-ui, sans-serif";
+        ctx.fillText("Z Chat", 40, 70);
+        ctx.fillStyle = "rgba(255,255,255,0.6)";
+        ctx.font = "400 18px system-ui, sans-serif";
+        ctx.fillText(`In call · ${conversationTitle.slice(0, 40)}`, 40, 100);
+      }
+      pipRafRef.current = window.requestAnimationFrame(draw);
+    };
+    draw();
+    try {
+      pipStreamRef.current = canvas.captureStream(15);
+    } catch {
+      pipStreamRef.current = null;
+    }
+    return pipStreamRef.current;
+  }, [conversationTitle]);
+
+  const enterPip = useCallback(async (): Promise<boolean> => {
+    const video = pipVideoRef.current as
+      | (HTMLVideoElement & {
+          requestPictureInPicture?: () => Promise<unknown>;
+          webkitSetPresentationMode?: (mode: string) => void;
+        })
+      | null;
+    if (!video) return false;
+
+    const source = pipSourceStream ?? ensurePipStream();
+    if (source && video.srcObject !== source) video.srcObject = source;
+    try {
+      await video.play();
+    } catch {
+      /* autoplay/gesture rules may block; PiP request below also needs a gesture */
+    }
+
+    try {
+      if (typeof video.requestPictureInPicture === "function") {
+        if (document.pictureInPictureElement === video) return true;
+        await video.requestPictureInPicture();
+        return true;
+      }
+      if (typeof video.webkitSetPresentationMode === "function") {
+        video.webkitSetPresentationMode("picture-in-picture");
+        return true;
+      }
+    } catch {
+      /* blocked without a user gesture (e.g. on visibilitychange) */
+    }
+    return false;
+  }, [pipSourceStream, ensurePipStream]);
+
+  const togglePip = useCallback(async () => {
+    const video = pipVideoRef.current as
+      | (HTMLVideoElement & { webkitSetPresentationMode?: (mode: string) => void })
+      | null;
+    if (pipActive) {
+      try {
+        await document.exitPictureInPicture?.();
+      } catch {
+        /* ignore */
+      }
+      try {
+        video?.webkitSetPresentationMode?.("inline");
+      } catch {
+        /* ignore */
+      }
+      setPipActive(false);
+      return;
+    }
+    const ok = await enterPip();
+    if (ok) setPipActive(true);
+    else toast.info("Picture-in-Picture isn't available in this browser");
+  }, [pipActive, enterPip]);
+
+  // Track PiP state (standard API + iOS webkit presentation modes).
+  useEffect(() => {
+    const video = pipVideoRef.current as
+      | (HTMLVideoElement & { webkitPresentationMode?: string })
+      | null;
+    if (!video) return;
+    const onEnter = () => setPipActive(true);
+    const onLeave = () => setPipActive(false);
+    const onMode = () => setPipActive(video.webkitPresentationMode === "picture-in-picture");
+    video.addEventListener("enterpictureinpicture", onEnter);
+    video.addEventListener("leavepictureinpicture", onLeave);
+    video.addEventListener("webkitpresentationmodechanged", onMode);
+    return () => {
+      video.removeEventListener("enterpictureinpicture", onEnter);
+      video.removeEventListener("leavepictureinpicture", onLeave);
+      video.removeEventListener("webkitpresentationmodechanged", onMode);
+    };
+  }, [call.inCall, minimized]);
+
+  // Best effort: pop into PiP when the app is sent to the background mid-call.
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden" && call.inCall) void enterPip();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [call.inCall, enterPip]);
+
+  useEffect(
+    () => () => {
+      if (pipRafRef.current !== null) window.cancelAnimationFrame(pipRafRef.current);
+      pipStreamRef.current?.getTracks().forEach((track) => track.stop());
+      pipStreamRef.current = null;
+    },
+    [],
+  );
 
   // Draggable picture-in-picture position (null = default bottom-right corner).
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null);
@@ -353,6 +497,18 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   const inBreakout = myRoomId !== null;
   const totalTiles = roomParticipants.length + 1;
 
+  // Hidden carrier <video> for Picture-in-Picture (screen share, else a canvas
+  // "in call" animation). Kept rendered-but-invisible so PiP can be requested.
+  const pipCarrier = (
+    <video
+      ref={pipVideoRef}
+      playsInline
+      muted
+      className="pointer-events-none fixed right-2 bottom-2 size-1 opacity-0"
+      aria-hidden
+    />
+  );
+
   // Picture-in-picture: the call stays connected (audio + WebRTC keep running
   // because the hook owns the streams), but the full-screen surface is replaced
   // by a small floating pill so the rest of Z Chat stays reachable.
@@ -367,6 +523,7 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
           !pipPos && "right-3 bottom-24 sm:right-4 sm:bottom-24",
         )}
       >
+        {pipCarrier}
         <button
           type="button"
           onPointerDown={onPipPointerDown}
@@ -410,6 +567,22 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
           ) : (
             <Mic className="size-4" />
           )}
+        </Button>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "size-9 shrink-0 rounded-full border border-white/10 text-white hover:bg-white/20 hover:text-white",
+            pipActive && "border-primary/70 bg-primary text-primary-foreground",
+          )}
+          aria-label="Picture-in-Picture"
+          aria-pressed={pipActive}
+          title="Picture-in-Picture (keeps the call alive in the background)"
+          onClick={() => void togglePip()}
+        >
+          <PictureInPicture2 className="size-4" />
         </Button>
 
         <Button
@@ -509,6 +682,7 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
         data-testid="call-overlay"
         className="relative flex h-[96vh] w-[98vw] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0a0c11]/95 text-white shadow-2xl sm:rounded-3xl"
       >
+        {pipCarrier}
         <header className="flex shrink-0 items-center gap-2.5 px-3 py-2 sm:px-4 sm:py-3">
           <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
             <PhoneCall className="size-4" />
@@ -735,6 +909,14 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                   <Copy className="size-5" />
                 </ControlButton>
               )}
+
+              <ControlButton
+                label={pipActive ? "Exit Picture-in-Picture" : "Picture-in-Picture"}
+                active={pipActive}
+                onClick={() => void togglePip()}
+              >
+                <PictureInPicture2 className="size-5" />
+              </ControlButton>
 
               <ControlButton label="Leave call" danger onClick={() => void call.leaveCall()}>
                 <PhoneOff className="size-5" />
