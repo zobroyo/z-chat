@@ -14,6 +14,7 @@ const WINDOWS_ZIP = "https://z-chat.men/media/downloads/ZChat-windows.zip?v=1";
 const WINDOWS_EXE = "https://z-chat.men/media/downloads/ZChat.exe?v=1";
 const ANDROID_APK = "https://z-chat.men/media/downloads/ZChat.apk";
 const MAC_DMG = "https://z-chat.men/media/downloads/ZChat-mac.dmg";
+const IOS_IPA = "https://z-chat.men/media/downloads/ZChat.ipa";
 
 /** True inside the Windows desktop app (its WebView UA carries ZChatDesktop). */
 function isDesktopApp(): boolean {
@@ -143,7 +144,19 @@ function PlatformDetail({
     return (
       <div>
         {back}
-        <p className="mt-1 text-sm font-semibold text-foreground">Add Z Chat to your Home Screen</p>
+        <a
+          href={IOS_IPA}
+          className="mt-1 flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-105"
+        >
+          <Download className="size-4" />
+          Download iOS app (.ipa)
+        </a>
+        <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
+          Not on the App Store. Install it with Sideloadly/AltStore on a Mac or PC — it re-signs the
+          app with your Apple ID and expires after 7 days. If that sounds like a hassle, adding it to
+          your Home Screen below is easier and updates instantly.
+        </p>
+        <p className="mt-3 text-sm font-semibold text-foreground">Or add Z Chat to your Home Screen</p>
         {safariFirst && (
           <p className="mt-2 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs leading-5 text-amber-500 dark:text-amber-300">
             On iPhone, only <strong>Safari</strong> can install apps. Open <strong>z-chat.men</strong>{" "}
