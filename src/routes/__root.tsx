@@ -3,7 +3,6 @@ import {
   Outlet,
   Link,
   createRootRouteWithContext,
-  useRouter,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -43,11 +42,48 @@ function NotFoundComponent() {
   );
 }
 
-function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
+/** True when the error looks like a stale-build / failed-chunk load. */
+function staleAssetError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /dynamically imported module|importing a module script|loading chunk|chunkloaderror|unexpected token|failed to fetch/i.test(
+    message,
+  );
+}
+
+/** Reloads the current page (or `target`) with a cache-busting query param. */
+function cacheBustReload(target?: string) {
+  if (typeof window === "undefined") return;
+  const url = new URL(
+    target ?? window.location.pathname + window.location.search,
+    window.location.origin,
+  );
+  url.searchParams.set("_r", Date.now().toString(36));
+  window.location.replace(url.toString());
+}
+
+/** Guards the auto-reload so a persistent failure can't loop forever. */
+function markStaleReloadOnce(): boolean {
+  try {
+    if (sessionStorage.getItem("zchat:stale-reload") === "1") return false;
+    sessionStorage.setItem("zchat:stale-reload", "1");
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function ErrorComponent({ error }: { error: unknown; reset: () => void }) {
   console.error(error);
-  const router = useRouter();
+
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+  }, [error]);
+
+  // A missing JS chunk (stale build) can't be fixed by re-rendering — reload
+  // once with a cache-busted URL to fetch the current document + assets.
+  useEffect(() => {
+    if (!staleAssetError(error)) return;
+    if (markStaleReloadOnce()) cacheBustReload();
   }, [error]);
 
   return (
@@ -61,20 +97,17 @@ function ErrorComponent({ error, reset }: { error: unknown; reset: () => void })
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
-            onClick={() => {
-              router.invalidate();
-              reset();
-            }}
+            onClick={() => cacheBustReload()}
             className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
           >
             Try again
           </button>
-          <a
-            href="/"
+          <button
+            onClick={() => cacheBustReload("/")}
             className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
             Go home
-          </a>
+          </button>
         </div>
       </div>
     </div>
@@ -164,6 +197,27 @@ function QuickTunnelGate({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+
+  // Recover automatically when a lazy chunk fails to load (stale build after a
+  // deploy): Vite fires `vite:preloadError`, so reload once with a fresh URL.
+  useEffect(() => {
+    const onPreloadError = () => {
+      if (markStaleReloadOnce()) cacheBustReload();
+    };
+    window.addEventListener("vite:preloadError", onPreloadError);
+    // A clean session clears the guard, so a later deploy can recover again.
+    const clear = window.setTimeout(() => {
+      try {
+        sessionStorage.removeItem("zchat:stale-reload");
+      } catch {
+        /* ignore */
+      }
+    }, 15_000);
+    return () => {
+      window.removeEventListener("vite:preloadError", onPreloadError);
+      window.clearTimeout(clear);
+    };
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>

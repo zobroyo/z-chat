@@ -21,10 +21,19 @@ export function renderErrorPage(): string {
       <h1>This page didn't load</h1>
       <p>Something went wrong on our end. You can try refreshing or head back home.</p>
       <div class="actions">
-        <button class="primary" onclick="location.reload()">Try again</button>
-        <a class="secondary" href="/">Go home</a>
+        <button class="primary" onclick="zRetry()">Try again</button>
+        <button class="secondary" onclick="zHome()">Go home</button>
       </div>
     </div>
+    <script>
+      // Cache-bust the URL so a stale cached document can never be served again.
+      function zGo(target) {
+        var sep = target.indexOf("?") === -1 ? "?" : "&";
+        window.location.replace(target + sep + "_r=" + Date.now().toString(36));
+      }
+      function zRetry() { zGo(window.location.pathname + window.location.search); }
+      function zHome() { zGo("/"); }
+    </script>
   </body>
 </html>`;
 }

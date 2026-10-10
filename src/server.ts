@@ -63,6 +63,40 @@ function isH3SwallowedErrorBody(body: string): boolean {
   }
 }
 
+/**
+ * Cache policy.
+ *
+ * The SSR document MUST NOT be cached: after a deploy the old HTML references
+ * hashed JS chunks that no longer exist, so the browser dead-ends on the
+ * server error page (the iOS "This page didn't load" bug — clearing browsing
+ * data "fixed" it only because it forced a fresh fetch). Content-hashed
+ * `/assets/*` files are safe to cache forever; the SW and manifest must be
+ * revalidated so updates take effect.
+ */
+function applyCacheHeaders(request: Request, response: Response): Response {
+  const pathname = new URL(request.url).pathname;
+  const headers = new Headers(response.headers);
+  const type = (headers.get("content-type") ?? "").toLowerCase();
+
+  if (pathname.startsWith("/assets/")) {
+    headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  } else if (type.includes("text/html")) {
+    // Always revalidate the document (and never store it) so a deploy can't
+    // leave a stale shell pointing at removed chunks.
+    headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    headers.set("Pragma", "no-cache");
+    headers.set("Expires", "0");
+  } else if (pathname === "/sw.js" || pathname.endsWith("/sw.js") || pathname === "/manifest.webmanifest") {
+    headers.set("Cache-Control", "no-cache, max-age=0, must-revalidate");
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     const url = new URL(request.url);
@@ -195,13 +229,16 @@ export default {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return applyCacheHeaders(request, await normalizeCatastrophicSsrResponse(response));
     } catch (error) {
       console.error(error);
-      return new Response(renderErrorPage(), {
-        status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
-      });
+      return applyCacheHeaders(
+        request,
+        new Response(renderErrorPage(), {
+          status: 500,
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+      );
     }
   },
 };
