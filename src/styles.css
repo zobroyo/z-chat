@@ -179,6 +179,7 @@
     -webkit-font-smoothing: antialiased;
     overscroll-behavior-y: none;
     overflow-x: hidden;
+    min-height: 100dvh;
     transition: background-color 160ms ease, color 160ms ease;
   }
 
@@ -194,6 +195,13 @@
 @utility surface-panel {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
+}
+
+/* iOS Safari (and standalone PWAs) can under-report `100vh`, leaving a dead
+   strip at the bottom. Feature pages using `min-h-screen` should fill the
+   dynamic viewport instead. Unlayered so it beats Tailwind's utility. */
+.min-h-screen {
+  min-height: 100dvh;
 }
 
 @utility scroll-slim {
