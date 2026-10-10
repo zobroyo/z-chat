@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
+  BookOpen,
   ChevronRight,
   CreditCard,
   Gamepad2,
@@ -121,6 +122,26 @@ function ServicesPage() {
           </span>
           <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary">
             Order
+            <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </Link>
+
+        <Link
+          to="/scripture"
+          className="surface-panel group flex min-h-44 flex-col rounded-2xl p-5 shadow-lift transition-transform hover:scale-[1.01]"
+        >
+          <span className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+            <BookOpen className="size-6" />
+          </span>
+          <span className="mt-4 block font-display text-lg font-bold text-foreground">
+            Scripture
+          </span>
+          <span className="mt-1 block flex-1 text-xs leading-5 text-muted-foreground">
+            The Bible, the Quran, the Tanakh, the Dhammapada and the Bhagavad Gita — read them all
+            right here.
+          </span>
+          <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary">
+            Open
             <ChevronRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
           </span>
         </Link>
