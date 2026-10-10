@@ -6,7 +6,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { closeSystemBrowser, onAppUrlOpen } from "@/lib/native";
@@ -205,84 +205,6 @@ function QuickTunnelGate({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
-function StandaloneDebug() {
-  const [info, setInfo] = useState<string | null>(null);
-
-  useEffect(() => {
-    const update = () => {
-      const mode = [
-        window.matchMedia("(display-mode: standalone)").matches ? "standalone" : "",
-        window.matchMedia("(display-mode: fullscreen)").matches ? "fullscreen" : "",
-        window.matchMedia("(display-mode: minimal-ui)").matches ? "minimal-ui" : "",
-        window.matchMedia("(display-mode: browser)").matches ? "browser" : "",
-        (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-          ? "nav"
-          : "",
-      ]
-        .filter(Boolean)
-        .join("+");
-
-      const probe = document.createElement("div");
-      probe.style.cssText =
-        "position:fixed;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)";
-      document.body.appendChild(probe);
-      const cs = getComputedStyle(probe);
-      const safeTop = cs.paddingTop;
-      const safeBottom = cs.paddingBottom;
-      probe.remove();
-
-      const shell = document.querySelector<HTMLElement>(".chat-app-shell");
-      const composer = document.querySelector<HTMLElement>("form")?.parentElement ?? null;
-
-      const probeH = (css: string) => {
-        const d = document.createElement("div");
-        d.style.cssText = `position:fixed;top:0;left:0;width:0;${css}`;
-        document.body.appendChild(d);
-        const h = Math.round(d.getBoundingClientRect().height);
-        d.remove();
-        return h;
-      };
-
-      setInfo(
-        [
-          `mode ${mode || "?"}`,
-          `innerH ${window.innerHeight}`,
-          `vv ${Math.round(window.visualViewport?.height ?? -1)}@${Math.round(window.visualViewport?.offsetTop ?? -1)}`,
-          `docH ${document.documentElement.clientHeight}`,
-          `bodyH ${document.body.clientHeight}`,
-          `shellH ${shell ? Math.round(shell.getBoundingClientRect().height) : -1}`,
-          `composerBottom ${composer ? Math.round(composer.getBoundingClientRect().bottom) : -1}`,
-          `vhH ${probeH("height:100vh")} dvhH ${probeH("height:100dvh")} pctH ${probeH("height:100%")}`,
-          `htmlRect ${Math.round(document.documentElement.getBoundingClientRect().height)} bodyRect ${Math.round(document.body.getBoundingClientRect().height)}`,
-          `composerPad ${composer ? getComputedStyle(composer).paddingBottom : "-"}`,
-          `safeT ${safeTop} safeB ${safeBottom}`,
-          `screen ${window.screen.width}x${window.screen.height}`,
-        ].join("  |  "),
-      );
-    };
-
-    update();
-    const t = window.setInterval(update, 1000);
-    window.addEventListener("resize", update);
-    window.visualViewport?.addEventListener("resize", update);
-    return () => {
-      window.clearInterval(t);
-      window.removeEventListener("resize", update);
-      window.visualViewport?.removeEventListener("resize", update);
-    };
-  }, []);
-
-  if (!info) return null;
-  return (
-    <div
-      className="fixed left-2 right-2 z-[9999] rounded bg-black px-2 py-1 font-mono text-[11px] leading-tight break-words text-green-400"
-      style={{ top: "calc(env(safe-area-inset-top, 0px) + 48px)" }}
-    >
-      {info}
-    </div>
-  );
-}
-
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
@@ -369,7 +291,6 @@ function RootComponent() {
               {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
               <Outlet />
               <Toaster position="top-center" />
-              <StandaloneDebug />
             </CallProvider>
           </AuthProvider>
         </QuickTunnelGate>
