@@ -240,7 +240,7 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
     }
     const ok = await enterPip();
     if (ok) setPipActive(true);
-    else toast.info("Picture-in-Picture isn't available in this browser");
+    else toast.info("Picture-in-Picture isn't supported here — on iPhone, use the Z Chat app for background calls");
   }, [pipActive, enterPip]);
 
   // Track PiP state (standard API + iOS webkit presentation modes).
@@ -270,6 +270,39 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [call.inCall, enterPip]);
+
+  // Keep the screen awake while in a call: a sleeping/locked screen suspends the
+  // call (especially in the PWA) — the "it cuts out after a while" symptom.
+  useEffect(() => {
+    if (!call.inCall) return;
+    let sentinel: { release: () => Promise<void> } | null = null;
+    let released = false;
+    const request = async () => {
+      try {
+        const wakeLock = (
+          navigator as Navigator & {
+            wakeLock?: {
+              request: (type: "screen") => Promise<{ release: () => Promise<void> }>;
+            };
+          }
+        ).wakeLock;
+        if (!wakeLock) return;
+        sentinel = await wakeLock.request("screen");
+      } catch {
+        /* unsupported or denied */
+      }
+    };
+    void request();
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && !released) void request();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      released = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      void sentinel?.release().catch(() => undefined);
+    };
+  }, [call.inCall]);
 
   useEffect(
     () => () => {
