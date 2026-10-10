@@ -209,12 +209,19 @@ function StandaloneDebug() {
   const [info, setInfo] = useState<string | null>(null);
 
   useEffect(() => {
-    const standalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
-    if (!standalone) return;
-
     const update = () => {
+      const mode = [
+        window.matchMedia("(display-mode: standalone)").matches ? "standalone" : "",
+        window.matchMedia("(display-mode: fullscreen)").matches ? "fullscreen" : "",
+        window.matchMedia("(display-mode: minimal-ui)").matches ? "minimal-ui" : "",
+        window.matchMedia("(display-mode: browser)").matches ? "browser" : "",
+        (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+          ? "nav"
+          : "",
+      ]
+        .filter(Boolean)
+        .join("+");
+
       const probe = document.createElement("div");
       probe.style.cssText =
         "position:fixed;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)";
@@ -228,6 +235,7 @@ function StandaloneDebug() {
       const composer = document.querySelector<HTMLElement>("form")?.parentElement ?? null;
       setInfo(
         [
+          `mode ${mode || "?"}`,
           `innerH ${window.innerHeight}`,
           `vv ${Math.round(window.visualViewport?.height ?? -1)}@${Math.round(window.visualViewport?.offsetTop ?? -1)}`,
           `docH ${document.documentElement.clientHeight}`,
@@ -253,7 +261,10 @@ function StandaloneDebug() {
 
   if (!info) return null;
   return (
-    <div className="fixed top-1 left-1 z-[9999] max-w-[96vw] rounded bg-black px-2 py-1 font-mono text-[10px] leading-tight text-green-400">
+    <div
+      className="fixed left-2 right-2 z-[9999] rounded bg-black px-2 py-1 font-mono text-[11px] leading-tight break-words text-green-400"
+      style={{ top: "calc(env(safe-area-inset-top, 0px) + 48px)" }}
+    >
       {info}
     </div>
   );
