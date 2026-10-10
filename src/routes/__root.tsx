@@ -226,6 +226,39 @@ function RootComponent() {
     };
   }, []);
 
+  // Native shell: the Android back button/gesture goes back in the app, and
+  // exits only when there's nowhere left to go. (iOS uses the edge-swipe, which
+  // the shell enables via `allowsBackForwardNavigationGestures`.)
+  useEffect(() => {
+    const capacitor = (
+      window as unknown as {
+        Capacitor?: {
+          isNativePlatform?: () => boolean;
+          Plugins?: Record<
+            string,
+            {
+              addListener?: (
+                event: string,
+                cb: (info: { canGoBack?: boolean }) => void,
+              ) => { remove?: () => void } | undefined;
+              exitApp?: () => void;
+            }
+          >;
+        };
+      }
+    ).Capacitor;
+    const appPlugin = capacitor?.Plugins?.["App"];
+    if (!capacitor?.isNativePlatform?.() || !appPlugin?.addListener) return;
+    const handle = appPlugin.addListener("backButton", () => {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        appPlugin.exitApp?.();
+      }
+    });
+    return () => handle?.remove?.();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
