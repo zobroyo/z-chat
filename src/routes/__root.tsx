@@ -8,6 +8,9 @@ import {
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
+import { supabase } from "@/integrations/supabase/client";
+import { closeSystemBrowser, onAppUrlOpen } from "@/lib/native";
+
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { AuthProvider } from "@/hooks/use-auth";
@@ -224,6 +227,23 @@ function RootComponent() {
       window.removeEventListener("vite:preloadError", onPreloadError);
       window.clearTimeout(clear);
     };
+  }, []);
+
+  // Native shell: complete a Google sign-in when the app is reopened via the
+  // zchat:// deep link the system browser bounced back to.
+  useEffect(() => {
+    const off = onAppUrlOpen((url) => {
+      void (async () => {
+        try {
+          const code = new URL(url).searchParams.get("code");
+          if (code) await supabase.auth.exchangeCodeForSession(code);
+        } catch {
+          /* ignore */
+        }
+        void closeSystemBrowser();
+      })();
+    });
+    return () => off?.();
   }, []);
 
   // Native shell: the Android back button/gesture goes back in the app, and

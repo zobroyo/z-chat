@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { isNativeApp, openInSystemBrowser } from "@/lib/native";
 
 import { displayNameSchema } from "@/lib/chat";
 import { getDeviceFingerprint } from "@/lib/fingerprint";
@@ -349,6 +350,22 @@ function AuthPage() {
         zoauthNext && zoauthNext.startsWith("/") && !zoauthNext.startsWith("//")
           ? `${window.location.origin}/?zoauth_next=${encodeURIComponent(zoauthNext)}`
           : `${window.location.origin}/chat`;
+
+      // In the native shell Google blocks its sign-in page inside a WebView, so
+      // run the OAuth in the system browser and return via a zchat:// deep link.
+      if (isNativeApp()) {
+        const { data, error } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: { redirectTo: "zchat://auth-callback", skipBrowserRedirect: true },
+        });
+        if (error || !data?.url) {
+          toast.error("Google sign-in didn't work. Try email instead.");
+          setBusy(false);
+          return;
+        }
+        await openInSystemBrowser(data.url);
+        return; // the deep-link handler in the root finishes the session
+      }
 
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
