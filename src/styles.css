@@ -315,20 +315,14 @@
   animation: zchat-message-highlight 1050ms ease-out both;
 }
 
-/* Apply device insets in both installed mode and iOS Safari's full-width viewport. */
+/* Full-height chat shell. `dvh` tracks iOS Safari's collapsing toolbar, so no
+   JS visual-viewport hacks are needed (they broke the installed PWA). */
 .chat-app-shell {
   height: 100vh;
-  height: var(--zchat-visual-viewport-height, 100dvh);
+  height: 100dvh;
 }
 
 @media (hover: none) and (pointer: coarse) {
-  .chat-app-shell {
-    position: fixed;
-    left: 0;
-    right: 0;
-    top: var(--zchat-visual-viewport-offset-top, 0px);
-  }
-
   .ios-safe-top {
     padding-top: max(env(safe-area-inset-top, 0px), 0.75rem);
   }
@@ -350,7 +344,7 @@
   [role="dialog"]:not(.ios-mobile-sheet) {
     top: var(--zchat-dialog-center-y, 50%);
     max-height: calc(
-      var(--zchat-visual-viewport-height, 100dvh) -
+      100dvh -
         env(safe-area-inset-top, 0px) -
         env(safe-area-inset-bottom, 0px) - 2rem
     );
@@ -378,27 +372,6 @@
   .chat-message-list {
     padding-left: max(env(safe-area-inset-left, 0px), 0.75rem);
     padding-right: max(env(safe-area-inset-right, 0px), 0.75rem);
-  }
-}
-
-/* Installed iOS PWA: the visual-viewport size/offset hack above is for Safari's
-   collapsing toolbar. In standalone mode those values are wrong (the shell ends
-   short, leaving a gap at the bottom), so pin the shell to the screen and
-   neutralise the JS variables outright. */
-@media (display-mode: standalone), (display-mode: fullscreen) {
-  :root {
-    --zchat-visual-viewport-height: 100dvh !important;
-    --zchat-visual-viewport-offset-top: 0px !important;
-  }
-
-  .chat-app-shell {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    height: auto !important;
-    width: auto !important;
   }
 }
 

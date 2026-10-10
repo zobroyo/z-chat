@@ -300,14 +300,6 @@ function ChatPage() {
       if (frame) window.cancelAnimationFrame(frame);
       frame = window.requestAnimationFrame(() => {
         root.style.setProperty(
-          "--zchat-visual-viewport-height",
-          `${viewport?.height ?? window.innerHeight}px`,
-        );
-        root.style.setProperty(
-          "--zchat-visual-viewport-offset-top",
-          `${Math.max(0, viewport?.offsetTop ?? 0)}px`,
-        );
-        root.style.setProperty(
           "--zchat-dialog-center-y",
           `${Math.max(0, viewport?.offsetTop ?? 0) + (viewport?.height ?? window.innerHeight) / 2}px`,
         );
@@ -334,8 +326,6 @@ function ChatPage() {
       window.removeEventListener("resize", updateAfterResize);
       window.removeEventListener("orientationchange", updateAfterResize);
       window.removeEventListener("pageshow", updateAfterResize);
-      root.style.removeProperty("--zchat-visual-viewport-height");
-      root.style.removeProperty("--zchat-visual-viewport-offset-top");
       root.style.removeProperty("--zchat-dialog-center-y");
     };
   }, []);
