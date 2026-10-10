@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 const WINDOWS_ZIP = "https://z-chat.men/media/downloads/ZChat-windows.zip?v=1";
 const WINDOWS_EXE = "https://z-chat.men/media/downloads/ZChat.exe?v=1";
 const ANDROID_APK = "https://z-chat.men/media/downloads/ZChat.apk";
+const MAC_DMG = "https://z-chat.men/media/downloads/ZChat-mac.dmg";
 
 /** True inside the Windows desktop app (its WebView UA carries ZChatDesktop). */
 function isDesktopApp(): boolean {
@@ -121,10 +122,17 @@ function PlatformDetail({
     return (
       <div>
         {back}
-        <p className="mt-1 text-sm font-semibold text-foreground">Coming soon</p>
-        <p className="mt-1 text-xs leading-5 text-muted-foreground">
-          The macOS app isn&apos;t ready yet. In the meantime, Z Chat works great in Safari or Chrome
-          on your Mac.
+        <a
+          href={MAC_DMG}
+          className="mt-1 flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-105"
+        >
+          <Download className="size-4" />
+          Download for macOS (.dmg)
+        </a>
+        <p className="mt-3 text-xs leading-5 text-muted-foreground">
+          Works on Intel and Apple Silicon. It isn&apos;t signed yet, so on first launch{" "}
+          <strong>right-click the app → Open</strong> (macOS warns about unidentified developers the
+          first time).
         </p>
       </div>
     );
