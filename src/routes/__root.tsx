@@ -5,6 +5,7 @@ import {
   createRootRouteWithContext,
   HeadContent,
   Scripts,
+  useLocation,
 } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 
@@ -193,6 +194,15 @@ function RootShell({ children }: { children: ReactNode }) {
  * until the gate hook allows the visit. Rendering no children means no route
  * content and no login UI exists on those hosts for a raw visitor.
  */
+function RoutedOutlet() {
+  const { pathname } = useLocation();
+  return (
+    <div key={pathname} className="page-enter">
+      <Outlet />
+    </div>
+  );
+}
+
 function QuickTunnelGate({ children }: { children: ReactNode }) {
   const allowed = useQuickTunnelGate();
   if (!allowed) {
@@ -289,7 +299,7 @@ function RootComponent() {
           <AuthProvider>
             <CallProvider>
               {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-              <Outlet />
+              <RoutedOutlet />
               <Toaster position="top-center" />
             </CallProvider>
           </AuthProvider>

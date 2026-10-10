@@ -2,12 +2,36 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
 export const Route = createFileRoute("/scripture")({
   head: () => ({ meta: [{ title: "Scripture — ZChat" }] }),
   component: ScripturePage,
 });
 
 const BASE = "/media/scripture";
+
+/** Sefaria embeds footnotes as <sup>/<i> markup; strip it and decode entities. */
+function clean(s: string): string {
+  return s
+    .replace(/<i[^>]*class="footnote"[\s\S]*?<\/i>/gi, "")
+    .replace(/<sup[\s\S]*?<\/sup>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#39;|&rsquo;|&lsquo;/g, "'")
+    .replace(/&quot;|&ldquo;|&rdquo;/g, '"')
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 interface IndexWork {
   key: string;
@@ -109,7 +133,7 @@ function ScripturePage() {
         </div>
       </div>
 
-      <div className="mb-5 flex flex-wrap gap-2">
+      <div className="mb-5 flex flex-wrap gap-2 pop-in">
         {(works ?? []).map((w) => (
           <button
             key={w.key}
@@ -182,17 +206,18 @@ function Selector({
       <span className="text-[10px] font-semibold tracking-wide text-muted-foreground uppercase">
         {label}
       </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full rounded-md border border-border bg-surface-1 px-2 py-1.5 text-sm text-foreground"
-      >
-        {options.map((o, i) => (
-          <option key={i} value={i}>
-            {o}
-          </option>
-        ))}
-      </select>
+      <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
+        <SelectTrigger className="h-9 bg-surface-1">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((o, i) => (
+            <SelectItem key={i} value={String(i)}>
+              {o}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </label>
   );
 }
@@ -233,7 +258,7 @@ function VerseReader({
           {verses.map((v, i) => (
             <li key={i} className="flex gap-2 text-sm leading-6 text-foreground">
               <span className="w-6 shrink-0 text-right text-xs text-muted-foreground">{i + 1}</span>
-              <span>{v}</span>
+              <span>{clean(v)}</span>
             </li>
           ))}
         </ol>
@@ -273,7 +298,7 @@ function QuranReader({
               </p>
               <p className="flex gap-2 text-sm leading-6 text-muted-foreground">
                 <span className="w-6 shrink-0 text-right text-xs">{a.n}</span>
-                <span>{a.en}</span>
+                <span>{clean(a.en)}</span>
               </p>
             </li>
           ))}
@@ -307,7 +332,7 @@ function ProseReader({
         <div className="space-y-3">
           {chapter.paragraphs.map((p, i) => (
             <p key={i} className="text-sm leading-6 whitespace-pre-line text-foreground">
-              {p}
+              {clean(p)}
             </p>
           ))}
         </div>
