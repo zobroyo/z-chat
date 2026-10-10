@@ -96,6 +96,30 @@ export function CallBreakoutPanel({
         ))}
       </div>
 
+      {isHost && rooms.length > 0 && (
+        <div className="mt-3 space-y-2">
+          <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            Your room
+          </p>
+          <Select
+            value={myRoomId ?? MAIN_ROOM}
+            onValueChange={(value) => onMove(selfId, value === MAIN_ROOM ? null : value)}
+          >
+            <SelectTrigger className="h-8 w-full text-xs" aria-label="Your breakout room">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={MAIN_ROOM}>Main room</SelectItem>
+              {rooms.map((room) => (
+                <SelectItem key={room.id} value={room.id}>
+                  {room.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
       {isHost && participants.length > 0 && (
         <div className="mt-3 space-y-2">
           <p className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">

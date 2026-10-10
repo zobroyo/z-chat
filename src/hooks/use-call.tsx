@@ -2340,6 +2340,30 @@ export function useCall(
     [send],
   );
 
+  // ---- Resume media when the app returns to the foreground -------------------
+  // iOS (and browsers) suspend the AudioContext when the app is backgrounded:
+  // the call goes silent and the local mic track can stay disabled. Re-resume
+  // the audio graph and re-enable the mic as soon as we're visible again.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const resume = () => {
+      if (document.visibilityState === "hidden" || !inCallRef.current) return;
+      void resumeCallAudio();
+      const local = localStreamRef.current;
+      if (!local) return;
+      const shouldBeOn = !mutedRef.current && !deafenedRef.current && !serverMutedRef.current;
+      for (const track of local.getAudioTracks()) track.enabled = shouldBeOn;
+    };
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("focus", resume);
+    window.addEventListener("pageshow", resume);
+    return () => {
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("focus", resume);
+      window.removeEventListener("pageshow", resume);
+    };
+  }, []);
+
   // ---- Breakout rooms (host authoritative) -----------------------------------
 
   const createBreakoutRoom = useCallback(() => {
