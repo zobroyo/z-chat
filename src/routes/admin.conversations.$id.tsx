@@ -1,12 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Pencil, Trash2, UserMinus } from "lucide-react";
+import { ArrowLeft, Loader2, Pencil, Plus, Search, Trash2, UserMinus, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 import { supabase } from "@/integrations/supabase/client";
 import {
   fetchConversationById,
   fetchConversationMembers,
+  addMemberAsAdmin,
+  fetchAdminUsers,
   renameConversationAsAdmin,
   kickMemberAsAdmin,
   editMessageAsAdmin,
@@ -43,6 +45,9 @@ function AdminConversationViewer() {
   const [busy, setBusy] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [messageDraft, setMessageDraft] = useState("");
+  const [memberQuery, setMemberQuery] = useState("");
+  const [memberResults, setMemberResults] = useState<AdminProfile[]>([]);
+  const [searching, setSearching] = useState(false);
 
   const load = async () => {
     try {
@@ -90,6 +95,34 @@ function AdminConversationViewer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // Debounced people search for the "add member" box (groups only).
+  useEffect(() => {
+    const query = memberQuery.trim();
+    if (!conversation || conversation.kind !== "group" || query.length < 2) {
+      setMemberResults([]);
+      setSearching(false);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      void fetchAdminUsers(0, query)
+        .then(({ rows }) => {
+          if (!cancelled) setMemberResults(rows.slice(0, 8));
+        })
+        .catch(() => {
+          if (!cancelled) setMemberResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setSearching(false);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [memberQuery, conversation]);
+
   const saveName = async () => {
     if (!conversation || !nameDraft.trim()) return;
     setBusy(true);
@@ -113,6 +146,33 @@ function AdminConversationViewer() {
       setMembers((prev) => prev.filter((m) => m.id !== userId));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to remove member");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const addMember = async (profile: AdminProfile) => {
+    if (!conversation) return;
+    setBusy(true);
+    try {
+      await addMemberAsAdmin(conversation.id, profile.id);
+      setMembers((prev) =>
+        prev.some((m) => m.id === profile.id)
+          ? prev
+          : [
+              ...prev,
+              {
+                id: profile.id,
+                display_name: profile.display_name,
+                avatar_url: profile.avatar_url,
+              },
+            ],
+      );
+      setMemberQuery("");
+      setMemberResults([]);
+      toast.success(`${profile.display_name || "Member"} added to the group`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to add member");
     } finally {
       setBusy(false);
     }
@@ -226,32 +286,90 @@ function AdminConversationViewer() {
         <TechnicalDetails items={[{ label: "Conversation UUID", value: conversation.id }]} />
       </div>
 
-      {members.length > 0 && (
-        <div>
-          <h2 className="mb-2 text-xs font-semibold text-muted-foreground">
-            {members.length} member{members.length === 1 ? "" : "s"}
-          </h2>
-          <div className="flex flex-wrap gap-2">
-            {members.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center gap-1.5 rounded-full border border-border bg-surface py-1 pr-1 pl-1.5 text-xs"
-              >
-                <UserAvatar name={m.display_name} path={m.avatar_url} className="size-5" />
-                {m.display_name || "Unnamed"}
-                {conversation.kind === "group" && (
-                  <button
-                    onClick={() => void kick(m.id, m.display_name)}
-                    disabled={busy}
-                    aria-label={`Remove ${m.display_name}`}
-                    className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                  >
-                    <UserMinus className="size-3" />
-                  </button>
-                )}
-              </div>
-            ))}
+      {conversation.kind !== "public" && (
+        <div className="space-y-3">
+          <div>
+            <h2 className="mb-2 text-xs font-semibold text-muted-foreground">
+              {members.length} member{members.length === 1 ? "" : "s"}
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {members.map((m) => (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-1.5 rounded-full border border-border bg-surface py-1 pr-1 pl-1.5 text-xs"
+                >
+                  <UserAvatar name={m.display_name} path={m.avatar_url} className="size-5" />
+                  {m.display_name || "Unnamed"}
+                  {conversation.kind === "group" && (
+                    <button
+                      onClick={() => void kick(m.id, m.display_name)}
+                      disabled={busy}
+                      aria-label={`Remove ${m.display_name}`}
+                      title={`Remove ${m.display_name}`}
+                      className="rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    >
+                      <UserMinus className="size-3" />
+                    </button>
+                  )}
+                </div>
+              ))}
+              {members.length === 0 && (
+                <p className="text-xs text-muted-foreground">No members.</p>
+              )}
+            </div>
           </div>
+
+          {conversation.kind === "group" && (
+            <div className="rounded-xl border border-border bg-surface p-3">
+              <h2 className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                <UserPlus className="size-3.5" /> Add a member
+              </h2>
+              <div className="relative">
+                <Search className="absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={memberQuery}
+                  onChange={(e) => setMemberQuery(e.target.value)}
+                  placeholder="Search people by name…"
+                  className="h-9 pl-8"
+                />
+              </div>
+              {memberQuery.trim().length >= 2 && (
+                <div className="mt-2 space-y-1">
+                  {searching && <p className="px-1 text-xs text-muted-foreground">Searching…</p>}
+                  {!searching && memberResults.length === 0 && (
+                    <p className="px-1 text-xs text-muted-foreground">No matches.</p>
+                  )}
+                  {memberResults.map((u) => {
+                    const already = members.some((m) => m.id === u.id);
+                    return (
+                      <div
+                        key={u.id}
+                        className="flex items-center gap-2 rounded-lg border border-border px-2 py-1.5"
+                      >
+                        <UserAvatar name={u.display_name} path={u.avatar_url} className="size-6" />
+                        <span className="min-w-0 flex-1 truncate text-sm">
+                          {u.display_name || "Unnamed"}
+                        </span>
+                        {already ? (
+                          <span className="text-[11px] text-muted-foreground">In group</span>
+                        ) : (
+                          <Button
+                            size="sm"
+                            className="h-7"
+                            disabled={busy}
+                            onClick={() => void addMember(u)}
+                          >
+                            <Plus className="mr-1 size-3.5" />
+                            Add
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

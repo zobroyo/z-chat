@@ -234,6 +234,14 @@ export async function kickMemberAsAdmin(conversationId: string, userId: string) 
   if (error) throw error;
 }
 
+/** Admin: add a user to a conversation (e.g. a group created earlier). */
+export async function addMemberAsAdmin(conversationId: string, userId: string) {
+  const { error } = await supabase
+    .from("conversation_members")
+    .insert({ conversation_id: conversationId, user_id: userId });
+  if (error) throw error;
+}
+
 export async function fetchConversationMembers(conversationId: string) {
   const { data, error } = await supabase
     .from("conversation_members")
