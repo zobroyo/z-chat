@@ -233,6 +233,16 @@ function StandaloneDebug() {
 
       const shell = document.querySelector<HTMLElement>(".chat-app-shell");
       const composer = document.querySelector<HTMLElement>("form")?.parentElement ?? null;
+
+      const probeH = (css: string) => {
+        const d = document.createElement("div");
+        d.style.cssText = `position:fixed;top:0;left:0;width:0;${css}`;
+        document.body.appendChild(d);
+        const h = Math.round(d.getBoundingClientRect().height);
+        d.remove();
+        return h;
+      };
+
       setInfo(
         [
           `mode ${mode || "?"}`,
@@ -242,6 +252,9 @@ function StandaloneDebug() {
           `bodyH ${document.body.clientHeight}`,
           `shellH ${shell ? Math.round(shell.getBoundingClientRect().height) : -1}`,
           `composerBottom ${composer ? Math.round(composer.getBoundingClientRect().bottom) : -1}`,
+          `vhH ${probeH("height:100vh")} dvhH ${probeH("height:100dvh")} pctH ${probeH("height:100%")}`,
+          `htmlRect ${Math.round(document.documentElement.getBoundingClientRect().height)} bodyRect ${Math.round(document.body.getBoundingClientRect().height)}`,
+          `composerPad ${composer ? getComputedStyle(composer).paddingBottom : "-"}`,
           `safeT ${safeTop} safeB ${safeBottom}`,
           `screen ${window.screen.width}x${window.screen.height}`,
         ].join("  |  "),
