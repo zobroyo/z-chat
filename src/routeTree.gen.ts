@@ -16,7 +16,6 @@ import { Route as ChatRouteImport } from './routes/chat'
 import { Route as LunchCardRouteImport } from './routes/lunch-card'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as RecoveryRouteImport } from './routes/recovery'
-import { Route as ScriptureRouteImport } from './routes/scripture'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminAppealsRouteImport } from './routes/admin.appeals'
@@ -66,11 +65,6 @@ const ProfileRoute = ProfileRouteImport.update({
 const RecoveryRoute = RecoveryRouteImport.update({
   id: '/recovery',
   path: '/recovery',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ScriptureRoute = ScriptureRouteImport.update({
-  id: '/scripture',
-  path: '/scripture',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ServicesRoute = ServicesRouteImport.update({
@@ -157,7 +151,6 @@ export interface FileRoutesByFullPath {
   '/lunch-card': typeof LunchCardRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
-  '/scripture': typeof ScriptureRoute
   '/services': typeof ServicesRoute
   '/admin/appeals': typeof AdminAppealsRoute
   '/admin/applications': typeof AdminApplicationsRoute
@@ -181,7 +174,6 @@ export interface FileRoutesByTo {
   '/lunch-card': typeof LunchCardRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
-  '/scripture': typeof ScriptureRoute
   '/services': typeof ServicesRoute
   '/admin/appeals': typeof AdminAppealsRoute
   '/admin/applications': typeof AdminApplicationsRoute
@@ -206,7 +198,6 @@ export interface FileRoutesById {
   '/lunch-card': typeof LunchCardRoute
   '/profile': typeof ProfileRoute
   '/recovery': typeof RecoveryRoute
-  '/scripture': typeof ScriptureRoute
   '/services': typeof ServicesRoute
   '/admin/appeals': typeof AdminAppealsRoute
   '/admin/applications': typeof AdminApplicationsRoute
@@ -233,7 +224,6 @@ export interface FileRouteTypes {
     | '/lunch-card'
     | '/profile'
     | '/recovery'
-    | '/scripture'
     | '/services'
     | '/admin/appeals'
     | '/admin/applications'
@@ -257,7 +247,6 @@ export interface FileRouteTypes {
     | '/lunch-card'
     | '/profile'
     | '/recovery'
-    | '/scripture'
     | '/services'
     | '/admin/appeals'
     | '/admin/applications'
@@ -281,7 +270,6 @@ export interface FileRouteTypes {
     | '/lunch-card'
     | '/profile'
     | '/recovery'
-    | '/scripture'
     | '/services'
     | '/admin/appeals'
     | '/admin/applications'
@@ -307,7 +295,6 @@ export interface RootRouteChildren {
   LunchCardRoute: typeof LunchCardRoute
   ProfileRoute: typeof ProfileRoute
   RecoveryRoute: typeof RecoveryRoute
-  ScriptureRoute: typeof ScriptureRoute
   ServicesRoute: typeof ServicesRoute
   AppServiceRoute: typeof AppServiceRoute
   CallConversationIdRoute: typeof CallConversationIdRoute
@@ -363,13 +350,6 @@ declare module '@tanstack/react-router' {
       path: '/recovery'
       fullPath: '/recovery'
       preLoaderRoute: typeof RecoveryRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/scripture': {
-      id: '/scripture'
-      path: '/scripture'
-      fullPath: '/scripture'
-      preLoaderRoute: typeof ScriptureRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/services': {
@@ -527,7 +507,6 @@ const rootRouteChildren: RootRouteChildren = {
   LunchCardRoute: LunchCardRoute,
   ProfileRoute: ProfileRoute,
   RecoveryRoute: RecoveryRoute,
-  ScriptureRoute: ScriptureRoute,
   ServicesRoute: ServicesRoute,
   AppServiceRoute: AppServiceRoute,
   CallConversationIdRoute: CallConversationIdRoute,
