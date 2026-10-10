@@ -131,6 +131,10 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   const [inviteOpen, setInviteOpen] = useState(false);
   /** Minimised ("picture-in-picture") mode: keep the call alive but out of the way. */
   const [minimized, setMinimized] = useState(false);
+  /** Participant pinned to the full-screen spotlight (null = normal grid). */
+  const [pinnedId, setPinnedId] = useState<string | null>(null);
+  /** The screen-sharer we auto-focused, so a manual unpin isn't fought. */
+  const autoSharedRef = useRef<string | null>(null);
 
   // Draggable picture-in-picture position (null = default bottom-right corner).
   const [pipPos, setPipPos] = useState<{ x: number; y: number } | null>(null);
@@ -261,6 +265,27 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
   useEffect(() => {
     if (!call.inCall && !call.joining) setMinimized(false);
   }, [call.inCall, call.joining]);
+
+  // Auto-focus the active screen share (spotlight). A manual pin takes
+  // precedence; when the sharer stops, drop the auto-pin so the grid returns.
+  useEffect(() => {
+    const activeSharer = call.screenSharing
+      ? call.selfId
+      : (call.participants.find(
+          (participant) =>
+            participant.sharing && (participant.roomId ?? null) === (call.myRoomId ?? null),
+        )?.id ?? null);
+
+    if (!activeSharer) {
+      if (autoSharedRef.current && pinnedId === autoSharedRef.current) setPinnedId(null);
+      autoSharedRef.current = null;
+      return;
+    }
+    if (pinnedId === null && autoSharedRef.current !== activeSharer) {
+      autoSharedRef.current = activeSharer;
+      setPinnedId(activeSharer);
+    }
+  }, [call.screenSharing, call.participants, call.selfId, call.myRoomId, pinnedId]);
 
   if (call.incomingCall && !call.inCall && !call.joining) {
     return (
@@ -414,6 +439,70 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
     );
   }
 
+  const featuredId =
+    pinnedId && (pinnedId === call.selfId || roomParticipants.some((p) => p.id === pinnedId))
+      ? pinnedId
+      : null;
+
+  const togglePin = (id: string) =>
+    setPinnedId((current) => (current === id ? null : id));
+
+  const renderTile = (id: string, spotlight: boolean) => {
+    if (id === call.selfId) {
+      return (
+        <CallParticipantTile
+          name="You"
+          muted={call.muted || call.deafened || call.serverMuted}
+          video={call.cameraOn || call.screenSharing}
+          stream={call.screenSharing ? call.screenStream : call.localStream}
+          self
+          sharing={call.screenSharing}
+          speaking={call.activeSpeakerId === call.selfId}
+          avatarUrl={call.selfAvatar}
+          deafened={call.deafened}
+          serverMuted={call.serverMuted}
+          isHost={call.isHost}
+          spotlight={spotlight}
+          pinned={pinnedId === call.selfId}
+          onTogglePin={() => togglePin(call.selfId)}
+        />
+      );
+    }
+
+    const participant = roomParticipants.find((item) => item.id === id);
+    if (!participant) return null;
+    return (
+      <CallParticipantTile
+        key={participant.id}
+        name={participant.name}
+        muted={participant.muted || participant.serverMuted}
+        video={participant.video || participant.sharing}
+        sharing={participant.sharing}
+        speaking={call.activeSpeakerId === participant.id}
+        avatarUrl={participant.avatar}
+        stream={call.remoteStreams[participant.id] ?? null}
+        deafened={participant.deafened}
+        serverMuted={participant.serverMuted}
+        localMuted={participant.localMuted}
+        isHost={participant.id === call.hostId}
+        isAdmin={participant.isAdmin}
+        isGuest={participant.isGuest}
+        volume={participant.volume}
+        canModerate={call.canModerate}
+        spotlight={spotlight}
+        pinned={pinnedId === participant.id}
+        onTogglePin={() => togglePin(participant.id)}
+        onVolumeChange={(volume) => call.setParticipantVolume(participant.id, volume)}
+        onToggleLocalMute={() => call.toggleParticipantLocalMute(participant.id)}
+        onToggleServerMute={() =>
+          call.setParticipantServerMute(participant.id, !participant.serverMuted)
+        }
+        onKick={() => call.kickParticipant(participant.id)}
+        onBan={() => call.banParticipant(participant.id)}
+      />
+    );
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-1.5 backdrop-blur-2xl sm:p-3">
       <div
@@ -497,6 +586,27 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
               <Loader2 className="size-6 animate-spin" />
               <p className="text-sm">Joining call…</p>
             </div>
+          ) : featuredId ? (
+            <div
+              data-testid="call-spotlight"
+              className="flex h-full w-full flex-col gap-1.5 sm:gap-2.5"
+            >
+              <div className="min-h-0 flex-1">{renderTile(featuredId, true)}</div>
+
+              {[call.selfId, ...roomParticipants.map((participant) => participant.id)].filter(
+                (id) => id !== featuredId,
+              ).length > 0 && (
+                <div className="flex h-20 shrink-0 items-stretch gap-1.5 overflow-x-auto sm:h-24 sm:gap-2.5">
+                  {[call.selfId, ...roomParticipants.map((participant) => participant.id)]
+                    .filter((id) => id !== featuredId)
+                    .map((id) => (
+                      <div key={id} className="aspect-video h-full shrink-0">
+                        {renderTile(id, false)}
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
           ) : (
             <div
               data-testid="call-grid"
@@ -505,47 +615,8 @@ export function CallOverlay({ call, conversationTitle }: CallOverlayProps) {
                 participantGridClass(totalTiles),
               )}
             >
-              <CallParticipantTile
-                name="You"
-                muted={call.muted || call.deafened || call.serverMuted}
-                video={call.cameraOn || call.screenSharing}
-                stream={call.screenSharing ? call.screenStream : call.localStream}
-                self
-                sharing={call.screenSharing}
-                speaking={call.activeSpeakerId === call.selfId}
-                avatarUrl={call.selfAvatar}
-                deafened={call.deafened}
-                serverMuted={call.serverMuted}
-                isHost={call.isHost}
-              />
-
-              {roomParticipants.map((participant) => (
-                <CallParticipantTile
-                  key={participant.id}
-                  name={participant.name}
-                  muted={participant.muted || participant.serverMuted}
-                  video={participant.video || participant.sharing}
-                  sharing={participant.sharing}
-                  speaking={call.activeSpeakerId === participant.id}
-                  avatarUrl={participant.avatar}
-                  stream={call.remoteStreams[participant.id] ?? null}
-                  deafened={participant.deafened}
-                  serverMuted={participant.serverMuted}
-                  localMuted={participant.localMuted}
-                  isHost={participant.id === call.hostId}
-                  isAdmin={participant.isAdmin}
-                  isGuest={participant.isGuest}
-                  volume={participant.volume}
-                  canModerate={call.canModerate}
-                  onVolumeChange={(volume) => call.setParticipantVolume(participant.id, volume)}
-                  onToggleLocalMute={() => call.toggleParticipantLocalMute(participant.id)}
-                  onToggleServerMute={() =>
-                    call.setParticipantServerMute(participant.id, !participant.serverMuted)
-                  }
-                  onKick={() => call.kickParticipant(participant.id)}
-                  onBan={() => call.banParticipant(participant.id)}
-                />
-              ))}
+              {renderTile(call.selfId, false)}
+              {roomParticipants.map((participant) => renderTile(participant.id, false))}
             </div>
           )}
         </div>

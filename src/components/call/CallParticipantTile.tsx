@@ -7,6 +7,8 @@ import {
   Mic,
   MicOff,
   MoreHorizontal,
+  Pin,
+  PinOff,
   Shield,
   UserMinus,
   Volume2,
@@ -21,7 +23,13 @@ import { initialsOf } from "@/lib/chat";
 import { cn } from "@/lib/utils";
 
 /** Video element that always follows the supplied MediaStream. */
-function StreamVideo({ stream }: { stream: MediaStream }) {
+function StreamVideo({
+  stream,
+  fit = "cover",
+}: {
+  stream: MediaStream;
+  fit?: "cover" | "contain";
+}) {
   const ref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -33,7 +41,15 @@ function StreamVideo({ stream }: { stream: MediaStream }) {
 
   // Always muted: remote audio is played by the hook's audio graph / hidden
   // <audio> element, so unmuting here would double the sound.
-  return <video ref={ref} autoPlay playsInline muted className="size-full object-cover" />;
+  return (
+    <video
+      ref={ref}
+      autoPlay
+      playsInline
+      muted
+      className={cn("size-full", fit === "contain" ? "object-contain" : "object-cover")}
+    />
+  );
 }
 
 export type CallParticipantTileProps = {
@@ -56,6 +72,12 @@ export type CallParticipantTileProps = {
   speaking?: boolean;
   /** True while this participant is sharing their screen. */
   sharing?: boolean;
+  /** This tile is the pinned / spotlighted participant. */
+  pinned?: boolean;
+  /** Pin or unpin this participant (full-screen spotlight). */
+  onTogglePin?: () => void;
+  /** Rendered large in the spotlight: fit the video with object-contain. */
+  spotlight?: boolean;
   canModerate?: boolean;
   onVolumeChange?: (volume: number) => void;
   onToggleLocalMute?: () => void;
@@ -96,6 +118,9 @@ export function CallParticipantTile({
   avatarUrl = null,
   speaking = false,
   sharing = false,
+  pinned = false,
+  onTogglePin,
+  spotlight = false,
   onVolumeChange,
   onToggleLocalMute,
   onToggleServerMute,
@@ -110,13 +135,15 @@ export function CallParticipantTile({
     <div
       data-testid="call-tile"
       className={cn(
-        "call-tile-enter group relative aspect-video h-full max-h-full max-w-full min-h-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.04] ring-1 ring-white/5 sm:rounded-3xl",
+        "call-tile-enter group relative h-full min-h-0 overflow-hidden rounded-2xl border border-white/10 ring-1 ring-white/5 sm:rounded-3xl",
+        spotlight ? "w-full bg-black" : "aspect-video max-h-full max-w-full bg-white/[0.04]",
         speaking && "border-emerald-400/60 ring-2 ring-emerald-400/70",
+        pinned && "border-primary/60 ring-2 ring-primary/60",
       )}
     >
       {showVideo ? (
         <>
-          <StreamVideo stream={stream} />
+          <StreamVideo stream={stream} fit={spotlight ? "contain" : "cover"} />
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
         </>
       ) : (
@@ -131,6 +158,23 @@ export function CallParticipantTile({
             </AvatarFallback>
           </Avatar>
         </div>
+      )}
+
+      {onTogglePin && (
+        <button
+          type="button"
+          onClick={onTogglePin}
+          className={cn(
+            "absolute top-2 right-2 z-10 flex size-8 items-center justify-center rounded-full border border-white/15 bg-black/60 text-white backdrop-blur transition-opacity hover:bg-black/80",
+            "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100",
+            pinned && "border-primary/70 bg-primary text-primary-foreground opacity-100",
+          )}
+          aria-label={pinned ? "Unpin from full screen" : "Pin to full screen"}
+          aria-pressed={pinned}
+          title={pinned ? "Unpin" : "Pin to full screen"}
+        >
+          {pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+        </button>
       )}
 
       <div className="absolute right-2 bottom-2 left-2 flex items-end justify-between gap-2 sm:right-3 sm:bottom-3 sm:left-3">
@@ -225,6 +269,19 @@ export function CallParticipantTile({
                   >
                     {localMuted ? <Volume2 className="mr-2 size-4" /> : <VolumeX className="mr-2 size-4" />}
                     {localMuted ? "Unmute for me" : "Mute for me only"}
+                  </Button>
+                )}
+
+                {onTogglePin && (
+                  <Button
+                    type="button"
+                    variant={pinned ? "secondary" : "outline"}
+                    size="sm"
+                    className="w-full"
+                    onClick={onTogglePin}
+                  >
+                    {pinned ? <PinOff className="mr-2 size-4" /> : <Pin className="mr-2 size-4" />}
+                    {pinned ? "Unpin from full screen" : "Pin to full screen"}
                   </Button>
                 )}
 
