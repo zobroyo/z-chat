@@ -34,7 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/use-auth";
 import { useCallContext } from "@/components/call/CallProvider";
-import { useCallParticipants, useCallPresenceMap } from "@/hooks/use-call-presence";
+import { useCallPresence } from "@/hooks/use-call-presence";
 import { checkIsAdmin } from "@/lib/admin";
 import { notifyAdmins } from "@/lib/notifyAdmins";
 import { supabase } from "@/integrations/supabase/client";
@@ -1151,26 +1151,9 @@ function ChatPage() {
     setContextConversation(activeId || null);
   }, [activeId, setContextConversation]);
 
-  // Who is in this conversation's call right now (even if we're not in it), so
-  // the header can name them and offer a one-tap Join.
-  const activeCallPeople = useCallParticipants(activeId || null, !call.inCall && !call.joining);
-  const activeCallPresence = activeCallPeople.length;
-  const activeCallLabel =
-    activeCallPeople.length === 1
-      ? `${activeCallPeople[0]?.name || "Someone"} is in a call`
-      : activeCallPeople.length > 1
-        ? `${activeCallPeople
-            .slice(0, 2)
-            .map((person) => person.name || "Someone")
-            .join(", ")} in a call`
-        : "";
-
-  // Active call per conversation, for the sidebar list: shows that a chat's call
-  // is still going (and who), without opening it.
-  const callPresenceMap = useCallPresenceMap(
-    [...groups.map((group) => group.id), ...directChats.map((conversation) => conversation.id)],
-    !call.inCall && !call.joining,
-  );
+  // How many people are in this conversation's call right now (even if we're
+  // not in it), so the header can offer a one-tap Join.
+  const activeCallPresence = useCallPresence(activeId || null, !call.inCall && !call.joining);
 
   useEffect(() => {
     if (call.error) toast.error(call.error);
@@ -1235,7 +1218,6 @@ function ChatPage() {
                 }
                 title={group.name ?? "Group"}
                 subtitle={`${members.filter((m) => m.conversation_id === group.id).length} members`}
-                callBadge={(callPresenceMap[group.id] ?? 0) > 0}
                 badge={unread[group.id] ?? 0}
               />
             ))}
@@ -1262,7 +1244,6 @@ function ChatPage() {
                   }
                   title={partner?.display_name ?? "Someone"}
                   subtitle={isOnline(partner) ? "Online" : "Offline"}
-                  callBadge={(callPresenceMap[conversation.id] ?? 0) > 0}
                   badge={unread[conversation.id] ?? 0}
                 />
               );
@@ -1484,14 +1465,14 @@ function ChatPage() {
                 type="button"
                 onClick={() => void call.joinCall()}
                 className="flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-green-500/40 bg-green-500/10 px-2.5 text-xs font-medium text-green-500 transition-colors hover:bg-green-500/20"
-                aria-label={`${activeCallLabel || `${activeCallPresence} in call`} — join`}
+                aria-label={`${activeCallPresence} in call — join`}
                 title="Join the call"
               >
                 <span className="relative flex size-2">
                   <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-500 opacity-75" />
                   <span className="relative inline-flex size-2 rounded-full bg-green-500" />
                 </span>
-                {activeCallLabel || `${activeCallPresence} in call`} · Join
+                {activeCallPresence} in call · Join
               </button>
             )}
 
