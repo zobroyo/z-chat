@@ -381,14 +381,24 @@
   }
 }
 
-/* Installed iOS PWA: fill the whole screen. The visual-viewport size/offset
-   hack above is for Safari's collapsing toolbar, which doesn't exist in
-   standalone mode — there it leaves a gap at the bottom of the screen. */
+/* Installed iOS PWA: the visual-viewport size/offset hack above is for Safari's
+   collapsing toolbar. In standalone mode those values are wrong (the shell ends
+   short, leaving a gap at the bottom), so pin the shell to the screen and
+   neutralise the JS variables outright. */
 @media (display-mode: standalone), (display-mode: fullscreen) {
+  :root {
+    --zchat-visual-viewport-height: 100dvh !important;
+    --zchat-visual-viewport-offset-top: 0px !important;
+  }
+
   .chat-app-shell {
-    top: 0;
-    bottom: 0;
-    height: auto;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    height: auto !important;
+    width: auto !important;
   }
 }
 
