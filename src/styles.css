@@ -366,6 +366,17 @@
   }
 }
 
+/* Installed iOS PWA: fill the whole screen. The visual-viewport size/offset
+   hack above is for Safari's collapsing toolbar, which doesn't exist in
+   standalone mode — there it can leave a gap at the bottom of the screen. */
+@media (display-mode: standalone) {
+  .chat-app-shell {
+    top: 0;
+    bottom: 0;
+    height: auto;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
