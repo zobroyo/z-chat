@@ -29,6 +29,10 @@ import { supabase } from "@/integrations/supabase/client";
 /* Hosts that serve the real app directly; the login lives only on these. */
 const MAIN_HOSTS = new Set(["z-chat.men", "www.z-chat.men", "jorking-lord"]);
 const JORKING_SUFFIX = ".jorking-lord";
+/* The canonical site. */
+const MAIN_SITE = "https://z-chat.men";
+/* Old deployments that should hard-redirect to the canonical site. */
+const LEGACY_REDIRECT_HOSTS = new Set(["z-chat-five.vercel.app"]);
 /* The send side deliberately stays on the public domains. */
 const HANDOFF_HOSTS = new Set(["z-chat.men", "www.z-chat.men"]);
 const STAY_KEY = "qt-stay";
@@ -65,6 +69,11 @@ function hostnameFromOrigin(origin: string): string {
 export const QUICK_TUNNEL_BOOT_SCRIPT = `(() => {
   try {
     const host = window.location.hostname.toLowerCase();
+    const legacy = ${JSON.stringify(Array.from(LEGACY_REDIRECT_HOSTS))};
+    if (legacy.includes(host)) {
+      window.location.replace(${JSON.stringify(MAIN_SITE)} + window.location.pathname + window.location.search + window.location.hash);
+      return;
+    }
     const mainHosts = ${JSON.stringify(Array.from(MAIN_HOSTS))};
     const suffix = ${JSON.stringify(JORKING_SUFFIX)};
     if (!mainHosts.includes(host) && !host.endsWith(suffix)) document.title = "ZChat";
@@ -256,6 +265,10 @@ export function useQuickTunnelGate(): boolean {
 
   useEffect(() => {
     if (!locked) return;
+    if (LEGACY_REDIRECT_HOSTS.has(window.location.hostname.toLowerCase())) {
+      window.location.replace(MAIN_SITE + window.location.pathname + window.location.search);
+      return;
+    }
     let cancelled = false;
 
     if (sawHandoff || hasSessionOk()) {
