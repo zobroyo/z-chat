@@ -102,7 +102,16 @@ function AdminDashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-2xl font-bold text-foreground">ZChat Admin</h1>
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo.svg"
+            alt=""
+            width={36}
+            height={36}
+            className="size-9 shrink-0 rounded-xl"
+          />
+          <h1 className="font-display text-2xl font-bold text-foreground">ZChat Admin</h1>
+        </div>
         <p className="text-sm text-muted-foreground">
           Live overview of the whole organisation — activity, growth and moderation at a glance.
         </p>

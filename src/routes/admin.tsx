@@ -113,7 +113,14 @@ function AdminLayout() {
   return (
     <div className="standalone-scroll-page flex min-h-screen bg-background">
       <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface/50 md:flex">
-        <div className="px-4 py-5">
+        <div className="flex items-center gap-2.5 px-4 py-5">
+          <img
+            src="/logo.svg"
+            alt="ZChat Admin"
+            width={36}
+            height={36}
+            className="size-9 shrink-0 rounded-xl"
+          />
           <div className="font-display text-sm font-bold tracking-wide text-foreground">
             ZCHAT ADMIN
           </div>
