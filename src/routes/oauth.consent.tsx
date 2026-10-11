@@ -130,7 +130,7 @@ function OAuthConsent() {
     <main className="standalone-scroll-page ios-safe-top ios-safe-bottom flex min-h-screen items-center justify-center px-5 py-10">
       <section className="surface-panel w-full max-w-md rounded-3xl p-7 shadow-lift sm:p-9">
         <div className="mb-7 flex items-center gap-3">
-          <img src="/logo.svg" alt="ZChat" width={44} height={44} className="size-11 shrink-0 rounded-2xl" />
+          <img src="/logo.svg" alt="ZChat" width={48} height={48} className="size-12 shrink-0 rounded-2xl" />
           <div><p className="text-sm text-muted-foreground">Secure sign-in</p><h1 className="text-xl font-bold">ZChat</h1></div>
         </div>
 

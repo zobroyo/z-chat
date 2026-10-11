@@ -1155,9 +1155,9 @@ function ChatPage() {
         <img
           src="/logo.svg"
           alt="ZChat"
-          width={32}
-          height={32}
-          className="size-8 shrink-0 rounded-lg"
+          width={40}
+          height={40}
+          className="size-10 shrink-0 rounded-xl"
         />
 
         <span className="font-display text-[15px] font-bold tracking-tight">ZChat</span>
