@@ -452,3 +452,46 @@
 @media (prefers-reduced-motion: reduce) {
   .page-enter, .stagger-children > *, .pop-in { animation: none; }
 }
+
+/* ---- Global micro-interactions: every control responds smoothly --------- */
+a,
+button,
+[role="button"],
+[role="menuitem"],
+input,
+textarea,
+select,
+.surface-panel {
+  transition:
+    transform 190ms cubic-bezier(0.22, 1, 0.36, 1),
+    background-color 190ms ease,
+    color 190ms ease,
+    border-color 190ms ease,
+    box-shadow 190ms ease,
+    opacity 190ms ease;
+}
+
+button:not(:disabled):active,
+[role="button"]:active {
+  transform: scale(0.97);
+}
+
+/* Screens assembled from blocks: each direct child rises in sequence. */
+.standalone-scroll-page > * {
+  animation: zchat-rise 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.standalone-scroll-page > *:nth-child(1) { animation-delay: 20ms; }
+.standalone-scroll-page > *:nth-child(2) { animation-delay: 60ms; }
+.standalone-scroll-page > *:nth-child(3) { animation-delay: 100ms; }
+.standalone-scroll-page > *:nth-child(4) { animation-delay: 140ms; }
+.standalone-scroll-page > *:nth-child(5) { animation-delay: 180ms; }
+.standalone-scroll-page > *:nth-child(6) { animation-delay: 220ms; }
+.standalone-scroll-page > *:nth-child(7) { animation-delay: 260ms; }
+.standalone-scroll-page > *:nth-child(8) { animation-delay: 300ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  a, button, [role="button"], input, textarea, select, .surface-panel {
+    transition: none;
+  }
+  .standalone-scroll-page > * { animation: none; }
+}
