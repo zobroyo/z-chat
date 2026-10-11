@@ -407,9 +407,7 @@ function AuthPage() {
 
       <div className="relative w-full max-w-sm">
         <div className="mb-8 flex items-center gap-3">
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-primary font-display text-lg font-extrabold text-primary-foreground">
-            Z
-          </span>
+          <img src="/logo.svg" alt="ZChat" width={44} height={44} className="size-11 shrink-0 rounded-2xl" />
 
           <div>
             <h1 className="text-2xl font-bold">ZChat</h1>
