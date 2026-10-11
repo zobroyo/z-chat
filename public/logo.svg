@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Z">
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="#0b0b0d"/>
+  <path d="M159 163 H353 V203 L199 303 H353 V343 H159 V303 L313 203 H159 Z" fill="#f4f4f6"/>
+  <path d="M313 203 L199 303 L159 303 Z" fill="#2f6bff"/>
+</svg>

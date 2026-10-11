@@ -71,9 +71,7 @@ export function InstallPrompt() {
       role="dialog"
       aria-label="Install Z Chat"
     >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary font-display text-lg font-extrabold text-primary-foreground">
-        Z
-      </span>
+      <img src="/logo.svg" alt="" width={40} height={40} className="size-10 shrink-0 rounded-xl" />
 
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-foreground">Install Z Chat</p>

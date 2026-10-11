@@ -1152,9 +1152,13 @@ function ChatPage() {
   const sidebar = (
     <div className="ios-safe-top ios-safe-bottom flex h-full flex-col bg-sidebar">
       <div className="flex items-center gap-2.5 border-b border-border/60 px-4 py-3.5">
-        <span className="flex size-8 items-center justify-center rounded-lg bg-primary font-display text-sm font-extrabold text-primary-foreground">
-          Z
-        </span>
+        <img
+          src="/logo.svg"
+          alt="ZChat"
+          width={32}
+          height={32}
+          className="size-8 shrink-0 rounded-lg"
+        />
 
         <span className="font-display text-[15px] font-bold tracking-tight">ZChat</span>
 
